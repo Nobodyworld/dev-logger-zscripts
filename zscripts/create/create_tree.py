@@ -1,63 +1,19 @@
-import os
 import sys
 from pathlib import Path
-import datetime
 
-# Resolve the current script directory
+# Ensure the repository root is importable when executed directly.
 script_dir = Path(__file__).resolve().parent
+repo_root = script_dir.parent.parent
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
 
-# Determine the parent directory where 'zscripts' is located
-parent_dir = script_dir.parent.parent / 'zscripts'
-# Insert the parent directory into the system path to allow importing utils and config modules
-sys.path.insert(0, str(parent_dir))
+from zscripts.operations import create_tree_snapshot  # noqa: E402
 
-# Import necessary functions and configurations
-from utils import load_gitignore_patterns, file_matches_any_pattern
-from config import SKIP_DIRS, LOG_DIR
 
-# Get a timestamp for this run
-timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+def main() -> None:
+    destination = create_tree_snapshot()
+    print(f"Directory tree written to {destination}")
 
-def create_tree(start_path, log_file, ignore_patterns, additional_ignore_dirs=None):
-    """
-    Create a tree structure of directories and files starting from the given path.
-
-    Args:
-        start_path (Path): The root directory to start the tree from.
-        log_file (file object): The file object to write the tree structure to.
-        ignore_patterns (list): A list of patterns to ignore.
-        additional_ignore_dirs (set, optional): A set of additional directories to ignore. Defaults to None.
-    """
-    if additional_ignore_dirs is None:
-        additional_ignore_dirs = {'static', 'staticfiles', 'migrations', '__pycache__', 'media', 'node_modules', 'build', 'dist', 'logs', 'zscripts', 'venv', 'env', 'envs'}
-    
-    for root, dirs, files in os.walk(start_path, topdown=True):
-        dirs[:] = [d for d in dirs if not file_matches_any_pattern(Path(root) / d, ignore_patterns) and d not in additional_ignore_dirs]
-        relative_path = Path(root).relative_to(start_path)
-        if relative_path.parts:
-            print(f"{relative_path}/", file=log_file)
-        for file in sorted(files):
-            if not file_matches_any_pattern(Path(root) / file, ignore_patterns):
-                print(f"    {file}", file=log_file)
-        for dir in sorted(dirs):
-            print(f"{relative_path / dir}/", file=log_file)
 
 if __name__ == "__main__":
-    # Determine the root directory of the project
-    project_root = script_dir.parent.parent
-
-    # Define the source path and log file path
-    src_path = project_root
-    log_file_path = project_root / f"zscripts/logs/logs_tree/create_tree_{timestamp}.txt"
-
-    # Ensure the log directory exists
-    log_file_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Load ignore patterns from .gitignore and config SKIP_DIRS
-    ignore_patterns = load_gitignore_patterns(project_root) + SKIP_DIRS
-
-    # Create the directory tree and write to log file
-    with open(log_file_path, 'w', encoding='utf-8') as log_file:
-        create_tree(src_path, log_file, ignore_patterns)
-
-    print(f"Directory tree written to {log_file_path}")
+    main()

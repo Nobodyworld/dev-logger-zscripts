@@ -1,123 +1,55 @@
-# Zscripts - Django File Compiler
+# Zscripts – Django File Compiler
 
-This project automates the process of organizing, compiling, and managing various scripts and configurations into the `logs` directory. The project is designed to handle multiple file types, including Python scripts, CSS, HTML, and JavaScript files, by categorizing and consolidating them into specific logs for better management and analysis.
+The toolkit automates collecting, consolidating, and analysing Django-style project files. It builds structured logs for Python, HTML, CSS, and JavaScript sources so you can review application code from a single location.
+
+## Highlights
+- Unified CLI entry point (`python -m zscripts.cli`) that replaces many ad-hoc scripts.
+- Central `operations` module with reusable helpers for logging, consolidation, and analysis.
+- Pytest-based regression suite covering the core workflows.
+- `pyproject.toml` for reproducible tooling (install `.[dev]` to get the optional test extra).
+
+## Quickstart
+Run any command from the repository root:
+
+```sh
+# Inspect available presets
+python -m zscripts.cli list-presets
+
+# Generate per-app logs for Python and HTML files
+python -m zscripts.cli log-apps --preset python --preset html
+
+# Create consolidated single-file logs (defaults to Python)
+python -m zscripts.cli log-single
+
+# Snapshot the project tree with a timestamped log
+python -m zscripts.cli tree
+
+# Utilities for converting, analysing, and consolidating build artefacts
+python -m zscripts.cli build convert
+python -m zscripts.cli build analyse
+python -m zscripts.cli build consolidate
+```
+
+Legacy scripts inside `zscripts/all`, `zscripts/all_single`, `zscripts/make`, and `zscripts/create` remain as thin wrappers but now delegate to the shared operations module and CLI.
 
 ## Project Structure
 
-The project directory is organized as follows:
+- `pyproject.toml` – packaging metadata and dev dependencies.
+- `zscripts/__init__.py` – package initialiser exposing core modules.
+- `zscripts/config.py` – centralises directory configuration and file-type presets.
+- `zscripts/utils.py` – low-level filesystem helpers (gitignore handling, aggregation).
+- `zscripts/operations.py` – high-level orchestration utilities used by the CLI and legacy scripts.
+- `zscripts/cli.py` – argparse-based CLI frontend.
+- `tests/test_operations.py` – regression coverage for the operations workflows.
+- Remaining subdirectories (`all`, `all_single`, `make`, `create`, `by_file`, `todo`, `zreadme`) retain their original purpose but now benefit from the refactored helpers.
 
-- **.gitattributes:** Git configuration for handling attributes.
-- **LICENSE:** The project license file.
+## Development Notes
 
-### zscripts Directory
-
-The main directory containing all scripts and configuration files for the project.
-
-- **config.py:** Configuration settings for the project, defining directories to skip and file types to handle.
-- **utils.py:** Utility functions used across the project for file operations and pattern matching.
-
-#### all Directory
-
-Contains scripts for handling multiple file types:
-
-- **all_both.py:** Handles both Python and HTML files.
-- **all_cssss.py:** Processes CSS files.
-- **all_htmlll.py:** Processes HTML files.
-- **all_jssss.py:** Processes JavaScript files.
-- **all_pyth.py:** Processes Python files.
-- **app_all_types.py:** Manages all file types within an application context.
-
-#### all_single Directory
-
-Contains scripts for handling single file types:
-
-- **single.py:** Handles a single operation.
-- **single_css.py:** Processes a single CSS file.
-- **single_html.py:** Processes a single HTML file.
-- **single_js.py:** Processes a single JavaScript file.
-- **single_pyth.py:** Processes a single Python file.
-
-#### by_file Directory
-
-Contains scripts for processing files by name:
-
-- **by_file_name.py:** Processes files based on their name.
-- **zby_file_name_analysis.py:** Analyzes files by name.
-
-#### create Directory
-
-Contains scripts for creating and managing the file tree:
-
-- **create_tree.py:** Creates the file tree structure.
-
-#### logs Directory
-
-The directory where all log files are stored. This directory is further organized into subdirectories for different types of logs.
-
-#### make Directory
-
-Contains scripts for various build and analysis tasks:
-
-- **analysis.py:** Performs analysis on the project files.
-- **build.py:** Builds the project structure.
-- **consoli.py:** Consolidates files for easier management.
-
-#### todo Directory
-
-Contains scripts and files related to project tasks and todos:
-
-- **log.txt:** Log file for tasks.
-- **todo.md:** Markdown file listing todos.
-- **todo.py:** Script for managing tasks.
-
-#### zreadme Directory
-
-Contains scripts and files for generating the README documentation:
-
-- **0-Overview.txt:** Overview file for the project.
-- **readme_build.py:** Script for building the README file.
-
-## Configuration
-
-### config.py
-
-The `config.py` file contains essential configurations for the project:
-
-- **SKIP_DIRS:** List of directories to skip during file operations.
-- **FILE_TYPES:** Dictionary mapping file names to their respective log categories.
-- **Directories:** Various directories defined for logging and output purposes.
-
-### utils.py
-
-The `utils.py` file includes utility functions:
-
-- **load_gitignore_patterns:** Loads ignore patterns from a `.gitignore` file.
-- **file_matches_any_pattern:** Checks if a file path matches any ignore pattern.
-- **create_app_logs:** Creates logs for app directories.
-- **consolidate_files:** Consolidates content of specified file types into a single log file.
-- **create_filtered_tree:** Creates a directory tree structure and logs content.
-- **process_file:** Processes a file and appends content to a dictionary.
-- **write_files:** Writes aggregated content to files.
-- **extract_definitions:** Extracts class and function definitions from Python files.
-
-## Main Scripts
-
-### create_tree.py
-
-Creates the file tree structure and logs specified file types while ignoring certain patterns.
-
-### readme_build.py
-
-Builds and updates the main `README.md` file based on the project's current structure and logs.
-
-## Usage
-
-To run the scripts, navigate to the `zscripts` directory and execute the desired script using Python. Ensure that all dependencies are installed and the configurations are correctly set.
-
-For example, to create logs for all Python files in the project:
+Install optional dev dependencies and run the tests (requires `pytest`):
 
 ```sh
-python zscripts/all/all_pyth.py
+pip install .[dev]
+python -m pytest
 ```
 
-This will generate a comprehensive log of all Python files, ignoring specified patterns, and save it in the `logs` directory.
+All CLI commands automatically create required log directories. Outputs live under `zscripts/logs/`, mirroring the preset names (`logs_apps_pyth`, `logs_single_files`, `logs_tree`, etc.).

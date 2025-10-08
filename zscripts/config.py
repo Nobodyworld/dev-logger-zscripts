@@ -1,12 +1,35 @@
 # zscripts/config.py
+from __future__ import annotations
+
 from pathlib import Path
 
-# Define the directories to skip
-SKIP_DIRS = ['zscripts', 'zbuild', 'migrations', 'static', 'yayay',
-              'asgi', 'wsgi', 'migrations', 'staticfiles', 'logs',
-              'media', '__pycache__', 'build', 'dist', 'zscripts',
-              'venv', 'env', 'envs', 'node_modules', 'public', 'assets',
-              '.git.txt']
+# Define the directories to skip (deduplicated while preserving order)
+SKIP_DIRS = tuple(
+    dict.fromkeys(
+        [
+            "zscripts",
+            "zbuild",
+            "migrations",
+            "static",
+            "yayay",
+            "asgi",
+            "wsgi",
+            "staticfiles",
+            "logs",
+            "media",
+            "__pycache__",
+            "build",
+            "dist",
+            "venv",
+            "env",
+            "envs",
+            "node_modules",
+            "public",
+            "assets",
+            ".git.txt",
+        ]
+    )
+)
 
 # Define the file types to look for and their corresponding output files
 FILE_TYPES = {
@@ -41,11 +64,13 @@ FILE_TYPES = {
 
 # Define directories for logging and output
 SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parent
 LOG_DIR = SCRIPT_DIR / 'logs'
 BUILD_DIR = LOG_DIR / 'build_files'
 ANALYSIS_DIR = LOG_DIR / 'analysis_logs'
 CONSOLIDATION_DIR = LOG_DIR / 'consoli_files'
 WORK_DIR = LOG_DIR / 'logs_files'
+TREE_LOG_DIR = LOG_DIR / 'logs_tree'
 
 # Define log directories for specific file types
 ALL_LOG_DIR = LOG_DIR / 'logs_apps_all'
@@ -63,3 +88,13 @@ CAPTURE_ALL_CSS_LOG = SINGLE_LOG_DIR / 'capture_all_css.txt'
 CAPTURE_ALL_JS_LOG = SINGLE_LOG_DIR / 'capture_all_js.txt'
 CAPTURE_ALL_PYTHON_HTML_LOG = SINGLE_LOG_DIR / 'capture_all_python_html.txt'
 CAPTURE_ALL_LOG = SINGLE_LOG_DIR / 'capture_all.txt'
+
+# Preset mappings used by the CLI to avoid scattering file-type knowledge
+FILE_TYPE_PRESETS = {
+    "python": {".py"},
+    "html": {".html"},
+    "css": {".css"},
+    "javascript": {".js"},
+    "python-html": {".py", ".html"},
+    "all": {".py", ".html", ".css", ".js"},
+}

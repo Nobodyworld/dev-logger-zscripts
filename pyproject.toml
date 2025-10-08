@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zscripts"
+version = "0.1.0"
+description = "Toolkit for aggregating and logging application code snippets."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Zscripts Maintainers" }]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+

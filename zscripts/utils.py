@@ -3,7 +3,10 @@ import fnmatch
 from pathlib import Path
 import os
 import re
-from config import SKIP_DIRS, FILE_TYPES
+try:  # pragma: no cover - compatibility shim
+    from .config import SKIP_DIRS, FILE_TYPES
+except ImportError:  # pragma: no cover
+    from config import SKIP_DIRS, FILE_TYPES  # type: ignore
 
 def load_gitignore_patterns(root_path):
     """

@@ -1,0 +1,36 @@
+- name: type:bug
+  color: D73A4A
+  description: Defects and regressions
+- name: type:feature
+  color: A2EEEF
+  description: New functionality or major enhancements
+- name: type:docs
+  color: 0366D6
+  description: Documentation-only changes
+- name: type:chore
+  color: C5DEF5
+  description: Maintenance, refactors, or tooling updates
+- name: priority:triage
+  color: FBCA04
+  description: Needs maintainer triage
+- name: priority:high
+  color: B60205
+  description: Must be addressed immediately
+- name: status:blocked
+  color: 6F42C1
+  description: Requires input or external dependency
+- name: status:ready
+  color: 0E8A16
+  description: Ready for implementation
+- name: area:cli
+  color: 5319E7
+  description: CLI parsing and UX
+- name: area:config
+  color: 1D76DB
+  description: Configuration schema or loading
+- name: area:observability
+  color: 5319E7
+  description: Logging, metrics, tracing work
+- name: area:security
+  color: 8B949E
+  description: Security, compliance, supply-chain tasks

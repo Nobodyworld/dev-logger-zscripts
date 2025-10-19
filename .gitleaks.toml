@@ -1,0 +1,11 @@
+title = "zscripts gitleaks configuration"
+
+enableDefaultRules = true
+
+[allowlist]
+  description = "Ignore generated fixtures and samples"
+  paths = [
+    "tests/tmp-case",
+    "tests/tmp-case2",
+    "sample_project"
+  ]

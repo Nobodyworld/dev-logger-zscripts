@@ -40,6 +40,27 @@ def test_cli_collect_writes_logs(sample_project_path: Path, tmp_path: Path) -> N
     assert any(python_log_dir.iterdir())
 
 
+def test_cli_collect_reports_summary(
+    sample_project_path: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    exit_code = cli_main(
+        [
+            "collect",
+            "--types",
+            "python",
+            "--project-root",
+            str(sample_project_path),
+            "--output-dir",
+            str(tmp_path / "logs"),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "Summary:" in captured.out
+    assert "files captured" in captured.out
+
+
 def test_cli_consolidate_writes_file(sample_project_path: Path, tmp_path: Path) -> None:
     output = tmp_path / "python.txt"
 
@@ -58,6 +79,29 @@ def test_cli_consolidate_writes_file(sample_project_path: Path, tmp_path: Path) 
     assert exit_code == 0
     assert output.exists()
     assert "backend" in output.read_text(encoding="utf-8")
+
+
+def test_cli_consolidate_reports_summary(
+    sample_project_path: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    output = tmp_path / "python.txt"
+
+    exit_code = cli_main(
+        [
+            "consolidate",
+            "--types",
+            "python",
+            "--project-root",
+            str(sample_project_path),
+            "--output",
+            str(output),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "files" in captured.out
+    assert "skipped" not in captured.err
 
 
 def test_cli_consolidate_includes_js_variants(sample_project_path: Path, tmp_path: Path) -> None:
@@ -276,6 +320,27 @@ def test_cli_tree_streams_stdout_and_limits_bytes(
     assert exit_code == 0
     assert '│   """Service' in captured.out
     assert "✓ Wrote project tree to stdout" in captured.err
+
+
+def test_cli_tree_reports_summary(
+    sample_project_path: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    tree_path = tmp_path / "tree.txt"
+
+    exit_code = cli_main(
+        [
+            "tree",
+            "--project-root",
+            str(sample_project_path),
+            "--output",
+            str(tree_path),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "lines" in captured.out
+    assert "Preview summary" not in captured.out
 
 
 def test_cli_collect_auto_detects_project_root(

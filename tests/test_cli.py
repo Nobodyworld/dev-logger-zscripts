@@ -164,6 +164,28 @@ def test_cli_consolidate_dry_run_lists_files(
     assert "backend/service.py" in captured.out
 
 
+def test_cli_consolidate_streams_to_stdout(
+    sample_project_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = cli_main(
+        [
+            "consolidate",
+            "--types",
+            "python",
+            "--project-root",
+            str(sample_project_path),
+            "--output",
+            "-",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "# backend/service.py" in captured.out
+    assert "✓ Consolidated python sources to stdout" in captured.err
+
+
 def test_cli_tree_dry_run_prints_preview(
     sample_project_path: Path,
     tmp_path: Path,
@@ -187,6 +209,29 @@ def test_cli_tree_dry_run_prints_preview(
     assert not tree_path.exists()
     assert "Dry run: would write project tree" in captured.out
     assert sample_project_path.resolve().as_posix() in captured.out
+
+
+def test_cli_tree_streams_stdout_and_limits_bytes(
+    sample_project_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = cli_main(
+        [
+            "tree",
+            "--project-root",
+            str(sample_project_path),
+            "--output",
+            "-",
+            "--include-contents",
+            "--max-bytes",
+            "10",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "│   \"\"\"Service" in captured.out
+    assert "✓ Wrote project tree to stdout" in captured.err
 
 
 def test_cli_rejects_unknown_type(

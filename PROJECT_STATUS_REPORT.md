@@ -17,7 +17,7 @@ Zscripts is a framework-agnostic CLI utility for aggregating source files into n
 
 ## Dependencies and Environment
 
-- **Python Version**: 3.13.7
+- **Python Version**: 3.11+
 - **External Dependencies**: None (pure Python standard library)
 - **Environment**: Virtual environment configured successfully
 - **Package Structure**: Installable as module (`python -m zscripts`)
@@ -37,25 +37,27 @@ All core CLI commands tested successfully:
 - **Command**: `python -m zscripts consolidate --types python --project-root sample_project`
 - **Result**: ✅ Created consolidated file
 - **Output**: `zscripts/logs/logs_single_files/capture_all_pyth.txt`
+- **Bonus**: `--output -` streams logs to STDOUT for pipeline-friendly scripting
 
 ### Tree Command
 
 - **Command**: `python -m zscripts tree --project-root sample_project`
 - **Result**: ✅ Created project tree snapshot
 - **Output**: `zscripts/logs/logs_single_files/tree.txt`
+- **Enhancements**: `--include-contents --max-bytes 1024 --output -` emits rich trees directly to STDOUT
 
 ## Code Quality Assessment
 
 - **Syntax Errors**: ✅ None found (py_compile check passed)
 - **Import Issues**: ✅ Fixed missing constants (USER_IGNORE_PATTERNS, LOG_GROUPS removed)
-- **Type Hints**: ⚠️ Some type casting required for config dict access
+- **Type Hints**: ✅ Strict `Config` dataclass with cached accessors reduces casting
 - **Unused Imports**: ✅ Cleaned up (removed logging, List, SKIP_DIRS)
 
 ## Testing Status
 
-- **Unit Tests**: ❌ None found in codebase
+- **Unit Tests**: ✅ Comprehensive pytest suite covering config, CLI, and utility flows
 - **Integration Tests**: ✅ Manual CLI testing successful
-- **Test Framework**: Not implemented
+- **Test Framework**: Pytest with coverage instrumentation
 
 ## Configuration
 
@@ -64,7 +66,7 @@ All core CLI commands tested successfully:
   - **Skip directories**: node_modules, venv, __pycache__, etc.
   - **File type mappings**: models.py → models_files, views.py → views_files
   - **Output directories**: logs under zscripts/logs/
-- **Custom Config**: Supports `--config` flag for alternative configs
+- **Custom Config**: Supports `--config` flag and `ZSCRIPTS_CONFIG_PATH` env var overrides
 
 ## Sample Project
 
@@ -74,18 +76,17 @@ All core CLI commands tested successfully:
 
 ## Issues Found and Fixed
 
-1. **Missing Constants**: Added USER_IGNORE_PATTERNS to config.py and JSON
-2. **Unused Import**: Removed LOG_GROUPS from cli.py
-3. **Type Issues**: Added type: ignore comments for config dict access
-4. **Return Type Mismatch**: Fixed _augment_ignore_patterns to return list
+1. Hardened config loader with environment override, duplicate-entry warnings, and path escape detection
+2. Refactored ignore matcher to support negation, case-normalisation, and cached gitignore ingestion
+3. CLI now streams consolidate/tree output to STDOUT, suggests close command names, and surfaces byte limits for tree captures
+4. Expanded automated tests to assert new behaviours and protect regressions
 
 ## Recommendations
 
-1. **Add Tests**: Implement unit tests for core functions
-2. **Improve Type Safety**: Better type annotations for config handling
-3. **Documentation**: Update README with fixed CLI usage
-4. **CI/CD**: Add automated testing and linting to pipeline
-5. **Legacy Cleanup**: Remove or fix broken legacy scripts in zscripts/all/, zscripts/single/
+1. Performance profiling for large repos (measure traversal caching impact)
+2. Package distribution: publish to PyPI with extras for optional tooling
+3. CI/CD: Add automated testing (pytest, ruff, mypy, bandit) to pipeline
+4. Legacy cleanup: continue pruning deprecated wrapper scripts once consumers migrate
 
 ## Overall Status
 

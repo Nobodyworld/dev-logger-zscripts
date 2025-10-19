@@ -3,39 +3,57 @@
 from __future__ import annotations
 
 import fnmatch
+import functools
 import logging
 import os
 import re
+import warnings
 from collections.abc import Collection, Iterable, Iterator
 from pathlib import Path
 from typing import Final, TextIO
 
-from .config import SKIP_DIRS, USER_IGNORE_PATTERNS
+from .config import Config, get_config
+
+_WINDOWS = os.name == "nt"
+
+
+@functools.lru_cache(maxsize=256)
+def _compile_pattern(pattern: str, *, case_sensitive: bool) -> re.Pattern[str]:
+    flags = 0 if case_sensitive else re.IGNORECASE
+    translated = fnmatch.translate(pattern)
+    return re.compile(translated, flags)
 
 
 class IgnoreMatcher:
     """Match relative paths against glob-style ignore patterns."""
 
-    def __init__(self, patterns: Iterable[str]) -> None:
-        compiled: list[tuple[str, re.Pattern[str]]] = []
+    def __init__(self, patterns: Iterable[str], *, case_sensitive: bool | None = None) -> None:
+        self._case_sensitive = case_sensitive if case_sensitive is not None else not _WINDOWS
+        compiled: list[tuple[str, re.Pattern[str], bool]] = []
         for pattern in patterns:
-            compiled.append((pattern, re.compile(fnmatch.translate(pattern))))
+            raw = pattern.strip()
+            if not raw:
+                continue
+            is_negated = raw.startswith("!")
+            candidate = raw[1:] if is_negated else raw
+            regex = _compile_pattern(candidate, case_sensitive=self._case_sensitive)
+            compiled.append((candidate, regex, is_negated))
         self._compiled: Final = compiled
-        # TODO - Support gitwildmatch semantics to align with .gitignore behavior.
-        # TODO - Cache translated patterns globally to reduce repeated regex compilation.
         # TODO - Track compilation failures to surface invalid glob syntax to callers.
 
     def matches(self, path: Path | str) -> bool:
         """Return ``True`` if *path* matches any configured ignore pattern."""
 
-        if isinstance(path, Path):
-            candidate = path.as_posix()
-        else:
-            candidate = Path(path).as_posix()
+        candidate_path = Path(path)
+        candidate = candidate_path.as_posix()
+        if not self._case_sensitive:
+            candidate = candidate.casefold()
 
-        # TODO - Normalise path case to better support case-insensitive filesystems.
-        # TODO - Honour negated patterns ("!") so later rules can re-include paths.
-        return any(regex.match(candidate) for _, regex in self._compiled)
+        matched = False
+        for _, regex, is_negated in self._compiled:
+            if regex.match(candidate):
+                matched = not is_negated
+        return matched
 
 
 LOGGER = logging.getLogger("zscripts.utils")
@@ -137,35 +155,62 @@ def load_gitignore_patterns(
     if not root_path.is_dir():
         raise NotADirectoryError(f"Project root must be a directory: {root_path}")
 
-    gitignore_path = root_path / ".gitignore"
-    patterns = set(BASE_IGNORE_PATTERNS)
+    config: Config | None = None
+    if skip_dirs is None or user_ignore_patterns is None:
+        config = get_config()
 
-    expanded_skip_dirs = expand_skip_dirs(skip_dirs or SKIP_DIRS)
-    patterns.update(expanded_skip_dirs)
+    effective_skip = tuple(skip_dirs or (config.skip if config else ()))
+    effective_user_patterns = (
+        tuple(sorted(_normalise_user_ignore_patterns(user_ignore_patterns)))
+        if user_ignore_patterns is not None
+        else tuple(sorted(config.user_ignore_patterns) if config else ())
+    )
 
-    if user_ignore_patterns is None:
-        patterns.update(USER_IGNORE_PATTERNS)
-    else:
-        patterns.update(_normalise_user_ignore_patterns(user_ignore_patterns))
+    return list(
+        _load_gitignore_patterns_cached(
+            root_path.resolve(), effective_skip, effective_user_patterns
+        )
+    )
 
-    if gitignore_path.is_file():
-        with gitignore_path.open("r", encoding="utf-8") as file:
+
+def _ingest_ignore_file(path: Path, patterns: set[str]) -> None:
+    if not path.is_file():
+        return
+    try:
+        with path.open("r", encoding="utf-8") as file:
             for line in file:
                 stripped_line = line.strip()
                 if stripped_line and not stripped_line.startswith("#"):
                     patterns.add(stripped_line)
+    except OSError as exc:  # pragma: no cover - unlikely on local filesystem
+        warnings.warn(
+            f"Failed to read ignore file {path}: {exc}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+
+@functools.lru_cache(maxsize=128)
+def _load_gitignore_patterns_cached(
+    root_path: Path, skip_dirs: tuple[str, ...], user_ignore_patterns: tuple[str, ...]
+) -> tuple[str, ...]:
+    patterns: set[str] = set(BASE_IGNORE_PATTERNS)
+    patterns.update(expand_skip_dirs(skip_dirs))
+    patterns.update(user_ignore_patterns)
+
+    gitignore_path = root_path / ".gitignore"
+    info_exclude = root_path / ".git" / "info" / "exclude"
+    _ingest_ignore_file(gitignore_path, patterns)
+    _ingest_ignore_file(info_exclude, patterns)
     # TODO - Parse gitignore escape sequences to mirror Git's matching semantics.
-    # TODO - Cache resolved ignore sets per root_path to avoid redundant disk reads.
-    # TODO - Include patterns from .git/info/exclude for parity with Git defaults.
-    return sorted(patterns)
+    return tuple(sorted(patterns))
 
 
-def file_matches_any_pattern(file_path: Path, patterns: Iterable[str]) -> bool:
+def file_matches_any_pattern(file_path: Path | str, patterns: Iterable[str]) -> bool:
     """Return ``True`` if *file_path* matches one of *patterns*."""
 
-    candidate = file_path.as_posix()
-    # TODO - Accept raw strings for parity with IgnoreMatcher.matches inputs.
-    return any(fnmatch.fnmatch(candidate, pattern) for pattern in patterns)
+    matcher = IgnoreMatcher(patterns)
+    return matcher.matches(file_path)
 
 
 def safe_relative_path(project_root: Path, candidate: Path) -> Path:
@@ -181,8 +226,14 @@ def safe_relative_path(project_root: Path, candidate: Path) -> Path:
 
 
 def _normalise_extensions(extensions: Iterable[str]) -> set[str]:
-    # TODO - Validate extensions include leading dots to avoid ambiguous matches.
-    return {ext.lower() for ext in extensions}
+    normalised: set[str] = set()
+    for ext in extensions:
+        if not ext.startswith('.'):
+            raise ValueError(
+                "File extensions must include a leading '.' character"
+            )
+        normalised.add(ext.lower())
+    return normalised
 
 
 def _iter_source_files(

@@ -54,7 +54,9 @@ source control or generated dynamically:
 
 Every path is resolved relative to the `zscripts/` package directory, so the
 example above stores aggregated logs under `zscripts/logs/`. You can provide a
-custom configuration file via the `--config` flag on any CLI command. The module
+custom configuration file via the `--config` flag on any CLI command. Operators
+can also override the default config path globally by setting the
+`ZSCRIPTS_CONFIG_PATH` environment variable before launching the CLI. The module
 `zscripts.config` exposes helpers (`load_config`, `get_config`, and constants such
 as `LOG_DIR`) for scripts that want to introspect the parsed settings.
 
@@ -84,7 +86,9 @@ python -m zscripts collect --types python,js --project-root sample_project
 ```
 
 Logs are written to the directories declared in `collection_logs`.
-Use `--dry-run` to preview the grouped files without creating any logs:
+Use `--dry-run` to preview the grouped files without creating any logs. The
+preview lists each stack alongside per-app counts so you can gauge output size
+before touching disk:
 
 ```bash
 python -m zscripts collect --types python --project-root sample_project --dry-run
@@ -101,7 +105,9 @@ python -m zscripts consolidate --types python --output /tmp/project-python.txt
 When no output file is supplied, the command falls back to the
 `single_targets` configuration entry. Combine `--dry-run` with either the
 default target or a custom `--output` path to inspect the ordered file list
-before writing:
+before writing. Pass `--output -` to stream the consolidated bundle directly to
+STDOUT (status messages still print to STDERR so the output stays machine
+readable):
 
 ```bash
 python -m zscripts consolidate --types python --project-root sample_project --dry-run
@@ -111,7 +117,9 @@ python -m zscripts consolidate --types python --project-root sample_project --dr
 
 Snapshot the repository structure. File contents are omitted by default to
 produce a compact overview; pass `--include-contents` to embed truncated file
-bodies when needed.
+bodies when needed. Use `--max-bytes` to cap how much of each file is inlined
+and `--output -` to stream the tree directly to STDOUT when building automated
+reports.
 
 ```bash
 python -m zscripts tree --project-root sample_project --output /tmp/tree.txt --include-contents

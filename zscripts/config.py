@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import functools
 import json
 import os
 import warnings
@@ -11,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, TypeAlias, TypedDict, cast
+
+from ._cache import typed_lru_cache
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 CONFIG_PATH_ENV_VAR = "ZSCRIPTS_CONFIG_PATH"
@@ -133,7 +134,9 @@ def _load_raw_config(config_path: Path | None = None) -> dict[str, JSONValue]:
         "collection_logs",
         "single_targets",
     }
-    unknown_keys = sorted(set(data) - known_keys)
+    data_dict = cast(dict[str, JSONValue], data)
+    key_set: set[str] = set(data_dict.keys())
+    unknown_keys = sorted(key_set - known_keys)
     if unknown_keys:
         raise RuntimeError(
             "Unknown configuration keys: "
@@ -142,7 +145,7 @@ def _load_raw_config(config_path: Path | None = None) -> dict[str, JSONValue]:
             + ", ".join(sorted(known_keys))
         )
 
-    return cast(dict[str, JSONValue], data)
+    return data_dict
 
 
 def _warn_on_duplicates(name: str, duplicates: Iterable[str]) -> None:
@@ -329,8 +332,7 @@ def resolve_paths(config: Config, *, base_dir: Path | None = None) -> ResolvedPa
     )
     capture_all_python_html_log = _ensure_within_root(
         root_dir,
-        single_log_dir
-        / config.single_targets.get("python_html", "capture_all_python_html.txt"),
+        single_log_dir / config.single_targets.get("python_html", "capture_all_python_html.txt"),
         label="capture_all_python_html",
     )
     capture_all_log = _ensure_within_root(
@@ -361,12 +363,12 @@ def resolve_paths(config: Config, *, base_dir: Path | None = None) -> ResolvedPa
     )
 
 
-@functools.lru_cache(maxsize=1)
+@typed_lru_cache(maxsize=1)
 def _get_default_config() -> Config:
     return _normalise_raw_config(_load_raw_config())
 
 
-@functools.lru_cache(maxsize=1)
+@typed_lru_cache(maxsize=1)
 def _get_default_paths() -> ResolvedPaths:
     return resolve_paths(_get_default_config())
 
@@ -388,7 +390,7 @@ def get_file_group_resolver() -> dict[str, str]:
     return dict(_get_default_config().file_types)
 
 
-_CONFIG_EXPORTS: dict[str, Callable[[], Any]] = {
+_CONFIG_EXPORTS: dict[str, Callable[[], object]] = {
     "SKIP_DIRS": lambda: _get_default_config().skip,
     "FILE_TYPES": lambda: dict(_get_default_config().file_types),
     "USER_IGNORE_PATTERNS": lambda: _get_default_config().user_ignore_patterns,

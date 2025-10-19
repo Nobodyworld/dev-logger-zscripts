@@ -31,6 +31,8 @@ All core CLI commands tested successfully:
 - **Command**: `python -m zscripts collect --types python --project-root sample_project`
 - **Result**: ✅ Created logs in `zscripts/logs/logs_apps_pyth/`
 - **Output**: Generated backend.txt, frontend.txt, infra.txt, scripts.txt, zscripts.txt
+- **Quality of life**: When invoked from nested directories the CLI auto-detects
+  the repository root, so the explicit `--project-root` flag is now optional.
 
 ### Consolidate Command
 
@@ -80,6 +82,8 @@ All core CLI commands tested successfully:
 2. Refactored ignore matcher to support negation, case-normalisation, and cached gitignore ingestion
 3. CLI now streams consolidate/tree output to STDOUT, suggests close command names, and surfaces byte limits for tree captures
 4. Expanded automated tests to assert new behaviours and protect regressions
+5. Added cross-platform validation for configured log filenames and reporter-driven
+   warnings when `--types` fall back to defaults
 
 ## Recommendations
 

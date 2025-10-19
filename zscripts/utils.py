@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import fnmatch
-import functools
 import logging
 import os
 import re
@@ -12,12 +11,13 @@ from collections.abc import Collection, Iterable, Iterator
 from pathlib import Path
 from typing import Final, TextIO
 
+from ._cache import typed_lru_cache
 from .config import Config, get_config
 
 _WINDOWS = os.name == "nt"
 
 
-@functools.lru_cache(maxsize=256)
+@typed_lru_cache(maxsize=256)
 def _compile_pattern(pattern: str, *, case_sensitive: bool) -> re.Pattern[str]:
     flags = 0 if case_sensitive else re.IGNORECASE
     translated = fnmatch.translate(pattern)
@@ -190,7 +190,7 @@ def _ingest_ignore_file(path: Path, patterns: set[str]) -> None:
         )
 
 
-@functools.lru_cache(maxsize=128)
+@typed_lru_cache(maxsize=128)
 def _load_gitignore_patterns_cached(
     root_path: Path, skip_dirs: tuple[str, ...], user_ignore_patterns: tuple[str, ...]
 ) -> tuple[str, ...]:
@@ -228,10 +228,8 @@ def safe_relative_path(project_root: Path, candidate: Path) -> Path:
 def _normalise_extensions(extensions: Iterable[str]) -> set[str]:
     normalised: set[str] = set()
     for ext in extensions:
-        if not ext.startswith('.'):
-            raise ValueError(
-                "File extensions must include a leading '.' character"
-            )
+        if not ext.startswith("."):
+            raise ValueError("File extensions must include a leading '.' character")
         normalised.add(ext.lower())
     return normalised
 

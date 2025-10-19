@@ -13,6 +13,7 @@ from zscripts.utils import (
     consolidate_files,
     create_filtered_tree,
     expand_skip_dirs,
+    file_matches_any_pattern,
     group_source_files_by_app,
     iter_filtered_tree_lines,
     list_matching_source_files,
@@ -54,6 +55,17 @@ def test_ignore_matcher_matches_glob_patterns() -> None:
     matcher = IgnoreMatcher(["*.pyc", "__pycache__/"])
     assert matcher.matches(Path("__pycache__/module.pyc"))
     assert not matcher.matches(Path("module.py"))
+
+
+def test_ignore_matcher_supports_negation() -> None:
+    matcher = IgnoreMatcher(["backend/*", "!backend/service.py"])
+    assert not matcher.matches(Path("backend/service.py"))
+    assert matcher.matches(Path("backend/other.py"))
+
+
+def test_ignore_matcher_case_normalisation() -> None:
+    matcher = IgnoreMatcher(["frontend/app.js"], case_sensitive=False)
+    assert matcher.matches(Path("frontend/App.js"))
 
 
 def test_collect_app_logs_ignores_symlinks(sample_project_path: Path, tmp_path: Path) -> None:
@@ -123,6 +135,15 @@ def test_load_gitignore_patterns_includes_skip_dirs(sample_project_path: Path) -
 
     patterns = load_gitignore_patterns(sample_project_path)
     assert "node_modules" in patterns
+
+
+def test_load_gitignore_patterns_includes_info_exclude(tmp_path: Path) -> None:
+    project_root = tmp_path / "project"
+    (project_root / ".git" / "info").mkdir(parents=True)
+    (project_root / ".git" / "info" / "exclude").write_text("cache/\n", encoding="utf-8")
+
+    patterns = load_gitignore_patterns(project_root)
+    assert "cache/" in patterns
 
 
 def test_load_gitignore_patterns_respects_overrides(tmp_path: Path) -> None:
@@ -235,6 +256,10 @@ def test_list_matching_source_files_produces_relative_paths(
 
     assert files == sorted(files, key=lambda path: path.as_posix())
     assert Path("backend/extra.PY") in files
+
+
+def test_file_matches_any_pattern_accepts_strings() -> None:
+    assert file_matches_any_pattern("backend/service.py", ["backend/*.py"])
 
 
 def test_iter_filtered_tree_lines_supports_dry_run_preview(

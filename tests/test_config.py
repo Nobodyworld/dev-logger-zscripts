@@ -5,9 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from zscripts import config
 from zscripts.config import Config, get_config, get_file_group_resolver, load_config, resolve_paths
-
-# TODO - Add configuration tests for environment overrides and nested directories.
 
 
 def test_config_loading_returns_expected_types() -> None:
@@ -43,6 +42,16 @@ def test_load_config_rejects_invalid_types(tmp_path: Path) -> None:
         load_config(invalid_config)
 
 
+def test_load_config_warns_on_duplicate_entries(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.json"
+    config_path.write_text('{"skip": ["dup", "dup", "dup "]}', encoding="utf-8")
+
+    with pytest.warns(RuntimeWarning, match="Duplicate entries ignored"):
+        loaded = load_config(config_path)
+
+    assert "dup" in loaded.skip
+
+
 def test_resolve_paths_returns_expected_structure(tmp_path: Path) -> None:
     config = get_config()
     resolved = resolve_paths(config, base_dir=tmp_path)
@@ -50,6 +59,16 @@ def test_resolve_paths_returns_expected_structure(tmp_path: Path) -> None:
     assert resolved.log_dir == tmp_path / config.directories.get("log_root", "logs")
     assert resolved.python_log_dir.parent == resolved.log_dir
     assert resolved.capture_all_log.parent == resolved.single_log_dir
+
+
+def test_resolve_paths_rejects_escape(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.json"
+    config_path.write_text('{"directories": {"log_root": "../escape"}}', encoding="utf-8")
+
+    loaded = load_config(config_path)
+
+    with pytest.raises(RuntimeError):
+        resolve_paths(loaded, base_dir=tmp_path)
 
 
 def test_config_to_dict_round_trip() -> None:
@@ -94,3 +113,28 @@ def test_to_dict_returns_mutable_copies() -> None:
 
     serialized["directories"]["new_dir"] = "value"
     assert "new_dir" not in config.directories
+
+
+def test_environment_override_loads_custom_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    custom_config = tmp_path / "custom.json"
+    custom_config.write_text('{"skip": ["env-skip"]}', encoding="utf-8")
+
+    monkeypatch.setenv("ZSCRIPTS_CONFIG_PATH", str(custom_config))
+    config._get_default_config.cache_clear()
+    config._get_default_paths.cache_clear()
+
+    loaded = load_config()
+    assert "env-skip" in loaded.skip
+
+    config._get_default_config.cache_clear()
+    config._get_default_paths.cache_clear()
+
+
+def test_unknown_keys_raise_helpful_error(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.json"
+    config_path.write_text('{"unexpected": 1}', encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="Unknown configuration keys"):
+        load_config(config_path)

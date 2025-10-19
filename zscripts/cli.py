@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import difflib
+import functools
 import logging
 import sys
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -42,29 +44,21 @@ def _normalise_extensions(source: Mapping[str, Iterable[str]]) -> dict[str, froz
     return {key: frozenset(ext.lower() for ext in value) for key, value in source.items()}
 
 
-# TODO - Deduplicate extension presets with SINGLE_TYPE_EXTENSIONS to avoid drift.
-COLLECT_TYPE_EXTENSIONS = _normalise_extensions(
-    {
-        "python": (".py",),
-        "html": (".html",),
-        "css": (".css",),
-        "js": JAVASCRIPT_EXTENSIONS,
-        "python_html": (".py", ".html"),
-        "all": (".py", ".html", ".css", *JAVASCRIPT_EXTENSIONS),
-    }
-)
+_BASE_EXTENSION_PRESETS = {
+    "python": (".py",),
+    "html": (".html",),
+    "css": (".css",),
+    "js": JAVASCRIPT_EXTENSIONS,
+    "python_html": (".py", ".html"),
+}
 
-# TODO - Allow configuration to define custom single file extension groups.
-SINGLE_TYPE_EXTENSIONS = _normalise_extensions(
-    {
-        "python": (".py",),
-        "html": (".html",),
-        "css": (".css",),
-        "js": JAVASCRIPT_EXTENSIONS,
-        "python_html": (".py", ".html"),
-        "any": (".py", ".html", ".css", *JAVASCRIPT_EXTENSIONS),
-    }
-)
+_NORMALISED_BASE_PRESETS = _normalise_extensions(_BASE_EXTENSION_PRESETS)
+
+COLLECT_TYPE_EXTENSIONS = dict(_NORMALISED_BASE_PRESETS)
+COLLECT_TYPE_EXTENSIONS["all"] = frozenset().union(*COLLECT_TYPE_EXTENSIONS.values())
+
+SINGLE_TYPE_EXTENSIONS = dict(_NORMALISED_BASE_PRESETS)
+SINGLE_TYPE_EXTENSIONS["any"] = COLLECT_TYPE_EXTENSIONS["all"]
 
 
 class UnknownTypeError(ValueError):
@@ -81,7 +75,6 @@ def _parse_type_list(raw: str, *, allowed: Mapping[str, frozenset[str]]) -> tupl
     supply values manually or via environment variables.
     """
 
-    # TODO - Offer suggestions for close matches when a type name is unknown.
     normalised: list[str] = []
     seen: set[str] = set()
     for value in raw.split(","):
@@ -90,7 +83,12 @@ def _parse_type_list(raw: str, *, allowed: Mapping[str, frozenset[str]]) -> tupl
             continue
         candidate = stripped.lower()
         if candidate not in allowed:
-            raise UnknownTypeError(f"Unsupported type '{stripped}'. Choose from {sorted(allowed)}")
+            suggestions = difflib.get_close_matches(candidate, allowed.keys(), n=1)
+            hint = f" Did you mean '{suggestions[0]}'?" if suggestions else ""
+            choices = ", ".join(sorted(allowed))
+            raise UnknownTypeError(
+                f"Unsupported type '{stripped}'. Choose from {choices}.{hint}"
+            )
         if candidate not in seen:
             normalised.append(candidate)
             seen.add(candidate)
@@ -129,12 +127,23 @@ def _build_single_targets(config: Config, base_dir: Path | None = None) -> dict[
     }
 
 
+@functools.lru_cache(maxsize=64)
+def _augment_ignore_patterns_cached(
+    project_root: Path, skip: tuple[str, ...], user_patterns: tuple[str, ...]
+) -> tuple[str, ...]:
+    return tuple(
+        load_gitignore_patterns(
+            project_root,
+            skip_dirs=skip,
+            user_ignore_patterns=user_patterns,
+        )
+    )
+
+
 def _augment_ignore_patterns(project_root: Path, config: Config) -> list[str]:
-    # TODO - Cache augmented pattern sets for repeated CLI command invocations.
-    return load_gitignore_patterns(
-        project_root,
-        skip_dirs=config.skip,
-        user_ignore_patterns=config.user_ignore_patterns,
+    sorted_user_patterns = tuple(sorted(config.user_ignore_patterns))
+    return list(
+        _augment_ignore_patterns_cached(project_root.resolve(), config.skip, sorted_user_patterns)
     )
 
 
@@ -147,7 +156,9 @@ def _resolve_project_root(raw_root: str, *, sample: bool) -> Path:
     # TODO - Preserve the original user input in error messages for clarity.
     resolved = project_root.resolve()
     if not resolved.exists():
-        raise FileNotFoundError(f"Project root does not exist: {resolved}")
+        raise FileNotFoundError(
+            f"Project root does not exist: {raw_root} (resolved to {resolved})"
+        )
     # TODO - Detect repository root automatically when project_root is omitted.
     return resolved
 
@@ -197,9 +208,9 @@ def collect_command(args: argparse.Namespace) -> None:
                 print("  - No matching files found")
             else:
                 for app_name, files in grouped.items():
-                    print(f"  - [{app_name}]")
+                    print(f"  - [{app_name}] ({len(files)} files)")
                     for relative_path in files:
-                        print(f"    {relative_path.as_posix()}")
+                        print(f"    · {relative_path.as_posix()}")
                         # TODO - Show file size metadata to estimate log volume upfront.
             continue
 
@@ -242,8 +253,12 @@ def consolidate_command(args: argparse.Namespace) -> None:
     output_base = Path(output_dir_arg).expanduser().resolve() if output_dir_arg else None
     targets = _build_single_targets(config, output_base)
 
-    # TODO - Accept stdout target ("-") for piping consolidated content.
-    output_path = Path(output_arg).expanduser().resolve() if output_arg else targets[type_name]
+    stream_stdout = output_arg == "-"
+    output_path = (
+        None
+        if stream_stdout
+        else Path(output_arg).expanduser().resolve() if output_arg else targets[type_name]
+    )
     # TODO - Warn when output_path resides outside of the configured log directory.
     ignore_patterns = _augment_ignore_patterns(project_root, config)
     if dry_run:
@@ -252,8 +267,9 @@ def consolidate_command(args: argparse.Namespace) -> None:
             SINGLE_TYPE_EXTENSIONS[type_name],
             ignore_patterns,
         )
-        LOGGER.info("event=consolidate_planned type=%s output=%s", type_name, output_path)
-        print(f"Dry run: would consolidate {len(planned)} files into {output_path}")
+        LOGGER.info("event=consolidate_planned type=%s output=%s", type_name, output_path or "-")
+        target_display = "stdout" if stream_stdout else output_path
+        print(f"Dry run: would consolidate {len(planned)} files into {target_display}")
         for relative_path in planned:
             print(f"  - {relative_path.as_posix()}")
         if not planned:
@@ -261,6 +277,30 @@ def consolidate_command(args: argparse.Namespace) -> None:
         # TODO - Return a non-zero exit code when dry-run detects unresolved issues.
         return
 
+    if stream_stdout:
+        LOGGER.info("event=consolidate_stream type=%s", type_name)
+        for relative_path in list_matching_source_files(
+            project_root,
+            SINGLE_TYPE_EXTENSIONS[type_name],
+            ignore_patterns,
+        ):
+            file_path = project_root / relative_path
+            try:
+                content = file_path.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError) as exc:
+                LOGGER.warning(
+                    "event=consolidate_skipped error_id=FS002 file=%s reason=%s",
+                    file_path,
+                    exc,
+                )
+                continue
+            print(f"# {relative_path.as_posix()}")
+            print(content)
+            print()
+        print(f"✓ Consolidated {type_name} sources to stdout", file=sys.stderr)
+        return
+
+    assert output_path is not None
     output_path.parent.mkdir(parents=True, exist_ok=True)
     # TODO - Clean up orphaned directories when consolidation is interrupted mid-run.
     consolidate_files(
@@ -280,6 +320,7 @@ def tree_command(args: argparse.Namespace) -> None:
     output_dir_arg = cast(str | None, getattr(args, "output_dir", None))
     output_arg = cast(str | None, getattr(args, "output", None))
     include_contents = cast(bool, getattr(args, "include_contents", False))
+    max_bytes = cast(int, getattr(args, "max_bytes", 4096))
     sample_flag = cast(bool, getattr(args, "sample", False))
     dry_run = cast(bool, getattr(args, "dry_run", False))
 
@@ -287,11 +328,16 @@ def tree_command(args: argparse.Namespace) -> None:
     config = load_config(config_arg)
     project_root = _resolve_project_root(project_root_arg, sample=sample_flag)
 
+    stream_stdout = False
     if output_dir_arg:
         output_base = Path(output_dir_arg).expanduser().resolve()
-        output_path = output_base / "project_tree.txt"
+        output_path: Path | None = output_base / "project_tree.txt"
     elif output_arg:
-        output_path = Path(output_arg).expanduser().resolve()
+        if output_arg == "-":
+            stream_stdout = True
+            output_path = None
+        else:
+            output_path = Path(output_arg).expanduser().resolve()
     else:
         default_base = next(iter(_build_log_paths(config).values())).parent
         output_path = default_base / "project_tree.txt"
@@ -301,24 +347,39 @@ def tree_command(args: argparse.Namespace) -> None:
     # TODO - Allow include/exclude filters to be provided at runtime for tree snapshots.
     # TODO - Offer machine-readable output (JSON/NDJSON) alongside the text tree view.
     if dry_run:
-        LOGGER.info("event=tree_planned output=%s", output_path)
-        print(f"Dry run: would write project tree to {output_path}")
+        LOGGER.info("event=tree_planned output=%s", output_path or "-")
+        target_display = "stdout" if stream_stdout else output_path
+        print(f"Dry run: would write project tree to {target_display}")
         for line in iter_filtered_tree_lines(
             project_root,
             ignore_patterns,
             include_content=include_contents,
+            max_bytes=max_bytes,
         ):
             print(line)
         # TODO - Display a summary of ignored paths during dry-run previews.
         return
 
+    if stream_stdout:
+        LOGGER.info("event=tree_stream")
+        for line in iter_filtered_tree_lines(
+            project_root,
+            ignore_patterns,
+            include_content=include_contents,
+            max_bytes=max_bytes,
+        ):
+            print(line)
+        print("✓ Wrote project tree to stdout", file=sys.stderr)
+        return
+
+    assert output_path is not None
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    # TODO - Allow writing to stdout when output_path equals '-' sentinel value.
     create_filtered_tree(
         project_root,
         output_path,
         ignore_patterns,
         include_content=include_contents,
+        max_bytes=max_bytes,
     )
     LOGGER.info("event=tree_completed output=%s", output_path)
     print(f"✓ Wrote project tree to {output_path}")
@@ -405,7 +466,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Include file contents in the tree output",
     )
-    # TODO - Add --max-bytes CLI argument to align with iter_filtered_tree_lines.
+    tree_parser.add_argument(
+        "--max-bytes",
+        type=int,
+        default=4096,
+        help="Maximum number of bytes to read per file when including contents",
+    )
     tree_parser.set_defaults(func=tree_command)
 
     return parser

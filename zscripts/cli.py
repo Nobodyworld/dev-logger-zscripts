@@ -5,14 +5,20 @@ from __future__ import annotations
 import argparse
 import difflib
 import logging
+import os
 import sys
-from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Final, TextIO, cast
 
 from ._cache import typed_lru_cache
 from .config import DEFAULT_CONFIG_PATH, Config, load_config, resolve_paths
+from .presets import (
+    get_collect_extension_map,
+    get_default_collection_logs,
+    get_default_single_targets,
+    get_single_extension_map,
+)
 from .utils import (
     collect_app_logs,
     consolidate_files,
@@ -36,81 +42,12 @@ WINDOWS_RESERVED_NAMES: Final[frozenset[str]] = frozenset(
 )
 WINDOWS_INVALID_CHARS: Final[frozenset[str]] = frozenset('<>:"/\\|?*')
 
-
-@dataclass(frozen=True)
-class TypePreset:
-    name: str
-    extensions: tuple[str, ...]
-    collect_log: str
-    single_target: str
-
-
-_TYPE_PRESETS: Mapping[str, TypePreset] = {
-    "python": TypePreset(
-        name="python",
-        extensions=(".py",),
-        collect_log="logs_apps_pyth",
-        single_target="capture_all_pyth.txt",
-    ),
-    "html": TypePreset(
-        name="html",
-        extensions=(".html",),
-        collect_log="logs_apps_html",
-        single_target="capture_all_html.txt",
-    ),
-    "css": TypePreset(
-        name="css",
-        extensions=(".css",),
-        collect_log="logs_apps_css",
-        single_target="capture_all_css.txt",
-    ),
-    "js": TypePreset(
-        name="js",
-        extensions=(
-            ".js",
-            ".jsx",
-            ".mjs",
-            ".cjs",
-            ".ts",
-            ".tsx",
-            ".mts",
-            ".cts",
-        ),
-        collect_log="logs_apps_js",
-        single_target="capture_all_js.txt",
-    ),
-    "python_html": TypePreset(
-        name="python_html",
-        extensions=(".py", ".html"),
-        collect_log="logs_apps_both",
-        single_target="capture_all_python_html.txt",
-    ),
-}
-
-
-def _normalise_extensions(extensions: Iterable[str]) -> frozenset[str]:
-    return frozenset(ext.lower() for ext in extensions)
-
-
-COLLECT_TYPE_EXTENSIONS: dict[str, frozenset[str]] = {
-    name: _normalise_extensions(preset.extensions) for name, preset in _TYPE_PRESETS.items()
-}
-COLLECT_TYPE_EXTENSIONS["all"] = frozenset().union(*COLLECT_TYPE_EXTENSIONS.values())
-
-SINGLE_TYPE_EXTENSIONS: dict[str, frozenset[str]] = {
-    name: COLLECT_TYPE_EXTENSIONS[name] for name in _TYPE_PRESETS
-}
-SINGLE_TYPE_EXTENSIONS["any"] = COLLECT_TYPE_EXTENSIONS["all"]
-
-_DEFAULT_COLLECTION_LOG_NAMES: dict[str, str] = {
-    preset.name: preset.collect_log for preset in _TYPE_PRESETS.values()
-}
-_DEFAULT_COLLECTION_LOG_NAMES.update({"all": "logs_apps_all", "single": "logs_single_files"})
-
-_DEFAULT_SINGLE_TARGET_NAMES: dict[str, str] = {
-    preset.name: preset.single_target for preset in _TYPE_PRESETS.values()
-}
-_DEFAULT_SINGLE_TARGET_NAMES.update({"any": "capture_all.txt"})
+COLLECT_TYPE_EXTENSIONS = get_collect_extension_map()
+SINGLE_TYPE_EXTENSIONS = get_single_extension_map()
+_DEFAULT_COLLECTION_LOG_NAMES = get_default_collection_logs()
+_DEFAULT_SINGLE_TARGET_NAMES = get_default_single_targets()
+COLLECT_TYPE_CHOICES = ", ".join(COLLECT_TYPE_EXTENSIONS.keys())
+SINGLE_TYPE_CHOICES = ", ".join(SINGLE_TYPE_EXTENSIONS.keys())
 
 
 def _validate_log_filenames(paths: Mapping[str, Path]) -> None:
@@ -137,31 +74,69 @@ def _validate_log_filenames(paths: Mapping[str, Path]) -> None:
                 raise ValueError(f"Log path for '{label}' uses Windows-reserved name '{segment}'")
 
 
+def _ensure_output_path(target: Path) -> None:
+    """Ensure the output path can be written to before starting heavy work."""
+
+    parent = target.parent
+    try:
+        parent.mkdir(parents=True, exist_ok=True)
+    except FileExistsError as exc:
+        raise RuntimeError(
+            f"Cannot create parent directory for output path {target}: {parent} is a file"
+        ) from exc
+
+    if not parent.is_dir():
+        raise RuntimeError(f"Parent path for output {target} is not a directory: {parent}")
+
+    if not os.access(parent, os.W_OK):
+        raise PermissionError(f"Output directory is not writable: {parent}")
+
+    if target.exists():
+        if target.is_dir():
+            raise IsADirectoryError(f"Output path resolves to a directory: {target}")
+        if not os.access(target, os.W_OK):
+            raise PermissionError(f"Existing output file is not writable: {target}")
+
+
 class UnknownTypeError(ValueError):
     """Raised when an unknown log type is requested."""
 
 
 class Reporter:
-    """Lightweight helper for emitting user-facing CLI messages."""
+    """Emit user-facing CLI messages in a test-friendly manner."""
+
+    __slots__ = ("_out", "_err")
 
     def __init__(self, out: TextIO | None = None, err: TextIO | None = None) -> None:
-        self._out = out or sys.stdout
-        self._err = err or sys.stderr
+        """Initialise the reporter with optional output streams."""
+
+        self._out: TextIO = out or sys.stdout
+        self._err: TextIO = err or sys.stderr
 
     def info(self, message: str) -> None:
+        """Write a single-line informational message to stdout."""
+
         print(message, file=self._out)
 
     def detail(self, message: str) -> None:
+        """Write a verbose detail line to stdout (used in dry runs)."""
+
         print(message, file=self._out)
 
     def success(self, message: str, *, to_stderr: bool = False) -> None:
+        """Emit a success notification, optionally redirecting to stderr."""
+
         stream = self._err if to_stderr else self._out
         print(message, file=stream)
 
     def warning(self, message: str) -> None:
+        """Emit a warning-prefixed message to stderr."""
+
         print(f"warning: {message}", file=self._err)
 
     def blank(self) -> None:
+        """Print an empty line to stdout to separate message blocks."""
+
         print(file=self._out)
 
 
@@ -424,7 +399,7 @@ def consolidate_command(args: argparse.Namespace) -> None:
 
     if output_path is None:
         raise RuntimeError("Output path was not resolved for consolidate command")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_output_path(output_path)
     # TODO - Clean up orphaned directories when consolidation is interrupted mid-run.
     consolidate_files(
         project_root,
@@ -498,7 +473,7 @@ def tree_command(args: argparse.Namespace) -> None:
 
     if output_path is None:
         raise RuntimeError("Output path was not resolved for tree command")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_output_path(output_path)
     create_filtered_tree(
         project_root,
         output_path,
@@ -556,7 +531,7 @@ def build_parser() -> argparse.ArgumentParser:
     collect_parser.add_argument(
         "--types",
         default="python",
-        help="Comma separated list of stacks to capture (choices: python, html, css, js, python_html, all)",
+        help=(f"Comma separated list of stacks to capture (choices: {COLLECT_TYPE_CHOICES})"),
     )
     # TODO - Provide shell completion scripts for --types argument values.
     collect_parser.set_defaults(func=collect_command)
@@ -568,7 +543,7 @@ def build_parser() -> argparse.ArgumentParser:
     consolidate_parser.add_argument(
         "--types",
         default="python",
-        help="Select the source stack to consolidate (choices: python, html, css, js, python_html, any)",
+        help=(f"Select the source stack to consolidate (choices: {SINGLE_TYPE_CHOICES})"),
     )
     consolidate_parser.add_argument(
         "--output",

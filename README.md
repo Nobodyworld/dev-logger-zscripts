@@ -60,6 +60,11 @@ can also override the default config path globally by setting the
 `zscripts.config` exposes helpers (`load_config`, `get_config`, and constants such
 as `LOG_DIR`) for scripts that want to introspect the parsed settings.
 
+Log directory and filename entries are validated when commands start so that
+paths remain portable across operating systems. Characters that are invalid on
+Windows (such as `:` or `?`) and reserved device names (`CON`, `COM1`, etc.) are
+rejected with a clear error message before any filesystem writes occur.
+
 ## CLI Workflow
 
 The CLI bundles the most common automation routines under `python -m zscripts`.
@@ -72,6 +77,11 @@ usage: python -m zscripts [-h] [--config CONFIG] [--project-root PROJECT_ROOT] {
 All subcommands share `--dry-run` and `--verbose` switches. `--dry-run` previews
 the files that would be written without touching the filesystem. `--verbose`
 escalates logging to `INFO` level for easier troubleshooting.
+
+When `--project-root` is omitted the CLI now walks upward from the current
+working directory until it finds a Git repository or `pyproject.toml`, ensuring
+commands run from nested folders still operate on the overall project. Supply an
+explicit `--project-root` to scope scans to a subdirectory.
 
 ### `collect`
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import random
 import string
 from pathlib import Path
@@ -12,12 +13,8 @@ from zscripts.cli import (
     UnknownTypeError,
     _parse_type_list,
 )
-from zscripts.cli import (
-    main as cli_main,
-)
+from zscripts.cli import main as cli_main
 from zscripts.config import get_config
-
-# TODO - Add CLI regression tests for misconfigured projects and I/O failures.
 
 
 def test_cli_collect_writes_logs(sample_project_path: Path, tmp_path: Path) -> None:
@@ -164,6 +161,53 @@ def test_cli_consolidate_dry_run_lists_files(
     assert "backend/service.py" in captured.out
 
 
+def test_cli_collect_warns_when_types_empty(
+    sample_project_path: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    exit_code = cli_main(
+        [
+            "collect",
+            "--types",
+            " ",
+            "--project-root",
+            str(sample_project_path),
+            "--output-dir",
+            str(tmp_path / "logs"),
+            "--dry-run",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "warning: No types provided" in captured.err
+    assert "Dry run enabled" in captured.out
+
+
+def test_cli_consolidate_warns_when_types_empty(
+    sample_project_path: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = tmp_path / "python.txt"
+
+    exit_code = cli_main(
+        [
+            "consolidate",
+            "--types",
+            "",
+            "--project-root",
+            str(sample_project_path),
+            "--output",
+            str(output),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert output.exists()
+    assert "warning: No types provided" in captured.err
+
+
 def test_cli_consolidate_streams_to_stdout(
     sample_project_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -230,8 +274,68 @@ def test_cli_tree_streams_stdout_and_limits_bytes(
 
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert "│   \"\"\"Service" in captured.out
+    assert '│   """Service' in captured.out
     assert "✓ Wrote project tree to stdout" in captured.err
+
+
+def test_cli_collect_auto_detects_project_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project_root = tmp_path / "auto-project"
+    nested = project_root / "nested" / "deep"
+    nested.mkdir(parents=True)
+    (project_root / ".git").mkdir()
+    (project_root / "module.py").write_text("print('hello')\n", encoding="utf-8")
+
+    monkeypatch.chdir(nested)
+
+    exit_code = cli_main(
+        [
+            "collect",
+            "--types",
+            "python",
+            "--output-dir",
+            str(tmp_path / "logs"),
+        ]
+    )
+
+    assert exit_code == 0
+    output_dir = tmp_path / "logs"
+    python_log = output_dir / "logs_apps_pyth"
+    assert python_log.exists()
+    log_file = python_log / "root.txt"
+    assert log_file.exists()
+    contents = log_file.read_text(encoding="utf-8")
+    assert "module.py" in contents
+
+
+def test_cli_collect_rejects_invalid_log_filename(
+    sample_project_path: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    default_config_path = Path("zscripts.config.json")
+    config_data = json.loads(default_config_path.read_text(encoding="utf-8"))
+    config_data["collection_logs"]["python"] = "invalid:name"
+    config_file = tmp_path / "config.json"
+    config_file.write_text(json.dumps(config_data), encoding="utf-8")
+
+    exit_code = cli_main(
+        [
+            "collect",
+            "--types",
+            "python",
+            "--project-root",
+            str(sample_project_path),
+            "--config",
+            str(config_file),
+            "--dry-run",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "invalid:name" in captured.err
 
 
 def test_cli_rejects_unknown_type(

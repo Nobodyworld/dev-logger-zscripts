@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import argparse
 import difflib
-import functools
 import logging
 import sys
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import Final, TextIO, cast
 
+from ._cache import typed_lru_cache
 from .config import DEFAULT_CONFIG_PATH, Config, load_config, resolve_paths
 from .utils import (
     collect_app_logs,
@@ -28,41 +29,140 @@ ERROR_ID_UNKNOWN_TYPE = "CLI001"
 ERROR_ID_PROJECT_ROOT = "CLI002"
 ERROR_ID_RUNTIME = "CLI999"
 
-JAVASCRIPT_EXTENSIONS = (
-    ".js",
-    ".jsx",
-    ".mjs",
-    ".cjs",
-    ".ts",
-    ".tsx",
-    ".mts",
-    ".cts",
+WINDOWS_RESERVED_NAMES: Final[frozenset[str]] = frozenset(
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{i}" for i in range(1, 10)}
+    | {f"LPT{i}" for i in range(1, 10)}
 )
+WINDOWS_INVALID_CHARS: Final[frozenset[str]] = frozenset('<>:"/\\|?*')
 
 
-def _normalise_extensions(source: Mapping[str, Iterable[str]]) -> dict[str, frozenset[str]]:
-    return {key: frozenset(ext.lower() for ext in value) for key, value in source.items()}
+@dataclass(frozen=True)
+class TypePreset:
+    name: str
+    extensions: tuple[str, ...]
+    collect_log: str
+    single_target: str
 
 
-_BASE_EXTENSION_PRESETS = {
-    "python": (".py",),
-    "html": (".html",),
-    "css": (".css",),
-    "js": JAVASCRIPT_EXTENSIONS,
-    "python_html": (".py", ".html"),
+_TYPE_PRESETS: Mapping[str, TypePreset] = {
+    "python": TypePreset(
+        name="python",
+        extensions=(".py",),
+        collect_log="logs_apps_pyth",
+        single_target="capture_all_pyth.txt",
+    ),
+    "html": TypePreset(
+        name="html",
+        extensions=(".html",),
+        collect_log="logs_apps_html",
+        single_target="capture_all_html.txt",
+    ),
+    "css": TypePreset(
+        name="css",
+        extensions=(".css",),
+        collect_log="logs_apps_css",
+        single_target="capture_all_css.txt",
+    ),
+    "js": TypePreset(
+        name="js",
+        extensions=(
+            ".js",
+            ".jsx",
+            ".mjs",
+            ".cjs",
+            ".ts",
+            ".tsx",
+            ".mts",
+            ".cts",
+        ),
+        collect_log="logs_apps_js",
+        single_target="capture_all_js.txt",
+    ),
+    "python_html": TypePreset(
+        name="python_html",
+        extensions=(".py", ".html"),
+        collect_log="logs_apps_both",
+        single_target="capture_all_python_html.txt",
+    ),
 }
 
-_NORMALISED_BASE_PRESETS = _normalise_extensions(_BASE_EXTENSION_PRESETS)
 
-COLLECT_TYPE_EXTENSIONS = dict(_NORMALISED_BASE_PRESETS)
+def _normalise_extensions(extensions: Iterable[str]) -> frozenset[str]:
+    return frozenset(ext.lower() for ext in extensions)
+
+
+COLLECT_TYPE_EXTENSIONS: dict[str, frozenset[str]] = {
+    name: _normalise_extensions(preset.extensions) for name, preset in _TYPE_PRESETS.items()
+}
 COLLECT_TYPE_EXTENSIONS["all"] = frozenset().union(*COLLECT_TYPE_EXTENSIONS.values())
 
-SINGLE_TYPE_EXTENSIONS = dict(_NORMALISED_BASE_PRESETS)
+SINGLE_TYPE_EXTENSIONS: dict[str, frozenset[str]] = {
+    name: COLLECT_TYPE_EXTENSIONS[name] for name in _TYPE_PRESETS
+}
 SINGLE_TYPE_EXTENSIONS["any"] = COLLECT_TYPE_EXTENSIONS["all"]
+
+_DEFAULT_COLLECTION_LOG_NAMES: dict[str, str] = {
+    preset.name: preset.collect_log for preset in _TYPE_PRESETS.values()
+}
+_DEFAULT_COLLECTION_LOG_NAMES.update({"all": "logs_apps_all", "single": "logs_single_files"})
+
+_DEFAULT_SINGLE_TARGET_NAMES: dict[str, str] = {
+    preset.name: preset.single_target for preset in _TYPE_PRESETS.values()
+}
+_DEFAULT_SINGLE_TARGET_NAMES.update({"any": "capture_all.txt"})
+
+
+def _validate_log_filenames(paths: Mapping[str, Path]) -> None:
+    """Ensure configured log paths are portable across operating systems."""
+
+    for label, path in paths.items():
+        parts = path.parts[1:] if path.is_absolute() else path.parts
+        for segment in parts:
+            if not segment:
+                raise ValueError(f"Log path for '{label}' contains an empty component")
+            if segment in {".", ".."}:
+                raise ValueError(
+                    f"Log path for '{label}' cannot include relative segments like '{segment}'"
+                )
+            if segment[-1] in {" ", "."}:
+                raise ValueError(
+                    f"Log path for '{label}' must not end with a space or period: '{segment}'"
+                )
+            if any(char in WINDOWS_INVALID_CHARS for char in segment):
+                raise ValueError(
+                    f"Log path for '{label}' contains characters incompatible with Windows: '{segment}'"
+                )
+            if segment.upper() in WINDOWS_RESERVED_NAMES:
+                raise ValueError(f"Log path for '{label}' uses Windows-reserved name '{segment}'")
 
 
 class UnknownTypeError(ValueError):
     """Raised when an unknown log type is requested."""
+
+
+class Reporter:
+    """Lightweight helper for emitting user-facing CLI messages."""
+
+    def __init__(self, out: TextIO | None = None, err: TextIO | None = None) -> None:
+        self._out = out or sys.stdout
+        self._err = err or sys.stderr
+
+    def info(self, message: str) -> None:
+        print(message, file=self._out)
+
+    def detail(self, message: str) -> None:
+        print(message, file=self._out)
+
+    def success(self, message: str, *, to_stderr: bool = False) -> None:
+        stream = self._err if to_stderr else self._out
+        print(message, file=stream)
+
+    def warning(self, message: str) -> None:
+        print(f"warning: {message}", file=self._err)
+
+    def blank(self) -> None:
+        print(file=self._out)
 
 
 def _parse_type_list(raw: str, *, allowed: Mapping[str, frozenset[str]]) -> tuple[str, ...]:
@@ -86,9 +186,7 @@ def _parse_type_list(raw: str, *, allowed: Mapping[str, frozenset[str]]) -> tupl
             suggestions = difflib.get_close_matches(candidate, allowed.keys(), n=1)
             hint = f" Did you mean '{suggestions[0]}'?" if suggestions else ""
             choices = ", ".join(sorted(allowed))
-            raise UnknownTypeError(
-                f"Unsupported type '{stripped}'. Choose from {choices}.{hint}"
-            )
+            raise UnknownTypeError(f"Unsupported type '{stripped}'. Choose from {choices}.{hint}")
         if candidate not in seen:
             normalised.append(candidate)
             seen.add(candidate)
@@ -99,35 +197,30 @@ def _build_log_paths(config: Config, base_dir: Path | None = None) -> dict[str, 
     resolved = resolve_paths(config)
     root = base_dir or resolved.log_dir
     logs = config.collection_logs
-    # TODO - Validate configured log filenames to flag characters invalid on Windows.
-    return {
-        "all": root / logs.get("all", "logs_apps_all"),
-        "python": root / logs.get("python", "logs_apps_pyth"),
-        "html": root / logs.get("html", "logs_apps_html"),
-        "css": root / logs.get("css", "logs_apps_css"),
-        "js": root / logs.get("js", "logs_apps_js"),
-        "python_html": root / logs.get("python_html", "logs_apps_both"),
-        "single": root / logs.get("single", "logs_single_files"),
+    paths = {
+        key: root / logs.get(key, _DEFAULT_COLLECTION_LOG_NAMES[key])
+        for key in _DEFAULT_COLLECTION_LOG_NAMES
     }
+    _validate_log_filenames(paths)
+    return paths
 
 
 def _build_single_targets(config: Config, base_dir: Path | None = None) -> dict[str, Path]:
     resolved = resolve_paths(config)
     root = base_dir or resolved.single_log_dir.parent
-    single_dir = root / config.collection_logs.get("single", "logs_single_files")
+    single_dir = root / config.collection_logs.get(
+        "single", _DEFAULT_COLLECTION_LOG_NAMES["single"]
+    )
     targets = config.single_targets
-    # TODO - Consolidate target naming with COLLECT_TYPE_EXTENSIONS for shared typing.
-    return {
-        "python": single_dir / targets.get("python", "capture_all_pyth.txt"),
-        "html": single_dir / targets.get("html", "capture_all_html.txt"),
-        "css": single_dir / targets.get("css", "capture_all_css.txt"),
-        "js": single_dir / targets.get("js", "capture_all_js.txt"),
-        "python_html": single_dir / targets.get("python_html", "capture_all_python_html.txt"),
-        "any": single_dir / targets.get("any", "capture_all.txt"),
+    paths = {
+        key: single_dir / targets.get(key, _DEFAULT_SINGLE_TARGET_NAMES[key])
+        for key in _DEFAULT_SINGLE_TARGET_NAMES
     }
+    _validate_log_filenames(paths)
+    return paths
 
 
-@functools.lru_cache(maxsize=64)
+@typed_lru_cache(maxsize=64)
 def _augment_ignore_patterns_cached(
     project_root: Path, skip: tuple[str, ...], user_patterns: tuple[str, ...]
 ) -> tuple[str, ...]:
@@ -147,36 +240,57 @@ def _augment_ignore_patterns(project_root: Path, config: Config) -> list[str]:
     )
 
 
-def _resolve_project_root(raw_root: str, *, sample: bool) -> Path:
+def _auto_detect_repository_root(start: Path) -> Path | None:
+    for candidate in (start,) + tuple(start.parents):
+        git_dir = candidate / ".git"
+        pyproject = candidate / "pyproject.toml"
+        if git_dir.is_dir() or pyproject.is_file():
+            return candidate
+    return None
+
+
+def _resolve_project_root(raw_root: str | None, *, sample: bool) -> Path:
     if sample:
         project_root = SCRIPT_DIR.parent / "sample_project"
-    else:
-        project_root = Path(raw_root).expanduser()
+        return project_root.resolve()
 
-    # TODO - Preserve the original user input in error messages for clarity.
-    resolved = project_root.resolve()
-    if not resolved.exists():
+    raw_display = raw_root if raw_root is not None else "."
+    candidate = Path(raw_display).expanduser()
+    resolved_candidate = candidate.resolve()
+    if not resolved_candidate.exists():
         raise FileNotFoundError(
-            f"Project root does not exist: {raw_root} (resolved to {resolved})"
+            f"Project root does not exist: {raw_display} (resolved to {resolved_candidate})"
         )
-    # TODO - Detect repository root automatically when project_root is omitted.
-    return resolved
+
+    if raw_root in (None, "", "."):
+        detected = _auto_detect_repository_root(resolved_candidate)
+        if detected is not None:
+            LOGGER.info(
+                "event=project_root_detected original=%s resolved=%s detected=%s",
+                raw_display,
+                resolved_candidate,
+                detected,
+            )
+            return detected
+
+    return resolved_candidate
 
 
 def collect_command(args: argparse.Namespace) -> None:
     config_arg = cast(Path | str | None, getattr(args, "config", None))
-    project_root_arg = cast(str, getattr(args, "project_root", "."))
+    project_root_arg = cast(str | None, getattr(args, "project_root", None))
     types_arg = cast(str, getattr(args, "types", "python"))
     output_dir_arg = cast(str | None, getattr(args, "output_dir", None))
     sample_flag = cast(bool, getattr(args, "sample", False))
     dry_run = cast(bool, getattr(args, "dry_run", False))
 
+    reporter = Reporter()
     LOGGER.info("event=collect start project_root=%s", project_root_arg)
     config = load_config(config_arg)
     type_names = _parse_type_list(types_arg, allowed=COLLECT_TYPE_EXTENSIONS)
     if not type_names:
         type_names = ("python",)
-        # TODO - Emit a warning when fallbacks override an empty --types argument.
+        reporter.warning("No types provided; defaulting to 'python'.")
 
     project_root = _resolve_project_root(project_root_arg, sample=sample_flag)
     output_base = Path(output_dir_arg).expanduser().resolve() if output_dir_arg else None
@@ -186,12 +300,12 @@ def collect_command(args: argparse.Namespace) -> None:
     base_output_dir = next(iter(log_paths.values())).parent
     ignore_patterns = _augment_ignore_patterns(project_root, config)
 
-    # TODO - Route user-facing output through a reporter abstraction for testability.
     # TODO - Emit periodic progress updates for long scans to reassure users.
-    print(f"Scanning project: {project_root}")
-    print(f"Output directory: {base_output_dir}")
+    reporter.info(f"Scanning project: {project_root}")
+    reporter.info(f"Output directory: {base_output_dir}")
     if dry_run:
-        print("Dry run enabled: no files will be written.\n")
+        reporter.info("Dry run enabled: no files will be written.")
+        reporter.blank()
         # TODO - Provide JSON output for dry-run details to enable scripting hooks.
 
     for type_name in type_names:
@@ -203,14 +317,14 @@ def collect_command(args: argparse.Namespace) -> None:
                 ignore_patterns,
             )
             LOGGER.info("event=collect_planned type=%s output=%s", type_name, log_dir)
-            print(f"• {type_name} -> {log_dir}")
+            reporter.info(f"• {type_name} -> {log_dir}")
             if not grouped:
-                print("  - No matching files found")
+                reporter.detail("  - No matching files found")
             else:
                 for app_name, files in grouped.items():
-                    print(f"  - [{app_name}] ({len(files)} files)")
+                    reporter.detail(f"  - [{app_name}] ({len(files)} files)")
                     for relative_path in files:
-                        print(f"    · {relative_path.as_posix()}")
+                        reporter.detail(f"    · {relative_path.as_posix()}")
                         # TODO - Show file size metadata to estimate log volume upfront.
             continue
 
@@ -223,31 +337,37 @@ def collect_command(args: argparse.Namespace) -> None:
             ignore_patterns,
         )
         LOGGER.info("event=collect_completed type=%s output=%s", type_name, log_dir)
-        print(f"✓ Created {type_name} logs at {log_dir}")
+        reporter.success(f"✓ Created {type_name} logs at {log_dir}")
 
     if dry_run:
-        print(f"\n📝 Dry run complete. Planned logs directory: {base_output_dir}")
+        reporter.blank()
+        reporter.info(f"📝 Dry run complete. Planned logs directory: {base_output_dir}")
         return
 
-    print(f"\n📁 View logs at: {base_output_dir}")
+    reporter.blank()
+    reporter.success(f"📁 View logs at: {base_output_dir}")
 
 
 def consolidate_command(args: argparse.Namespace) -> None:
     config_arg = cast(Path | str | None, getattr(args, "config", None))
-    project_root_arg = cast(str, getattr(args, "project_root", "."))
+    project_root_arg = cast(str | None, getattr(args, "project_root", None))
     types_arg = cast(str, getattr(args, "types", "python"))
     output_dir_arg = cast(str | None, getattr(args, "output_dir", None))
     output_arg = cast(str | None, getattr(args, "output", None))
     sample_flag = cast(bool, getattr(args, "sample", False))
     dry_run = cast(bool, getattr(args, "dry_run", False))
 
+    reporter = Reporter()
     LOGGER.info("event=consolidate start project_root=%s", project_root_arg)
     config = load_config(config_arg)
     type_names = _parse_type_list(types_arg, allowed=SINGLE_TYPE_EXTENSIONS)
+    if not type_names:
+        reporter.warning("No types provided; defaulting to 'python'.")
+        type_names = ("python",)
     if len(type_names) != 1:
         raise UnknownTypeError("Consolidate command accepts a single type value")
 
-    type_name = type_names[0] if type_names else "python"
+    type_name = type_names[0]
     project_root = _resolve_project_root(project_root_arg, sample=sample_flag)
 
     output_base = Path(output_dir_arg).expanduser().resolve() if output_dir_arg else None
@@ -257,7 +377,9 @@ def consolidate_command(args: argparse.Namespace) -> None:
     output_path = (
         None
         if stream_stdout
-        else Path(output_arg).expanduser().resolve() if output_arg else targets[type_name]
+        else Path(output_arg).expanduser().resolve()
+        if output_arg
+        else targets[type_name]
     )
     # TODO - Warn when output_path resides outside of the configured log directory.
     ignore_patterns = _augment_ignore_patterns(project_root, config)
@@ -269,11 +391,11 @@ def consolidate_command(args: argparse.Namespace) -> None:
         )
         LOGGER.info("event=consolidate_planned type=%s output=%s", type_name, output_path or "-")
         target_display = "stdout" if stream_stdout else output_path
-        print(f"Dry run: would consolidate {len(planned)} files into {target_display}")
+        reporter.info(f"Dry run: would consolidate {len(planned)} files into {target_display}")
         for relative_path in planned:
-            print(f"  - {relative_path.as_posix()}")
+            reporter.detail(f"  - {relative_path.as_posix()}")
         if not planned:
-            print("  (no matching files found)")
+            reporter.detail("  (no matching files found)")
         # TODO - Return a non-zero exit code when dry-run detects unresolved issues.
         return
 
@@ -297,10 +419,11 @@ def consolidate_command(args: argparse.Namespace) -> None:
             print(f"# {relative_path.as_posix()}")
             print(content)
             print()
-        print(f"✓ Consolidated {type_name} sources to stdout", file=sys.stderr)
+        reporter.success(f"✓ Consolidated {type_name} sources to stdout", to_stderr=True)
         return
 
-    assert output_path is not None
+    if output_path is None:
+        raise RuntimeError("Output path was not resolved for consolidate command")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     # TODO - Clean up orphaned directories when consolidation is interrupted mid-run.
     consolidate_files(
@@ -310,13 +433,13 @@ def consolidate_command(args: argparse.Namespace) -> None:
         ignore_patterns,
     )
     LOGGER.info("event=consolidate_completed type=%s output=%s", type_name, output_path)
-    print(f"✓ Consolidated {type_name} sources into {output_path}")
+    reporter.success(f"✓ Consolidated {type_name} sources into {output_path}")
     # TODO - Offer to open the generated log automatically when running interactively.
 
 
 def tree_command(args: argparse.Namespace) -> None:
     config_arg = cast(Path | str | None, getattr(args, "config", None))
-    project_root_arg = cast(str, getattr(args, "project_root", "."))
+    project_root_arg = cast(str | None, getattr(args, "project_root", None))
     output_dir_arg = cast(str | None, getattr(args, "output_dir", None))
     output_arg = cast(str | None, getattr(args, "output", None))
     include_contents = cast(bool, getattr(args, "include_contents", False))
@@ -324,6 +447,7 @@ def tree_command(args: argparse.Namespace) -> None:
     sample_flag = cast(bool, getattr(args, "sample", False))
     dry_run = cast(bool, getattr(args, "dry_run", False))
 
+    reporter = Reporter()
     LOGGER.info("event=tree start project_root=%s", project_root_arg)
     config = load_config(config_arg)
     project_root = _resolve_project_root(project_root_arg, sample=sample_flag)
@@ -349,14 +473,14 @@ def tree_command(args: argparse.Namespace) -> None:
     if dry_run:
         LOGGER.info("event=tree_planned output=%s", output_path or "-")
         target_display = "stdout" if stream_stdout else output_path
-        print(f"Dry run: would write project tree to {target_display}")
+        reporter.info(f"Dry run: would write project tree to {target_display}")
         for line in iter_filtered_tree_lines(
             project_root,
             ignore_patterns,
             include_content=include_contents,
             max_bytes=max_bytes,
         ):
-            print(line)
+            reporter.detail(line)
         # TODO - Display a summary of ignored paths during dry-run previews.
         return
 
@@ -369,10 +493,11 @@ def tree_command(args: argparse.Namespace) -> None:
             max_bytes=max_bytes,
         ):
             print(line)
-        print("✓ Wrote project tree to stdout", file=sys.stderr)
+        reporter.success("✓ Wrote project tree to stdout", to_stderr=True)
         return
 
-    assert output_path is not None
+    if output_path is None:
+        raise RuntimeError("Output path was not resolved for tree command")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     create_filtered_tree(
         project_root,
@@ -382,7 +507,7 @@ def tree_command(args: argparse.Namespace) -> None:
         max_bytes=max_bytes,
     )
     LOGGER.info("event=tree_completed output=%s", output_path)
-    print(f"✓ Wrote project tree to {output_path}")
+    reporter.success(f"✓ Wrote project tree to {output_path}")
     # TODO - Provide guidance for piping output directly to stdout for scripting.
 
 
@@ -394,8 +519,8 @@ def _add_shared_arguments(subparser: argparse.ArgumentParser) -> None:
     )
     subparser.add_argument(
         "--project-root",
-        default=".",
-        help="Root directory to scan (default: current directory)",
+        default=None,
+        help="Root directory to scan (default: auto-detect from current directory)",
     )
     subparser.add_argument(
         "--output-dir",

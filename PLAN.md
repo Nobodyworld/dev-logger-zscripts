@@ -1,233 +1,289 @@
 # Execution Plan
 
-This plan sequences modernization work from low-risk governance foundations through deeper architectural, security, and performance improvements. Each task is designed as a reviewable PR-sized unit with clear acceptance criteria and rollback guidance.
+_Last updated: 2025-10-19_
 
-## Milestone 1: Foundation & Governance
+This plan sequences modernization into guardrailed milestones that deliver incremental value without regressing the CLI’s
+behaviour. Each task is sized for a reviewable PR and carries explicit rollback instructions, tags, and prerequisites. STATUS.md
+will track execution progress after every PR.
 
-### Workstream 1.1: Repository Governance
-- **Task 1.1.1 – Establish governance docs & templates**  
-  Goal: Publish CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, SUPPORT.md, CODEOWNERS, LICENSE verification, and ISSUE/PR templates aligned with project values.  
-  Acceptance Criteria: Documents rendered in root/.github; templates auto-apply on GitHub; CODEOWNERS matches maintainer team; README references governance docs.  
-  Blast Radius: Documentation only.  
-  Rollback: Revert added markdown/templates.  
-  Tags: {docs, DX, security}.  
-  Prerequisites: Repo intelligence report (complete).  
-  Blockers: None.
-- **Task 1.1.2 – Introduce Conventional Commits & editor config**  
-  Goal: Add commitlint config, npm package (if needed) or python-based hook, and `.editorconfig` for whitespace consistency.  
-  Acceptance Criteria: Commitlint enforced via CI/pre-commit; documentation updated with commit guidelines; `.editorconfig` covers repo file types.  
-  Blast Radius: Tooling/config only.  
-  Rollback: Remove configs/hooks.  
-  Tags: {DX}.  
-  Prerequisites: Task 1.1.1 (documentation references commit guidelines).  
-  Blockers: Potential need for Node runtime decision (documented).
+## Milestone Readiness Matrix
+| Milestone | Goal | Exit Criteria |
+|-----------|------|---------------|
+| M0 – Discovery | Establish shared understanding and roadmap. | REPORT.md + PLAN.md merged, referenced from README/STATUS.md, stakeholders sign-off. |
+| M1 – Governance & CI | Harden policies, docs, and automation to catch regressions early. | Governance docs aligned, CI matrix & caching live, pre-commit parity achieved. |
+| M2 – Type Safety & Modularity | Remove typing debt and prepare for refactors. | mypy strict clean, config schema validated, utilities modularised behind flags. |
+| M3 – Quality Gates | Expand regression safety nets. | Snapshot/integration/coverage suites stable, coverage ≥85% core modules. |
+| M4 – Security & Observability | Provide supply-chain visibility and runtime insight. | SBOM automation, secret scanning, structured logging flag, telemetry hooks. |
+| M5 – Performance & Resilience | Quantify and improve throughput & UX. | Benchmarks in place, traversal optimised behind flag, graceful cancellation documented. |
+| M6 – Release & Adoption | Automate releases and onboard contributors fast. | Semantic release pipeline, adoption docs, STATUS.md summarises residual risk. |
 
-### Workstream 1.2: CI/CD Bootstrap
-- **Task 1.2.1 – GitHub Actions pipeline**  
-  Goal: Create workflow running `make fmt --check`, `make lint`, `make type`, `make security`, and `make test` across Python 3.10–3.12 with caching.  
-  Acceptance Criteria: Workflow passes locally via `act` or documented dry-run; badges added to README; failure gates merges.  
-  Blast Radius: CI only.  
-  Rollback: Disable or delete workflow file.  
-  Tags: {testing, reliability, security, DX}.  
-  Prerequisites: Task 1.1.1 (governance docs referencing CI) optional.  
-  Blockers: None.
-- **Task 1.2.2 – Pre-commit hook suite**  
-  Goal: Configure `.pre-commit-config.yaml` aligning with Ruff format/lint, mypy (fast), bandit, commitlint, and pyproject sorter if adopted.  
-  Acceptance Criteria: `pre-commit run --all-files` clean; README/CONTRIBUTING updated with installation; CI job ensures hook compliance.  
-  Blast Radius: Tooling.  
-  Rollback: Remove config/CI checks.  
-  Tags: {DX, testing, security}.  
-  Prerequisites: Task 1.2.1 (CI runner to enforce).  
-  Blockers: None.
-- **Task 1.2.3 – Makefile/Task runner refresh**  
-  Goal: Ensure `make dev` / `make check` provide one-command bootstrap; add `justfile` or `taskfile` if needed.  
-  Acceptance Criteria: Documented local bootstrap command; ensures environment parity instructions updated.  
-  Blast Radius: Docs + scripts.  
-  Rollback: Revert Makefile changes.  
-  Tags: {DX}.  
-  Prerequisites: Task 1.2.2 (align commands with hooks).  
-  Blockers: None.
+## Milestone 0 – Discovery & Alignment
+### Workstream M0.W1 – Intelligence Baseline
+- **Task M0.W1.T1 – Ratify Repo Intelligence & Execution Plan**
+  - Goal: Publish REPORT.md and PLAN.md (this document) in main with cross-links to README and STATUS.
+  - Acceptance Criteria: Docs merged; README/STATUS reference them; kickoff notes shared with stakeholders.
+  - Blast Radius: Documentation only.
+  - Rollback Plan: Revert documentation commit.
+  - Tags: {docs, DX}.
+  - Prerequisites: None.
+  - Blockers: Stakeholder roster confirmation.
 
-## Milestone 2: Type Safety & Code Hygiene
+## Milestone 1 – Governance, DX, and CI Foundations
+### Definition of Done
+- Governance docs (LICENSE, README, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, SUPPORT, CODEOWNERS) aligned and lint-clean.
+- `.github/` contains PR/Issue templates, CI status checks enforced, commitlint active.
+- Developers can run `make check` with identical tooling to CI.
 
-### Workstream 2.1: Strict Typing Rollout
-- **Task 2.1.1 – mypy baseline cleanup**  
-  Goal: Remove unused/ignored sections, ensure strict typing passes without `type: ignore` debt in core modules.  
-  Acceptance Criteria: `make type` passes with minimal ignores; typing docs updated.  
-  Blast Radius: Python modules.  
-  Rollback: Revert targeted typing changes.  
-  Tags: {DX, reliability}.  
-  Prerequisites: Milestone 1 complete (CI ready).  
-  Blockers: None.
-- **Task 2.1.2 – Typed configuration schema**  
-  Goal: Introduce `pydantic` or `attrs`-based validation to replace bespoke checks, emit JSON schema, and document `.env.example`.  
-  Acceptance Criteria: Config loader validates structure; tests cover invalid/missing fields; `.env.example` created; docs updated.  
-  Blast Radius: Config load path; requires regression tests.  
-  Rollback: Revert module swap to prior dataclass approach.  
-  Tags: {reliability, security, DX}.  
-  Prerequisites: Task 2.1.1 (clean baseline).  
-  Blockers: Choice of dependency (document & ADR).
+### Workstream M1.W1 – Governance & Policy
+- **Task M1.W1.T1 – Normalize governance documents**
+  - Goal: Ensure policy docs are consistent, linked, and reference escalation paths.
+  - Acceptance Criteria: README links governance bundle; CODEOWNERS current; templates auto-apply.
+  - Blast Radius: Docs/templates.
+  - Rollback Plan: Revert doc/template updates.
+  - Tags: {docs, DX}.
+  - Prerequisites: M0 complete.
+  - Blockers: Confirm maintainer list and contact info.
+- **Task M1.W1.T2 – Adopt Conventional Commits & commitlint enforcement**
+  - Goal: Enforce conventional commits via commitlint in CI and optional pre-commit hook.
+  - Acceptance Criteria: CI rejects malformed commits; CONTRIBUTING documents style; sample commit messages provided.
+  - Blast Radius: Tooling/CI.
+  - Rollback Plan: Remove commitlint config + workflow step.
+  - Tags: {DX}.
+  - Prerequisites: Task M1.W1.T1.
+  - Blockers: Node runtime availability (resolve via `commitlint --help` container or python equivalent).
 
-### Workstream 2.2: Module Decomposition
-- **Task 2.2.1 – Extract filesystem traversal module**  
-  Goal: Split `zscripts.utils` into `fs.py` (walking, ignore parsing) and `render.py` (tree/log writing) with explicit exports.  
-  Acceptance Criteria: No behavioural regressions; tests updated; new modules documented; legacy wrappers import from new packages with compatibility layer.  
-  Blast Radius: Core util functions; high.  
-  Rollback: Revert module split (ensure commit isolations).  
-  Tags: {DX, reliability}.  
-  Prerequisites: Task 2.1.1 (typing) to avoid compounding issues.  
-  Blockers: Need ADR.
-- **Task 2.2.2 – Introduce public API surface**  
-  Goal: Add `zscripts/__init__.py` exports documenting supported functions; mark legacy wrappers deprecated with warnings & feature flags.  
-  Acceptance Criteria: API documented in README; deprecation warnings behind env/flag; tests verifying warnings.  
-  Blast Radius: Medium (import paths).  
-  Rollback: Revert exports/warnings.  
-  Tags: {DX, docs}.  
-  Prerequisites: Task 2.2.1.  
-  Blockers: None.
+### Workstream M1.W2 – CI/CD + Tooling Baseline
+- **Task M1.W2.T1 – Harden CI workflow**
+  - Goal: Update `.github/workflows/ci.yml` for Python 3.10–3.12 matrix, pip caching, artifact uploads (coverage, SBOM, security).
+  - Acceptance Criteria: Workflow passes, badge updated, required checks documented in README/CONTRIBUTING.
+  - Blast Radius: CI only.
+  - Rollback Plan: Revert workflow or temporarily disable check.
+  - Tags: {testing, reliability, DX}.
+  - Prerequisites: Task M1.W1.T1.
+  - Blockers: Secrets for artifact hosting (if needed).
+- **Task M1.W2.T2 – Align pre-commit with CI**
+  - Goal: Refresh `.pre-commit-config.yaml` to run Ruff fmt/check, mypy (fast subset), bandit, gitleaks, pytest --collect-only,
+    and commitlint optional hook.
+  - Acceptance Criteria: `pre-commit run --all-files` succeeds; CI job enforces parity; CONTRIBUTING updated.
+  - Blast Radius: Tooling.
+  - Rollback Plan: Revert config + workflow step.
+  - Tags: {DX, testing, security}.
+  - Prerequisites: Task M1.W2.T1.
+  - Blockers: Hook runtime (tune `pass_filenames` and caching).
+- **Task M1.W2.T3 – Developer bootstrap command**
+  - Goal: Provide single-command onboarding (`make dev` / `make check`) with troubleshooting notes.
+  - Acceptance Criteria: README “First Hour Guide” present; command executes lint/type/test locally within 5 minutes.
+  - Blast Radius: Docs + automation.
+  - Rollback Plan: Revert Makefile/docs changes.
+  - Tags: {DX, docs}.
+  - Prerequisites: Task M1.W2.T2.
+  - Blockers: None.
 
-## Milestone 3: Testing & Quality Assurance
+## Milestone 2 – Type Safety & Code Health
+### Definition of Done
+- `make type` (mypy strict) passes without ignores.
+- Config schema validated with clear error messaging and `.env.example` parity.
+- Utilities decomposed with compatibility shims and ADR documenting architecture decision.
 
-### Workstream 3.1: Test Pyramid Expansion
-- **Task 3.1.1 – Golden CLI output tests**  
-  Goal: Add snapshot tests for `collect`, `consolidate`, `tree` (dry-run + real).  
-  Acceptance Criteria: Pytest golden files stored under `tests/data`; deterministic seeds; docs explain update workflow.  
-  Blast Radius: Tests only.  
-  Rollback: Remove new tests if blocking.  
-  Tags: {testing, reliability}.  
-  Prerequisites: Milestone 2 completion for stable APIs.  
-  Blockers: None.
-- **Task 3.1.2 – Integration fixture for large repos**  
-  Goal: Build synthetic large project fixture to measure traversal speed and ensure no stack regressions.  
-  Acceptance Criteria: Fixture generated on-the-fly (not checked in huge); tests assert runtime thresholds; metrics recorded.  
-  Blast Radius: Tests/time; ensure gating via markers.  
-  Rollback: Disable fixture-based test.  
-  Tags: {testing, performance}.  
-  Prerequisites: Task 3.1.1.  
-  Blockers: Runtime cost (mitigate with markers).
+### Workstream M2.W1 – Strict Typing Expansion
+- **Task M2.W1.T1 – Eliminate typing debt**
+  - Goal: Annotate modules, remove `# type: ignore`, and ensure mypy strict passes.
+  - Acceptance Criteria: mypy clean, pyproject excludes minimal, docs note typing expectations.
+  - Blast Radius: Runtime (medium risk).
+  - Rollback Plan: Revert targeted typing commits.
+  - Tags: {DX, reliability}.
+  - Prerequisites: Milestone 1 complete.
+  - Blockers: Dynamic behaviour in `utils` may require refactors.
+- **Task M2.W1.T2 – Config schema upgrade**
+  - Goal: Replace manual parsing with typed schema (Pydantic or attrs), add `.env.example`, validation errors with context.
+  - Acceptance Criteria: Tests cover invalid inputs; CLI surfaces actionable errors; docs updated.
+  - Blast Radius: Config path (medium/high).
+  - Rollback Plan: Guard behind feature flag (e.g., `ZSCRIPTS_USE_PYDANTIC=false`).
+  - Tags: {reliability, security, DX}.
+  - Prerequisites: Task M2.W1.T1.
+  - Blockers: Dependency selection and licensing review.
 
-### Workstream 3.2: Coverage & Reporting
-- **Task 3.2.1 – Coverage thresholds & reporting**  
-  Goal: Enforce ≥85% coverage on core modules; integrate coverage XML + badge + PR annotations.  
-  Acceptance Criteria: CI fails under threshold; coverage uploaded (codecov or built-in); README badge.  
-  Blast Radius: Tests/CI.  
-  Rollback: Raise/lower threshold config.  
-  Tags: {testing, reliability}.  
-  Prerequisites: Task 1.2.1 (CI).  
-  Blockers: External service configuration (document fallback).
-- **Task 3.2.2 – Mutation / property testing expansion**  
-  Goal: Extend hypothesis-based tests for config + CLI argument parsing; optional mutmut run.  
-  Acceptance Criteria: New hypothesis strategies; CI job optional nightly; documentation for running long suite.  
-  Blast Radius: Tests.  
-  Rollback: Skip new tests.  
-  Tags: {testing, reliability}.  
-  Prerequisites: Task 3.1.1.  
-  Blockers: Runtime.
+### Workstream M2.W2 – Module Decomposition
+- **Task M2.W2.T1 – Split `zscripts.utils`**
+  - Goal: Extract traversal, filtering, rendering, and IO concerns into dedicated modules with orchestrator facade.
+  - Acceptance Criteria: Tests updated; compatibility imports maintained; ADR captured; feature flag toggles new pipeline.
+  - Blast Radius: High (core logic).
+  - Rollback Plan: Disable feature flag, revert orchestrator changes.
+  - Tags: {DX, reliability, performance}.
+  - Prerequisites: Task M2.W1.T1, ADR drafted.
+  - Blockers: Coordination with downstream consumers.
+- **Task M2.W2.T2 – Public API curation**
+  - Goal: Define explicit exports via `__all__`, add deprecation warnings/timeline for legacy wrappers, document supported APIs.
+  - Acceptance Criteria: Tests assert warnings; CHANGELOG communicates timeline; README updated.
+  - Blast Radius: Medium.
+  - Rollback Plan: Remove warnings/exports changes.
+  - Tags: {DX, docs, reliability}.
+  - Prerequisites: Task M2.W2.T1.
+  - Blockers: Communication plan for downstream users.
 
-## Milestone 4: Security & Observability
+## Milestone 3 – Testing & Quality Assurance
+### Definition of Done
+- Golden-path CLI snapshots with deterministic fixtures.
+- Performance integration test for large repo fixture (opt-in).
+- Coverage thresholds enforced (≥85% core modules) with artifacts uploaded in CI.
 
-### Workstream 4.1: Supply Chain & Secrets
-- **Task 4.1.1 – SBOM & dependency policy**  
-  Goal: Generate CycloneDX SBOM in CI; add policy for vetting dependencies; integrate Trivy/Gitleaks scanning.  
-  Acceptance Criteria: Workflow artifact produced; README/SECURITY doc outlines policy; secret scan gating merges.  
-  Blast Radius: CI only.  
-  Rollback: Disable workflows.  
-  Tags: {security}.  
-  Prerequisites: Milestone 1 CI scaffolding.  
-  Blockers: Installing scanning tools (document caching).
-- **Task 4.1.2 – Configuration hardening**  
-  Goal: Validate config/environment inputs with schema + secrets redaction; add `.env.example` and runtime warnings for missing env.  
-  Acceptance Criteria: CLI fails fast on invalid config; docs updated; tests cover failure paths.  
-  Blast Radius: Runtime config; medium.  
-  Rollback: Revert validation hook.  
-  Tags: {security, reliability}.  
-  Prerequisites: Task 2.1.2 (typed config).  
-  Blockers: None.
+### Workstream M3.W1 – Regression Coverage
+- **Task M3.W1.T1 – Golden CLI snapshots**
+  - Goal: Snapshot CLI outputs for `collect`, `consolidate`, `tree` using `sample_project` fixtures.
+  - Acceptance Criteria: Deterministic outputs; update workflow documented; tests marked `snapshot`.
+  - Blast Radius: Tests.
+  - Rollback Plan: Remove snapshots/markers.
+  - Tags: {testing, reliability}.
+  - Prerequisites: Milestone 2 stable APIs.
+  - Blockers: Platform newline handling.
+- **Task M3.W1.T2 – Large-repo integration suite**
+  - Goal: Generate synthetic large fixture at runtime; assert runtime budget and memory thresholds.
+  - Acceptance Criteria: Test marked `slow`/optional; metrics recorded; docs note opt-in flag.
+  - Blast Radius: Tests (runtime cost).
+  - Rollback Plan: Skip/disable marker.
+  - Tags: {testing, performance}.
+  - Prerequisites: Task M3.W1.T1.
+  - Blockers: CI runtime limits (opt into nightly job if necessary).
 
-### Workstream 4.2: Observability
-- **Task 4.2.1 – Structured logging + verbosity controls**  
-  Goal: Introduce structured logging adapter (JSON/text), correlation IDs, and log-level configuration.  
-  Acceptance Criteria: CLI respects `--verbose` and env var for log level; logs structured; tests cover new flows; documentation updated.  
-  Blast Radius: CLI output (high).  
-  Rollback: Feature flag gating (default off).  
-  Tags: {observability, DX}.  
-  Prerequisites: Task 2.2.1 (module split for easier instrumentation).  
-  Blockers: None.
-- **Task 4.2.2 – Metrics & tracing hooks**  
-  Goal: Add optional OpenTelemetry integration capturing counts/durations, with noop default.  
-  Acceptance Criteria: CLI accepts `--otel-endpoint`; metrics exported in integration test; docs provide deployment guide.  
-  Blast Radius: Medium (optional).  
-  Rollback: Disable feature flag.  
-  Tags: {observability, performance}.  
-  Prerequisites: Task 4.2.1.  
-  Blockers: Additional dependency evaluation.
+### Workstream M3.W2 – Coverage & Reporting
+- **Task M3.W2.T1 – Enforce coverage thresholds**
+  - Goal: Configure pytest-cov thresholds, upload HTML/XML reports, add badge.
+  - Acceptance Criteria: `make test` fails <85% coverage; CI uploads artifacts; README badge live.
+  - Blast Radius: Tests + CI.
+  - Rollback Plan: Relax threshold or revert config.
+  - Tags: {testing, reliability}.
+  - Prerequisites: Task M3.W1.T1.
+  - Blockers: Storage for artifacts (use GitHub Actions artifacts).
+- **Task M3.W2.T2 – Mutation/property testing expansion**
+  - Goal: Enhance Hypothesis strategies for config/CLI; add nightly mutation testing job (e.g., mutmut) gated by label.
+  - Acceptance Criteria: Tests documented; optional CI workflow added; failures triaged with action items.
+  - Blast Radius: Tests.
+  - Rollback Plan: Disable workflow/markers.
+  - Tags: {testing, reliability}.
+  - Prerequisites: Task M3.W1.T1.
+  - Blockers: Runtime; may require nightly schedule.
 
-## Milestone 5: Performance & Resilience
+## Milestone 4 – Security & Observability
+### Definition of Done
+- Automated SBOM + secret scanning integrated in CI; SECURITY.md updated with process.
+- Structured logging (JSON/text) available via flag with context IDs.
+- Metrics/tracing hooks integrated behind noop exporters.
 
-### Workstream 5.1: Performance Profiling
-- **Task 5.1.1 – Benchmark suite**  
-  Goal: Add `pytest-benchmark` or custom harness measuring traversal/log writing; track baseline in repo.  
-  Acceptance Criteria: Benchmarks runnable via `make benchmark`; results stored in CI artifacts; README documents regression policy.  
-  Blast Radius: Tests/time.  
-  Rollback: Disable benchmark job.  
-  Tags: {performance, testing}.  
-  Prerequisites: Task 3.1.2 (large fixture).  
-  Blockers: CI time.
-- **Task 5.1.2 – Optimise traversal pipeline**  
-  Goal: Use caching/iterators to reduce filesystem calls; consider multiprocessing for large repos; maintain feature parity.  
-  Acceptance Criteria: Benchmarks show ≥20% improvement on large fixture; no regression in functionality; feature flagged if risky.  
-  Blast Radius: High (core path).  
-  Rollback: Toggle feature flag or revert commit.  
-  Tags: {performance, reliability}.  
-  Prerequisites: Task 5.1.1 (baseline).  
-  Blockers: Platform-specific differences.
+### Workstream M4.W1 – Supply Chain Security
+- **Task M4.W1.T1 – SBOM & secret scanning automation**
+  - Goal: Run CycloneDX, gitleaks/trivy in CI, publish artifacts, document remediation policy.
+  - Acceptance Criteria: CI fails on findings; SECURITY.md outlines escalation; artifacts downloadable.
+  - Blast Radius: CI.
+  - Rollback Plan: Disable workflows / revert configs.
+  - Tags: {security, reliability}.
+  - Prerequisites: Milestone 1 baseline.
+  - Blockers: Tool runtime (cache results where possible).
+- **Task M4.W1.T2 – Configuration hardening**
+  - Goal: Redact secrets in logs, enforce env validation, introduce safe defaults.
+  - Acceptance Criteria: Tests for misconfigurations; docs note secure defaults.
+  - Blast Radius: Runtime config (medium).
+  - Rollback Plan: Feature flag fallback.
+  - Tags: {security, reliability}.
+  - Prerequisites: Task M2.W1.T2.
+  - Blockers: Additional dependencies (e.g., `python-dotenv`).
 
-### Workstream 5.2: Resilience
-- **Task 5.2.1 – Graceful cancellation & retries**  
-  Goal: Add signal handling for CLI, timeouts for long operations, and retry/backoff for transient filesystem errors.  
-  Acceptance Criteria: CTRL+C leaves partial outputs clean; tests simulate exceptions; docs updated.  
-  Blast Radius: Medium (I/O).  
-  Rollback: Disable signal hooks.  
-  Tags: {reliability}.  
-  Prerequisites: Task 2.2.1 (modular utilities).  
-  Blockers: Cross-platform behavior.
-- **Task 5.2.2 – Health checks for integrations**  
-  Goal: Provide `zscripts doctor` subcommand verifying environment, config, and optional telemetry endpoints.  
-  Acceptance Criteria: Command documented; tests cover success/failure; integrates with observability instrumentation.  
-  Blast Radius: Low/medium (new command).  
-  Rollback: Remove command.  
-  Tags: {reliability, DX, observability}.  
-  Prerequisites: Task 4.2.2 (telemetry).  
-  Blockers: None.
+### Workstream M4.W2 – Observability Foundations
+- **Task M4.W2.T1 – Structured logging**
+  - Goal: Implement structured logging with correlation IDs, log level controls, JSON/text formatter selection.
+  - Acceptance Criteria: CLI flag/env toggles; integration tests validate output; docs updated.
+  - Blast Radius: CLI output (high).
+  - Rollback Plan: Default flag off or revert module.
+  - Tags: {reliability, DX}.
+  - Prerequisites: Task M2.W2.T1.
+  - Blockers: Format stability + downstream tooling.
+- **Task M4.W2.T2 – Metrics & tracing hooks**
+  - Goal: Add optional OpenTelemetry counters/timers with noop default and docs for exporters.
+  - Acceptance Criteria: Integration test uses in-memory exporter; README includes deployment guidance.
+  - Blast Radius: Medium (optional path).
+  - Rollback Plan: Disable exporters / revert instrumentation.
+  - Tags: {reliability, performance}.
+  - Prerequisites: Task M4.W2.T1.
+  - Blockers: Dependency footprint (ensure optional extras handling).
 
-## Milestone 6: Release & Adoption
+## Milestone 5 – Performance & Resilience
+### Definition of Done
+- Benchmark harness quantifies baseline and improvements.
+- Traversal optimizations deliver ≥20% improvement on large fixture, gated behind feature flag.
+- CLI gracefully handles cancellations/retries with cleanup semantics.
 
-### Workstream 6.1: Release Automation
-- **Task 6.1.1 – Semantic release pipeline**  
-  Goal: Configure release workflow to cut tagged builds, generate changelog, publish to PyPI, attach SBOM/signatures.  
-  Acceptance Criteria: Dry-run release documented; pipeline uses OIDC for PyPI; CHANGELOG updates automated.  
-  Blast Radius: CI/release only.  
-  Rollback: Disable workflow.  
-  Tags: {DX, reliability, security}.  
-  Prerequisites: Milestones 1–4 for stability.  
-  Blockers: PyPI credentials.
-- **Task 6.1.2 – Adoption enablement docs**  
-  Goal: Produce First Hour Guide, Common Tasks, Troubleshooting, and migration notes for new features (flags, new commands).  
-  Acceptance Criteria: Docs published in `docs/` & linked from README; STATUS.md updated with final recommendations.  
-  Blast Radius: Docs.  
-  Rollback: Revert docs.  
-  Tags: {docs, DX}.  
-  Prerequisites: Completion of preceding milestones.  
-  Blockers: None.
+### Workstream M5.W1 – Performance Optimization
+- **Task M5.W1.T1 – Benchmark harness**
+  - Goal: Add `pytest-benchmark` (or similar) to measure traversal/log writing times; integrate with CI baseline.
+  - Acceptance Criteria: `make benchmark` command; CI stores results; README documents usage.
+  - Blast Radius: Tests/automation.
+  - Rollback Plan: Remove harness.
+  - Tags: {performance, testing}.
+  - Prerequisites: Task M3.W1.T2.
+  - Blockers: CI runtime (possible nightly job).
+- **Task M5.W1.T2 – Optimize traversal pipeline**
+  - Goal: Apply profiling-driven improvements (memoization, concurrency, async IO) behind feature flag targeting ≥20% speedup.
+  - Acceptance Criteria: Benchmarks show improvement; docs note flag; changelog records optimisation.
+  - Blast Radius: High (core logic).
+  - Rollback Plan: Disable flag or revert changes.
+  - Tags: {performance, reliability}.
+  - Prerequisites: Task M5.W1.T1.
+  - Blockers: Cross-platform filesystem semantics.
 
-## Sequencing Notes
-- Milestone 1 is prerequisite for all subsequent work; ensures governance and automation guardrails before changing runtime behaviour.
-- Milestones 2 & 3 can progress in parallel after foundational CI, with module decomposition preceding major testing/observability changes.
-- Security/observability (Milestone 4) depends on typed config and modular utilities to minimize risk.
-- Performance/resilience efforts (Milestone 5) build on expanded tests/benchmarks for safe optimisation.
-- Release automation (Milestone 6) is last to guarantee stable, observable system prior to automated publishing.
+### Workstream M5.W2 – Resilience & UX
+- **Task M5.W2.T1 – Graceful cancellation & retries**
+  - Goal: Implement signal handling, transient IO retry/backoff, and cleanup for partially written outputs.
+  - Acceptance Criteria: Tests simulate failures; docs describe behaviour; defaults configurable.
+  - Blast Radius: Runtime control flow (medium).
+  - Rollback Plan: Feature flag fallback.
+  - Tags: {reliability, DX}.
+  - Prerequisites: Task M2.W2.T1.
+  - Blockers: Platform-specific signal support.
+- **Task M5.W2.T2 – `zscripts doctor` health command**
+  - Goal: Add CLI subcommand to validate environment, configuration, telemetry connectivity, and output readiness.
+  - Acceptance Criteria: Command documented; tests cover pass/fail scenarios; integrates with structured logging.
+  - Blast Radius: Low/medium (new feature).
+  - Rollback Plan: Remove command.
+  - Tags: {DX, reliability}.
+  - Prerequisites: Task M4.W2.T1.
+  - Blockers: None.
 
-## Risk Management & Communication
-- Every task requiring behaviour changes must ship behind feature flags or environment toggles, with documentation in `STATUS.md` and CHANGELOG entries.
-- High-risk tasks (module splits, performance refactors) require dedicated ADRs and dry-run artefacts before merge.
-- STATUS.md will be updated after each PR summarising progress and next steps.
+## Milestone 6 – Release Automation & Adoption
+### Definition of Done
+- Release workflow automated with semantic versioning, signed artifacts, and SBOM attachment.
+- STATUS.md summarises current health, pending risks, and next steps.
+- Documentation bundle provides “First Hour Guide”, “Common Tasks”, and “Troubleshooting”.
+
+### Workstream M6.W1 – Release & Change Management
+- **Task M6.W1.T1 – Semantic release pipeline**
+  - Goal: Automate versioning, changelog generation, SBOM inclusion, and PyPI publication using GitHub Actions and OIDC.
+  - Acceptance Criteria: Dry-run release documented; workflow publishes signed artifacts to draft release; CHANGELOG updates
+    automatically.
+  - Blast Radius: CI/release.
+  - Rollback Plan: Disable workflow.
+  - Tags: {DX, reliability, security}.
+  - Prerequisites: Milestones 1–4 stabilised.
+  - Blockers: PyPI permissions and signing keys.
+- **Task M6.W1.T2 – Adoption enablement docs**
+  - Goal: Publish onboarding guides (`docs/first-hour.md`, `docs/common-tasks.md`, `docs/troubleshooting.md`) and refresh
+    STATUS.md with modernization summary and next steps.
+  - Acceptance Criteria: Docs merged, cross-linked from README; STATUS.md updated post-PR.
+  - Blast Radius: Docs.
+  - Rollback Plan: Revert docs.
+  - Tags: {docs, DX}.
+  - Prerequisites: Task M6.W1.T1.
+  - Blockers: None.
+
+## Sequencing & Parallelism Guidance
+- Milestone 1 provides guardrails; do not start runtime refactors (Milestone 2+) until CI/pre-commit hardening is complete.
+- Typing and modularisation (Milestone 2) should land before observability/performance work to minimise merge conflicts.
+- Testing improvements (Milestone 3) can run in parallel with late Milestone 2 tasks once APIs stabilise.
+- Security & observability (Milestone 4) depends on typed config and modular utilities for safe instrumentation.
+- Performance work (Milestone 5) requires benchmarks + regression suites to measure improvement safely.
+- Release automation (Milestone 6) is final to ensure pipeline codifies mature processes.
+
+## Risk Management & Rollback Strategy
+- All runtime-impacting changes must ship behind feature flags or opt-in environment variables until validated in production
+  scenarios.
+- Every PR updates STATUS.md with summary, risk notes, and next steps.
+- Architecture Decision Records (`docs/adr/YYYYMMDD-*.md`) document major structural choices and link to related PRs.
+- Rollbacks rely on git revert plus feature-flag disablement to ensure rapid mitigation without redeploy.

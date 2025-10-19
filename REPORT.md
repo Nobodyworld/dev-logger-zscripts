@@ -1,61 +1,150 @@
 # Repo Intelligence Report
 
+_Last updated: 2025-10-19_
+
+## Executive Summary
+Zscripts is a Python-first command-line toolkit that inventories source trees, normalises log bundles, and provides audit-ready
+artifacts for downstream security and incident response workflows. The repository currently packages a reusable library, a CLI,
+polyglot sample data, and extensive developer tooling. While the core feature set is stable, modernization is required to
+standardise governance, harden automation, and unlock future refactors with confidence.
+
 ## System Overview
-- **Domains**: Source aggregation and documentation support for multi-language repositories. Core responsibilities include scanning project trees, grouping files by stack, and emitting per-stack logs or consolidated bundles.
-- **Primary Modules**:
-  - `zscripts.cli`: Argparse-based entrypoint (`python -m zscripts` / `zscripts` console script). Orchestrates config loading, validates filesystem targets, and dispatches to util functions. Provides dry-run/reporting helpers.
-  - `zscripts.config`: JSON-backed configuration schema with immutability guarantees. Exposes `Config` dataclass, default path resolution, and environment-variable override (`ZSCRIPTS_CONFIG_PATH`).
-  - `zscripts.utils`: 500+ line module handling filesystem traversal, ignore pattern parsing (gitignore aware), grouping by app, log writing, and repository tree emission. Hosts reusable primitives for both CLI and legacy wrappers.
-  - Legacy wrappers (`zscripts/all`, `zscripts/all_single`): Thin modules that import CLI helpers to preserve historic module-level entry points.
-  - Packaging glue (`__main__.py`, `_cache.py`, `presets.py`): Provide typed LRU cache decorator and extension maps used by CLI/options.
-- **Data Flow**:
-  1. CLI parses arguments → resolves project root (walks up to git root/pyproject) → loads JSON config.
-  2. Config is hydrated via `load_config`/`resolve_paths`, ensuring log directories and filenames are canonical.
-  3. CLI invokes utils (`collect_app_logs`, `consolidate_files`, `create_filtered_tree`) which iterate the filesystem, using ignore patterns + extension maps from `presets`.
-  4. Outputs materialize as per-directory log files, consolidated bundles, or textual tree snapshots under configured directories.
-- **Public APIs/CLIs/Jobs**:
-  - Console script `zscripts` / module `python -m zscripts` with subcommands `collect`, `consolidate`, `tree` (support `--dry-run`, `--verbose`).
-  - Legacy module APIs (`from zscripts.all import all_both` etc.) kept for backwards compatibility.
-  - No background jobs or services; tooling is CLI-focused.
+### Product Mission & Personas
+- **Mission**: Give security, SRE, and compliance teams a deterministic way to capture repository state, classify artefacts by
+  technology stack, and export evidence bundles.
+- **Primary personas**: Security engineers (log bundles), SREs (filesystem audits), Release managers (pre-flight change review),
+  Contributors (local CLI tooling).
+
+### Deployable & Executable Units
+| Artifact | Description | Delivery Path |
+|----------|-------------|---------------|
+| `zscripts` CLI | Entry point for all user interactions (installable via pip). | `python -m zscripts` or console script. |
+| Python API | Importable modules (`zscripts.cli`, `zscripts.utils`, `zscripts.config`). | Consumed by automation scripts. |
+| Governance bundle | Documentation & policy assets (README, SECURITY, CODEOWNERS, templates). | Repository root. |
+| Developer automation | Makefile, Nox sessions, pre-commit hooks, GitHub Actions. | `/Makefile`, `/noxfile.py`, `.github/`. |
+| Sample fixture | `sample_project` polyglot monorepo used for integration tests & documentation screenshots. | `/sample_project`. |
+
+### Runtime Architecture & Data Flow
+1. **Invocation layer**: Console entry point `zscripts.cli:main` provides subcommands `collect`, `consolidate`, and `tree`, plus
+   hidden legacy aliases exposed via `zscripts/all*.py` for backwards compatibility.
+2. **Configuration**: `zscripts.config` assembles defaults, CLI arguments, environment variables (`ZSCRIPTS_CONFIG_PATH`), and
+   JSON configuration files. Validation is manual; no schema enforcement is in place yet.
+3. **Execution**: `zscripts.utils` orchestrates filesystem discovery, ignore pattern resolution, grouping by extension presets
+   from `zscripts.presets`, caching helpers in `_cache`, and log emission utilities.
+4. **Outputs**: Results are written under `zscripts_logs/` (default) or a caller-defined directory. Dry-run and verbose flags
+   pivot output toward stdout via `Reporter` classes.
+5. **Observability**: Logging is minimal (stdout/stderr text). There is no structured logging, metrics, or tracing pipeline.
+
+### Repository Topology
+```
+zscripts/
+├─ zscripts/                  # Core library & CLI code
+│  ├─ cli.py                  # argparse wiring, dispatch
+│  ├─ config.py               # dataclass config + env resolution
+│  ├─ utils.py                # traversal, grouping, IO (hotspot)
+│  ├─ presets.py              # extension → log bundle mapping
+│  ├─ _cache.py               # typed helper around functools.lru_cache
+│  ├─ logs/, zreadme.py       # template assets
+│  └─ all.py, all_single.py   # legacy compatibility imports
+├─ tests/                     # pytest-based unit/integration suites
+├─ sample_project/            # integration fixture (polyglot)
+├─ docs/adr/                  # historical architecture decisions
+├─ Makefile, noxfile.py       # developer automation entry points
+├─ .github/workflows/         # CI (lint, test, security scanning)
+└─ Governance docs            # README, SECURITY, CONTRIBUTING, etc.
+```
+
+### Public Interfaces & CLIs
+| Command | Synopsis | Key Flags | Output |
+|---------|----------|-----------|--------|
+| `zscripts collect` | Capture project artefacts grouped by stack preset. | `--target`, `--dry-run`, `--verbose`. | Files under `zscripts_logs/`. |
+| `zscripts consolidate` | Merge disparate artefacts into a compressed bundle. | `--output`, `--include`, `--exclude`. | Consolidated archive / stdout summary. |
+| `zscripts tree` | Render filtered directory tree based on presets. | `--preset`, `--depth`, `--format`. | Tree report text. |
+| `python -m zscripts` | Mirrors CLI entry point for environments without script installation. | Same as subcommands. | Same as CLI. |
+
+The Python API exposes functions within `zscripts.utils` and configuration helpers for advanced automation scenarios. There are
+no background daemons or long-running services.
+
+### Configuration & Data Contracts
+- **Primary config**: `zscripts.config.Config` dataclass; accepts CLI args, JSON payloads, and environment overrides.
+- **File formats**: JSON presets; log bundles emitted as plaintext or user-defined archives.
+- **Environment variables**: `ZSCRIPTS_CONFIG_PATH`, `ZSCRIPTS_OUTPUT_DIR`, optional toggles for dry-run/verbosity.
+- **Assumptions**: Local filesystem access, POSIX-like semantics; Windows support requires path sanitation already embedded in
+  CLI layer.
 
 ## Tech Stack & Dependency Graph
-- **Runtime**: Python 3.10–3.12, standard library only. No third-party runtime deps.
-- **Tooling**: Ruff (lint+format), mypy (strict), pytest (unit/property tests), bandit (security scan), nox & make for task runners.
-- **Artifacts**: README generated from `zscripts/zreadme`, sample project mixing Python/JS/CSS/YAML for integration coverage.
-- **Dependency Graph**:
-  - `cli` → (`config`, `presets`, `utils`, `_cache`).
-  - `utils` → (`pathlib`, `itertools`, `fnmatch`, `json`, `re`, `_cache` minimal) and uses helper functions defined internally; shared with legacy wrappers.
-  - `config` → (`json`, `pathlib`, `typing`).
-  - Legacy wrappers → (`cli`).
-- **Hotspots**:
-  - `zscripts/utils.py` (505 LOC, multi-responsibility) lacks module partitioning, making typing and targeted tests harder.
-  - CLI argument parsing includes custom validation logic that could benefit from schema validation to reduce bespoke code.
-- **Dead Code Signals**:
-  - `zscripts/all_single` exports near-identical wrappers; tests ensure they import without raising but do not exercise functionality. Consider deprecating behind flag after migration plan.
-  - No direct references to `zscripts/config.json` (appears legacy). Verify before removal.
+- **Language**: Python 3.10+ (tooling validated on 3.11, target to expand to 3.12).
+- **Runtime dependencies**: Standard library only (intentionally zero external runtime deps for supply-chain hygiene).
+- **Dev/test/tooling**: Ruff (lint & format), mypy (strict), pytest/pytest-cov, bandit, cyclonedx, gitleaks, pre-commit,
+  commitlint, nox, Makefile targets. Node is optionally used for commitlint.
+- **Packaging**: `pyproject.toml` with setuptools backend and console script registration; versioning manual.
+- **Automation**: `make fmt|lint|type|test|security|check|sbom`; `nox` sessions mirror the Make targets; `.pre-commit-config.yaml`
+  enforces formatting and linting locally.
+- **CI/CD**: `.github/workflows/ci.yml` runs lint/type/test/security steps on push/PR; `gitleaks.yml` scans secrets; release
+  automation is absent.
 
-## Risks & Quick Wins
-- **Risks**:
-  - Single, monolithic util module increases chance of regression when introducing typing/observability.
-  - Absence of automated CI/CD or pre-commit allows style drift and security regressions.
-  - Configuration validation is bespoke; malformed JSON/structure failures surface late in CLI execution.
-  - Lack of SBOM/lockfile management can mask supply-chain exposure once deps are added.
-  - Observatory gap (no logging/tracing/metrics) reduces diagnosability for large repositories.
-- **Quick Wins**:
-  - Introduce GitHub Actions pipeline running `make check` across supported Python versions.
-  - Add repository-level governance docs/templates (CONTRIBUTING, SECURITY, CODEOWNERS) for onboarding consistency.
-  - Establish pre-commit hooks aligning with Ruff/black (or Ruff format) + mypy/pytest smoke.
-  - Generate SBOM via `syft` or `cyclonedx-bom` in CI for future dependencies.
-  - Create `.env.example` capturing config-related environment variables.
+#### Dependency Graph (condensed)
+```
+cli        → config, presets, utils, _cache
+config     → dataclasses, json, pathlib, os (stdlib)
+utils      → pathlib, os, itertools, shutil, presets, _cache
+presets    → json, pathlib
+_cache     → functools.lru_cache (stdlib)
+legacy all → cli, utils
+```
+Tests exercise CLI/config/utils and rely on `sample_project` fixtures.
+
+### Hotspots, Debt, and Observability Gaps
+- **`zscripts/utils.py`**: ~500 LOC orchestrating traversal, filtering, IO, and reporting, mixing concerns without clear
+  abstractions. Refactors need guardrails (feature flags, golden tests).
+- **Config validation**: Manual parsing yields unclear errors; lacks schema validation and `.env` parity. High leverage fix.
+- **Logging**: Reliant on print statements; no structured logs, correlation IDs, or metrics. Limits debuggability.
+- **Governance sprawl**: Multiple legacy EXEC_PLAN* docs cause onboarding noise; README does not yet surface modernization
+  status.
+- **Testing gaps**: Integration coverage limited to CLI argument parsing; no snapshot or performance regression tests.
+
+### Potential Dead Code / Low-Value Assets
+- `zscripts/config.json` appears unused (legacy artifact) — confirm via rg/tests before removal.
+- `zscripts/logs/*` templates rarely imported; need telemetry to justify retention.
+- Legacy wrappers `zscripts/all.py` and `zscripts/all_single.py` are thin proxies; maintain until formal deprecation window.
+- Historical planning docs under `EXEC_PLAN_*` and `REPORTS/` duplicate the modern report/plan; candidates for archival.
+
+## Risk Inventory & Mitigations
+| Risk | Impact | Likelihood | Mitigation Strategy |
+|------|--------|------------|---------------------|
+| Monolithic utilities mask regressions. | High | High | Decompose with feature flags, add snapshot tests, enforce coverage gates. |
+| Config parsing lacks schema validation. | High | Medium | Introduce typed schema (Pydantic/pydantic-core), document `.env.example`, add validation tests. |
+| CI drift between local tooling and GitHub Actions. | Medium | Medium | Align Makefile, pre-commit, and CI to single source of truth (`make check`). |
+| Supply-chain visibility (SBOM/secrets). | Medium | Medium | Automate CycloneDX + gitleaks, publish artifacts in CI, document policy. |
+| Observability void (no structured logs/metrics). | Medium | Medium | Add structured logging with opt-in flag, adopt OpenTelemetry hooks behind noop default. |
+| Release workflow manual and opaque. | Medium | Medium | Implement semantic-release pipeline with dry-run gating, CODEOWNERS review. |
+| Sample project drift from real workloads. | Medium | Low | Periodically regenerate fixtures, document expected stacks, add property-based tests. |
+| Legacy compatibility modules linger without deprecation plan. | Low | Medium | Introduce deprecation warnings + timeline, communicate in CHANGELOG. |
+
+## Quick Wins (0–2 week ROI)
+1. **Governance normalisation** – Link governance docs from README, rationalise templates, ensure CODEOWNERS coverage.
+2. **CI matrix & caching** – Expand GitHub Actions to Python 3.10–3.12, add pip caching, upload coverage/security artifacts.
+3. **Pre-commit alignment** – Update hooks to match CI, add fast mypy and pytest smoke checks; document in CONTRIBUTING.
+4. **SBOM automation** – Run CycloneDX in CI and store artifacts; document dependency update policy in SECURITY.md.
+5. **Developer bootstrap** – Provide `make dev`/`make check` workflow, “First Hour Guide”, and local parity notes.
 
 ## Top 10 Opportunities by ROI
-1. **Governance & CI Foundations** – Add CODEOWNERS, contributing guide, issue/PR templates, EditorConfig, conventional commit validation, and GitHub Actions for lint/type/test. *(Tags: DX, reliability, testing, docs)*
-2. **Pre-commit Automation** – Ship pre-commit config orchestrating Ruff format/lint, mypy, pytest --fast. Ensures consistent developer workflows. *(DX, testing)*
-3. **Typed Config Schema** – Introduce pydantic/dataclasses JSON schema validation to catch config drift early; add `.env.example` & runtime validation. *(Reliability, security)*
-4. **Module Decomposition** – Break `utils.py` into focused modules (filesystem traversal, tree rendering, collectors) with explicit interfaces. Improves maintainability and testability. *(DX, performance)*
-5. **Strict Typing Coverage** – Expand typing to legacy wrappers, remove loose `Any`, enforce mypy across repo including tests where feasible. *(DX, reliability)*
-6. **Observability Layer** – Add structured logging hooks, metrics counters (e.g., OpenTelemetry logging exporter), and debug tracing of file traversal counts. *(Observability, reliability)*
-7. **Test Pyramid Expansion** – Add integration fixtures for large projects, golden-file tests for CLI output, and performance regression benchmarks. *(Testing, performance)*
-8. **Security Tooling** – Integrate Gitleaks/Trivy secret & dependency scanning, add Renovate for automated dependency updates. *(Security)*
-9. **Release Automation** – Configure semantic-release (or changesets) to publish wheels/archives with signed artifacts and generated CHANGELOG. *(DX, reliability)*
-10. **Performance Profiling & Caching** – Add benchmarking harness + instrumentation for traversal functions; explore multiprocessing or path memoization for large repos. *(Performance)*
+| # | Opportunity | Expected Impact | Effort | Prerequisites | Tags |
+|---|-------------|----------------|--------|---------------|------|
+| 1 | Harden governance, CODEOWNERS, CI status checks, and documentation cross-links. | High | Low | None | {DX, docs, reliability} |
+| 2 | Align pre-commit & CI (Ruff fmt/check, mypy strict, security scans) with commitlint enforcement. | Medium | Low | #1 | {DX, testing, security} |
+| 3 | Typed config schema + `.env.example` parity with feature-flag rollback. | High | Medium | #1–2 | {reliability, security, DX} |
+| 4 | Modularise `utils` into traversal/logging/reporting packages with compatibility facade. | High | High | #2–3 | {DX, reliability, performance} |
+| 5 | Structured logging & context propagation behind opt-in flag. | Medium | Medium | #3–4 | {reliability, DX} |
+| 6 | Golden-path CLI snapshot & regression suite (collect/consolidate/tree). | High | Medium | #2 | {testing, reliability} |
+| 7 | Supply-chain automation (SBOM, gitleaks, dependency policy, Renovate). | Medium | Medium | #1 | {security, reliability} |
+| 8 | Benchmark & profiling harness to quantify traversal performance. | Medium | Medium | #6 | {performance, testing} |
+| 9 | Semantic release pipeline (semantic versioning, signed artefacts, changelog automation). | High | Medium | #1, #7 | {DX, reliability} |
+| 10 | Feature-flag strategy for legacy wrappers with published deprecation timeline. | Medium | Medium | #3–4 | {DX, reliability} |
+
+## Evidence & Next Steps
+- `STATUS.md` will capture progress per PR with risk/rollback notes.
+- New ADRs will document high-impact decisions (module decomposition, schema selection, observability strategy).
+- Metrics to instrument during modernization: CLI execution duration, file count processed, log size, validation error rates.
+- Target success criteria: ≥85% coverage on core modules, CI runtime <10 minutes, zero manual release steps, developer setup in
+  <5 minutes.

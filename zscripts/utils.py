@@ -8,6 +8,7 @@ import os
 import re
 import warnings
 from collections.abc import Collection, Iterable, Iterator
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, TextIO
 
@@ -88,6 +89,33 @@ BASE_IGNORE_PATTERNS: Final[set[str]] = {
     "zbuild",
     "zbuild/",
 }
+
+
+@dataclass(frozen=True)
+class CollectionStats:
+    """Summary of a ``collect_app_logs`` invocation."""
+
+    apps_written: int
+    files_written: int
+    files_skipped: int
+    bytes_written: int
+
+
+@dataclass(frozen=True)
+class ConsolidationStats:
+    """Summary of a ``consolidate_files`` invocation."""
+
+    files_written: int
+    files_skipped: int
+    bytes_written: int
+
+
+@dataclass(frozen=True)
+class TreeStats:
+    """Summary of a ``create_filtered_tree`` invocation."""
+
+    lines_emitted: int
+    bytes_written: int
 
 
 def expand_skip_dirs(skip_dirs: Iterable[str]) -> set[str]:
@@ -336,13 +364,17 @@ def collect_app_logs(
     log_dir: Path,
     extensions: Collection[str],
     ignore_patterns: Collection[str],
-) -> None:
+) -> CollectionStats:
     """Collect matching files grouped by app and write per-app log files."""
 
     matcher = IgnoreMatcher(ignore_patterns)
     log_dir.mkdir(parents=True, exist_ok=True)
 
     handles: dict[str, TextIO] = {}
+    apps_written = 0
+    files_written = 0
+    files_skipped = 0
+    bytes_written = 0
 
     try:
         for relative_root, file_path, relative_file in _iter_source_files(
@@ -356,6 +388,7 @@ def collect_app_logs(
                 handle = log_file_path.open("w", encoding="utf-8")
                 handle.write(f"# {app_name}\n\n")
                 handles[app_name] = handle
+                apps_written += 1
 
             try:
                 content = file_path.read_text(encoding="utf-8")
@@ -365,9 +398,13 @@ def collect_app_logs(
                     file_path,
                     exc,
                 )
+                files_skipped += 1
                 continue
 
-            handle.write(f"# {relative_file.as_posix()}\n{content}\n\n")
+            entry = f"# {relative_file.as_posix()}\n{content}\n\n"
+            handle.write(entry)
+            files_written += 1
+            bytes_written += len(entry.encode())
             # TODO - Allow configurable separators to ease downstream parsing.
             # TODO - Stream output to gzip files when log compression is desired.
     finally:
@@ -375,17 +412,28 @@ def collect_app_logs(
             handle.close()
         # TODO - Ensure file handles are flushed even if the close operation fails.
 
+    return CollectionStats(
+        apps_written=apps_written,
+        files_written=files_written,
+        files_skipped=files_skipped,
+        bytes_written=bytes_written,
+    )
+
 
 def consolidate_files(
     project_root: Path,
     output_path: Path,
     extensions: Collection[str],
     ignore_patterns: Collection[str],
-) -> None:
+) -> ConsolidationStats:
     """Write all matching source files into a single consolidated log."""
 
     matcher = IgnoreMatcher(ignore_patterns)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    files_written = 0
+    files_skipped = 0
+    bytes_written = 0
 
     with output_path.open("w", encoding="utf-8") as output_file:
         for _, file_path, relative_file in _iter_source_files(project_root, extensions, matcher):
@@ -397,10 +445,20 @@ def consolidate_files(
                     file_path,
                     exc,
                 )
+                files_skipped += 1
                 continue
-            output_file.write(f"# {relative_file.as_posix()}\n{content}\n\n")
+            entry = f"# {relative_file.as_posix()}\n{content}\n\n"
+            output_file.write(entry)
+            files_written += 1
+            bytes_written += len(entry.encode())
             # TODO - Stream writes incrementally to support multi-gigabyte projects.
             # TODO - Embed file metadata headers to aid downstream tooling analysis.
+
+    return ConsolidationStats(
+        files_written=files_written,
+        files_skipped=files_skipped,
+        bytes_written=bytes_written,
+    )
 
 
 def iter_filtered_tree_lines(
@@ -476,10 +534,12 @@ def create_filtered_tree(
     *,
     include_content: bool = True,
     max_bytes: int = 4096,
-) -> None:
+) -> TreeStats:
     """Write a filtered tree view of *project_root* to *output_path*."""
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    line_count = 0
+    byte_count = 0
     with output_path.open("w", encoding="utf-8") as output_file:
         for line in iter_filtered_tree_lines(
             project_root,
@@ -488,7 +548,50 @@ def create_filtered_tree(
             max_bytes=max_bytes,
         ):
             output_file.write(f"{line}\n")
+            line_count += 1
+            byte_count += len(f"{line}\n".encode())
     # TODO - Provide an option to emit ANSI colors when the tree targets terminal output.
+
+    return TreeStats(lines_emitted=line_count, bytes_written=byte_count)
+
+
+def ensure_writable_path(target: Path, *, allowed_root: Path | None = None) -> Path:
+    """Validate that *target* can be written to before heavy work begins."""
+
+    expanded = target.expanduser()
+    parent = expanded.parent
+
+    try:
+        parent.mkdir(parents=True, exist_ok=True)
+    except FileExistsError as exc:
+        raise RuntimeError(
+            f"Cannot create parent directory for output path {expanded}: {parent} is a file"
+        ) from exc
+
+    if not parent.is_dir():
+        raise RuntimeError(f"Parent path for output {expanded} is not a directory: {parent}")
+
+    if not os.access(parent, os.W_OK):
+        raise PermissionError(f"Output directory is not writable: {parent}")
+
+    resolved = expanded.resolve()
+
+    if allowed_root is not None:
+        allowed_resolved = allowed_root.expanduser().resolve()
+        try:
+            resolved.relative_to(allowed_resolved)
+        except ValueError as exc:
+            raise RuntimeError(
+                f"Output path {resolved} escapes the allowed root {allowed_resolved}"
+            ) from exc
+
+    if resolved.exists():
+        if resolved.is_dir():
+            raise IsADirectoryError(f"Output path resolves to a directory: {resolved}")
+        if not os.access(resolved, os.W_OK):
+            raise PermissionError(f"Existing output file is not writable: {resolved}")
+
+    return resolved
 
 
 __all__ = [
@@ -502,4 +605,8 @@ __all__ = [
     "consolidate_files",
     "iter_filtered_tree_lines",
     "create_filtered_tree",
+    "ensure_writable_path",
+    "CollectionStats",
+    "ConsolidationStats",
+    "TreeStats",
 ]

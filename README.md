@@ -1,5 +1,7 @@
 # Zscripts
 
+[![CI](https://github.com/zscripts/zscripts/actions/workflows/ci.yml/badge.svg)](https://github.com/zscripts/zscripts/actions/workflows/ci.yml)
+
 Zscripts is a framework-agnostic utility for aggregating source files into
 navigable logs. The toolchain helps multi-stack teams surface Python, JavaScript,
 TypeScript, CSS, shell scripts, infrastructure YAML, and other assets in a
@@ -8,6 +10,15 @@ consistent format so they can audit or ship documentation more quickly.
 The repository ships with a configurable command line interface, templates for
 regenerating this README, and a sample project that mixes backend, frontend, and
 infrastructure code to highlight cross-stack coverage.
+
+
+## Project Governance
+
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Contributing Guide](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
+- [Support Guide](SUPPORT.md)
+- [Status Updates](STATUS.md)
 
 ## Repository Layout
 
@@ -106,6 +117,10 @@ before touching disk:
 python -m zscripts collect --types python --project-root sample_project --dry-run
 ```
 
+Each completed run now prints a concise summary that includes the number of
+files written, any skipped reads, and the total volume produced. Use these
+metrics to flag unexpectedly large captures before shipping artifacts off-box.
+
 ### `consolidate`
 
 Create a single file that merges all sources for the requested stack.
@@ -130,6 +145,10 @@ inspect the file list safely.
 python -m zscripts consolidate --types python --project-root sample_project --dry-run
 ```
 
+Like the `collect` command, the consolidator surfaces execution summaries so
+you can verify how many files were merged, how much data was emitted, and
+whether any inputs were skipped due to read errors.
+
 ### `tree`
 
 Snapshot the repository structure. File contents are omitted by default to
@@ -144,6 +163,9 @@ python -m zscripts tree --project-root sample_project --output /tmp/tree.txt --i
 This is useful when you need a contextual code review bundle or want to capture
 changes across multiple stacks in a single artifact. Pass `--dry-run` to emit
 the planned tree directly to STDOUT without writing an output file.
+
+Tree snapshots also record how many lines and bytes were written, making it easy
+to track drift across repositories over time.
 
 ## Verification Checklist
 
@@ -248,3 +270,21 @@ CLI.
 Because the CLI reads JSON, you can keep multiple configuration files around for
 different frameworks (e.g., `zscripts.config.django.json` vs.
 `zscripts.config.node.json`) and swap between them with the `--config` flag.
+## Developer Workflow
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pre-commit install
+pre-commit install --hook-type commit-msg
+make check
+make sbom
+```
+
+- `.pre-commit-config.yaml` runs Ruff (format + lint), mypy, Bandit, detect-secrets, and commitlint hooks.
+- Commit messages must follow Conventional Commits; CI enforces this via commitlint.
+- Reference [.env.example](.env.example) when configuring environment variables such as `ZSCRIPTS_CONFIG_PATH`.
+- `make sbom` produces CycloneDX JSON and XML manifests in `artifacts/sbom/`; CI uploads the same artifacts for each build.
+- CI runs [gitleaks](https://github.com/gitleaks/gitleaks) with the repository configuration to block committed secrets. Use `pre-commit run --all-files` to catch issues locally before pushing.
+

@@ -74,19 +74,21 @@ def test_collect_app_logs_ignores_symlinks(sample_project_path: Path, tmp_path: 
     (sample_project_path / "backend" / "escape.py").symlink_to(outside_file)
 
     log_dir = tmp_path / "logs"
-    collect_app_logs(sample_project_path, log_dir, {".py"}, [])
+    stats = collect_app_logs(sample_project_path, log_dir, {".py"}, [])
 
     backend_log = log_dir / "backend.txt"
     content = backend_log.read_text(encoding="utf-8")
     assert "escape.py" not in content
     assert "service.py" in content
+    assert stats.files_skipped == 0
+    assert stats.files_written >= 1
 
 
 def test_collect_app_logs_collects_javascript_family(
     sample_project_path: Path, tmp_path: Path
 ) -> None:
     log_dir = tmp_path / "logs"
-    collect_app_logs(
+    stats = collect_app_logs(
         sample_project_path,
         log_dir,
         {".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"},
@@ -103,6 +105,9 @@ def test_collect_app_logs_collects_javascript_family(
     assert "App.tsx" in content
     assert "App.mts" in content
     assert "App.cts" in content
+    assert stats.files_written == 8
+    assert stats.files_skipped == 0
+    assert stats.bytes_written > 0
 
 
 def test_consolidate_files_handles_uppercase_extensions(
@@ -112,21 +117,26 @@ def test_consolidate_files_handles_uppercase_extensions(
     uppercase_file.write_text("print('upper')\n", encoding="utf-8")
 
     output_path = tmp_path / "consolidated.txt"
-    consolidate_files(sample_project_path, output_path, {".py"}, [])
+    stats = consolidate_files(sample_project_path, output_path, {".py"}, [])
 
     content = output_path.read_text(encoding="utf-8")
     assert "service.py" in content
     assert "UPPER.PY" in content
+    assert stats.files_written >= 2
+    assert stats.files_skipped == 0
+    assert stats.bytes_written > 0
 
 
 def test_create_filtered_tree_without_contents(sample_project_path: Path, tmp_path: Path) -> None:
     output_path = tmp_path / "tree.txt"
-    create_filtered_tree(sample_project_path, output_path, [], include_content=False)
+    stats = create_filtered_tree(sample_project_path, output_path, [], include_content=False)
 
     content = output_path.read_text(encoding="utf-8")
     assert "backend" in content
     assert "frontend" in content
     assert "Backend service" not in content
+    assert stats.lines_emitted > 0
+    assert stats.bytes_written > 0
 
 
 def test_load_gitignore_patterns_includes_skip_dirs(sample_project_path: Path) -> None:

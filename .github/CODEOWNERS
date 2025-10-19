@@ -1,0 +1,14 @@
+# Default owners
+* @zscripts/maintainers
+
+# Documentation
+*.md @zscripts/docs-team
+
+# CI workflows
+.github/workflows/* @zscripts/maintainers @zscripts/release-engineers
+
+# Python package
+zscripts/** @zscripts/maintainers
+
+# Tests
+tests/** @zscripts/qa-team

@@ -5,9 +5,9 @@ from __future__ import annotations
 import argparse
 import difflib
 import logging
-import os
 import sys
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, TextIO, cast
 
@@ -20,9 +20,13 @@ from .presets import (
     get_single_extension_map,
 )
 from .utils import (
+    CollectionStats,
+    ConsolidationStats,
+    TreeStats,
     collect_app_logs,
     consolidate_files,
     create_filtered_tree,
+    ensure_writable_path,
     group_source_files_by_app,
     iter_filtered_tree_lines,
     list_matching_source_files,
@@ -50,6 +54,52 @@ COLLECT_TYPE_CHOICES = ", ".join(COLLECT_TYPE_EXTENSIONS.keys())
 SINGLE_TYPE_CHOICES = ", ".join(SINGLE_TYPE_EXTENSIONS.keys())
 
 
+BYTES_STEP = 1024.0
+
+
+def _format_bytes(value: int) -> str:
+    """Return *value* in bytes as a human readable string."""
+
+    if value <= 0:
+        return "0 B"
+
+    units = ("B", "KiB", "MiB", "GiB", "TiB")
+    remainder = float(value)
+    for unit in units:
+        if remainder < BYTES_STEP or unit == units[-1]:
+            if unit == "B":
+                return f"{int(remainder)} {unit}"
+            return f"{remainder:.1f} {unit}"
+        remainder /= BYTES_STEP
+    return f"{value} B"
+
+
+@dataclass(slots=True)
+class _CollectTotals:
+    files_written: int = 0
+    files_skipped: int = 0
+    bytes_written: int = 0
+
+
+@dataclass(slots=True)
+class _ConsolidateConfig:
+    type_name: str
+    project_root: Path
+    ignore_patterns: Sequence[str]
+    stream_stdout: bool
+    target_path: Path | None
+
+
+@dataclass(slots=True)
+class _TreeConfig:
+    project_root: Path
+    ignore_patterns: Sequence[str]
+    include_contents: bool
+    max_bytes: int
+    stream_stdout: bool
+    target_path: Path | None
+
+
 def _validate_log_filenames(paths: Mapping[str, Path]) -> None:
     """Ensure configured log paths are portable across operating systems."""
 
@@ -72,30 +122,6 @@ def _validate_log_filenames(paths: Mapping[str, Path]) -> None:
                 )
             if segment.upper() in WINDOWS_RESERVED_NAMES:
                 raise ValueError(f"Log path for '{label}' uses Windows-reserved name '{segment}'")
-
-
-def _ensure_output_path(target: Path) -> None:
-    """Ensure the output path can be written to before starting heavy work."""
-
-    parent = target.parent
-    try:
-        parent.mkdir(parents=True, exist_ok=True)
-    except FileExistsError as exc:
-        raise RuntimeError(
-            f"Cannot create parent directory for output path {target}: {parent} is a file"
-        ) from exc
-
-    if not parent.is_dir():
-        raise RuntimeError(f"Parent path for output {target} is not a directory: {parent}")
-
-    if not os.access(parent, os.W_OK):
-        raise PermissionError(f"Output directory is not writable: {parent}")
-
-    if target.exists():
-        if target.is_dir():
-            raise IsADirectoryError(f"Output path resolves to a directory: {target}")
-        if not os.access(target, os.W_OK):
-            raise PermissionError(f"Existing output file is not writable: {target}")
 
 
 class UnknownTypeError(ValueError):
@@ -195,6 +221,19 @@ def _build_single_targets(config: Config, base_dir: Path | None = None) -> dict[
     return paths
 
 
+def _resolve_consolidate_allowed_root(
+    output_dir_arg: str | None,
+    output_arg: str | None,
+    config: Config,
+    output_base: Path | None,
+) -> Path | None:
+    if output_dir_arg:
+        return output_base
+    if output_arg:
+        return None
+    return resolve_paths(config).single_log_dir
+
+
 @typed_lru_cache(maxsize=64)
 def _augment_ignore_patterns_cached(
     project_root: Path, skip: tuple[str, ...], user_patterns: tuple[str, ...]
@@ -251,6 +290,238 @@ def _resolve_project_root(raw_root: str | None, *, sample: bool) -> Path:
     return resolved_candidate
 
 
+def _collect_dry_run(
+    type_names: Sequence[str],
+    project_root: Path,
+    log_paths: Mapping[str, Path],
+    ignore_patterns: Sequence[str],
+    reporter: Reporter,
+) -> None:
+    for type_name in type_names:
+        log_dir = log_paths[type_name]
+        grouped = group_source_files_by_app(
+            project_root,
+            COLLECT_TYPE_EXTENSIONS[type_name],
+            ignore_patterns,
+        )
+        LOGGER.info("event=collect_planned type=%s output=%s", type_name, log_dir)
+        reporter.info(f"• {type_name} -> {log_dir}")
+        if not grouped:
+            reporter.detail("  - No matching files found")
+            continue
+        for app_name, files in grouped.items():
+            reporter.detail(f"  - [{app_name}] ({len(files)} files)")
+            for relative_path in files:
+                reporter.detail(f"    · {relative_path.as_posix()}")
+                # TODO - Show file size metadata to estimate log volume upfront.
+
+    reporter.blank()
+    reporter.info("📝 Dry run complete. No files were written.")
+
+
+def _collect_execute(
+    type_names: Sequence[str],
+    project_root: Path,
+    log_paths: Mapping[str, Path],
+    ignore_patterns: Sequence[str],
+    reporter: Reporter,
+) -> _CollectTotals:
+    totals = _CollectTotals()
+    for type_name in type_names:
+        log_dir = log_paths[type_name]
+        log_dir.mkdir(parents=True, exist_ok=True)
+        stats: CollectionStats = collect_app_logs(
+            project_root,
+            log_dir,
+            COLLECT_TYPE_EXTENSIONS[type_name],
+            ignore_patterns,
+        )
+        LOGGER.info(
+            "event=collect_completed type=%s output=%s files=%d skipped=%d bytes=%d",
+            type_name,
+            log_dir,
+            stats.files_written,
+            stats.files_skipped,
+            stats.bytes_written,
+        )
+        details = [f"{stats.files_written} files"]
+        if stats.files_skipped:
+            details.append(f"{stats.files_skipped} skipped")
+        details.append(f"{_format_bytes(stats.bytes_written)}")
+        reporter.success(
+            f"✓ Created {type_name} logs at {log_dir} ({', '.join(details)})"
+        )
+        totals.files_written += stats.files_written
+        totals.files_skipped += stats.files_skipped
+        totals.bytes_written += stats.bytes_written
+
+    return totals
+
+
+def _consolidate_dry_run(config: _ConsolidateConfig, reporter: Reporter) -> None:
+    planned = list_matching_source_files(
+        config.project_root,
+        SINGLE_TYPE_EXTENSIONS[config.type_name],
+        config.ignore_patterns,
+    )
+    LOGGER.info(
+        "event=consolidate_planned type=%s output=%s",
+        config.type_name,
+        config.target_path or "-",
+    )
+    target_display = "stdout" if config.stream_stdout else config.target_path
+    reporter.info(f"Dry run: would consolidate {len(planned)} files into {target_display}")
+    for relative_path in planned:
+        reporter.detail(f"  - {relative_path.as_posix()}")
+    if not planned:
+        reporter.detail("  (no matching files found)")
+    # TODO - Return a non-zero exit code when dry-run detects unresolved issues.
+
+
+def _consolidate_stream(config: _ConsolidateConfig, reporter: Reporter) -> None:
+    LOGGER.info("event=consolidate_stream type=%s", config.type_name)
+    files_written = 0
+    files_skipped = 0
+    bytes_written = 0
+    for relative_path in list_matching_source_files(
+        config.project_root,
+        SINGLE_TYPE_EXTENSIONS[config.type_name],
+        config.ignore_patterns,
+    ):
+        file_path = config.project_root / relative_path
+        try:
+            content = file_path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError) as exc:
+            LOGGER.warning(
+                "event=consolidate_skipped error_id=FS002 file=%s reason=%s",
+                file_path,
+                exc,
+            )
+            files_skipped += 1
+            continue
+        entry = f"# {relative_path.as_posix()}\n{content}\n\n"
+        print(entry, end="")
+        files_written += 1
+        bytes_written += len(entry.encode())
+    LOGGER.info(
+        "event=consolidate_stream_completed type=%s files=%d skipped=%d bytes=%d",
+        config.type_name,
+        files_written,
+        files_skipped,
+        bytes_written,
+    )
+    details = [f"{files_written} files"]
+    if files_skipped:
+        details.append(f"{files_skipped} skipped")
+    details.append(f"{_format_bytes(bytes_written)}")
+    reporter.success(
+        f"✓ Consolidated {config.type_name} sources to stdout ({', '.join(details)})",
+        to_stderr=True,
+    )
+
+
+def _consolidate_to_file(
+    config: _ConsolidateConfig,
+    allowed_root: Path | None,
+    reporter: Reporter,
+) -> None:
+    if config.target_path is None:
+        raise RuntimeError("Output path was not resolved for consolidate command")
+    output_resolved = ensure_writable_path(config.target_path, allowed_root=allowed_root)
+    # TODO - Clean up orphaned directories when consolidation is interrupted mid-run.
+    stats: ConsolidationStats = consolidate_files(
+        config.project_root,
+        output_resolved,
+        SINGLE_TYPE_EXTENSIONS[config.type_name],
+        config.ignore_patterns,
+    )
+    LOGGER.info(
+        "event=consolidate_completed type=%s output=%s files=%d skipped=%d bytes=%d",
+        config.type_name,
+        output_resolved,
+        stats.files_written,
+        stats.files_skipped,
+        stats.bytes_written,
+    )
+    details = [f"{stats.files_written} files"]
+    if stats.files_skipped:
+        details.append(f"{stats.files_skipped} skipped")
+    details.append(f"{_format_bytes(stats.bytes_written)}")
+    reporter.success(
+        f"✓ Consolidated {config.type_name} sources into {output_resolved} ({', '.join(details)})"
+    )
+    if stats.files_skipped:
+        reporter.warning(
+            "Some files were skipped during consolidation due to read errors; review logs."
+        )
+
+
+def _tree_dry_run(config: _TreeConfig, reporter: Reporter) -> None:
+    LOGGER.info("event=tree_planned output=%s", config.target_path or "-")
+    target_display = "stdout" if config.stream_stdout else config.target_path
+    reporter.info(f"Dry run: would write project tree to {target_display}")
+    preview_lines = 0
+    preview_bytes = 0
+    for line in iter_filtered_tree_lines(
+        config.project_root,
+        config.ignore_patterns,
+        include_content=config.include_contents,
+        max_bytes=config.max_bytes,
+    ):
+        reporter.detail(line)
+        preview_lines += 1
+        preview_bytes += len(f"{line}\n".encode())
+    reporter.info(
+        f"Preview summary: {preview_lines} lines (~{_format_bytes(preview_bytes)})"
+    )
+
+
+def _tree_stream(config: _TreeConfig, reporter: Reporter) -> None:
+    LOGGER.info("event=tree_stream")
+    lines_emitted = 0
+    bytes_written = 0
+    for line in iter_filtered_tree_lines(
+        config.project_root,
+        config.ignore_patterns,
+        include_content=config.include_contents,
+        max_bytes=config.max_bytes,
+    ):
+        print(line)
+        lines_emitted += 1
+        bytes_written += len(f"{line}\n".encode())
+    reporter.success(
+        f"✓ Wrote project tree to stdout ({lines_emitted} lines, {_format_bytes(bytes_written)})",
+        to_stderr=True,
+    )
+
+
+def _tree_write(
+    config: _TreeConfig,
+    allowed_root: Path | None,
+    reporter: Reporter,
+) -> None:
+    if config.target_path is None:
+        raise RuntimeError("Output path was not resolved for tree command")
+    resolved_output = ensure_writable_path(config.target_path, allowed_root=allowed_root)
+    stats: TreeStats = create_filtered_tree(
+        config.project_root,
+        resolved_output,
+        config.ignore_patterns,
+        include_content=config.include_contents,
+        max_bytes=config.max_bytes,
+    )
+    LOGGER.info(
+        "event=tree_completed output=%s lines=%d bytes=%d",
+        resolved_output,
+        stats.lines_emitted,
+        stats.bytes_written,
+    )
+    reporter.success(
+        f"✓ Wrote project tree to {resolved_output} ({stats.lines_emitted} lines,"
+        f" {_format_bytes(stats.bytes_written)})"
+    )
+
+
 def collect_command(args: argparse.Namespace) -> None:
     config_arg = cast(Path | str | None, getattr(args, "config", None))
     project_root_arg = cast(str | None, getattr(args, "project_root", None))
@@ -280,45 +551,18 @@ def collect_command(args: argparse.Namespace) -> None:
     reporter.info(f"Output directory: {base_output_dir}")
     if dry_run:
         reporter.info("Dry run enabled: no files will be written.")
-        reporter.blank()
-        # TODO - Provide JSON output for dry-run details to enable scripting hooks.
-
-    for type_name in type_names:
-        log_dir = log_paths[type_name]
-        if dry_run:
-            grouped = group_source_files_by_app(
-                project_root,
-                COLLECT_TYPE_EXTENSIONS[type_name],
-                ignore_patterns,
-            )
-            LOGGER.info("event=collect_planned type=%s output=%s", type_name, log_dir)
-            reporter.info(f"• {type_name} -> {log_dir}")
-            if not grouped:
-                reporter.detail("  - No matching files found")
-            else:
-                for app_name, files in grouped.items():
-                    reporter.detail(f"  - [{app_name}] ({len(files)} files)")
-                    for relative_path in files:
-                        reporter.detail(f"    · {relative_path.as_posix()}")
-                        # TODO - Show file size metadata to estimate log volume upfront.
-            continue
-
-        log_dir.mkdir(parents=True, exist_ok=True)
-        # TODO - Reset target directories when stale files from previous runs are detected.
-        collect_app_logs(
-            project_root,
-            log_dir,
-            COLLECT_TYPE_EXTENSIONS[type_name],
-            ignore_patterns,
-        )
-        LOGGER.info("event=collect_completed type=%s output=%s", type_name, log_dir)
-        reporter.success(f"✓ Created {type_name} logs at {log_dir}")
-
-    if dry_run:
-        reporter.blank()
-        reporter.info(f"📝 Dry run complete. Planned logs directory: {base_output_dir}")
+        _collect_dry_run(type_names, project_root, log_paths, ignore_patterns, reporter)
         return
 
+    totals = _collect_execute(type_names, project_root, log_paths, ignore_patterns, reporter)
+    reporter.info(
+        f"Summary: {totals.files_written} files captured"
+        f" ({_format_bytes(totals.bytes_written)})"
+    )
+    if totals.files_skipped:
+        reporter.warning(
+            f"Skipped {totals.files_skipped} files due to read errors (see logs for details)."
+        )
     reporter.blank()
     reporter.success(f"📁 View logs at: {base_output_dir}")
 
@@ -358,57 +602,27 @@ def consolidate_command(args: argparse.Namespace) -> None:
     )
     # TODO - Warn when output_path resides outside of the configured log directory.
     ignore_patterns = _augment_ignore_patterns(project_root, config)
+    consolidate_ctx = _ConsolidateConfig(
+        type_name=type_name,
+        project_root=project_root,
+        ignore_patterns=tuple(ignore_patterns),
+        stream_stdout=stream_stdout,
+        target_path=output_path,
+    )
     if dry_run:
-        planned = list_matching_source_files(
-            project_root,
-            SINGLE_TYPE_EXTENSIONS[type_name],
-            ignore_patterns,
-        )
-        LOGGER.info("event=consolidate_planned type=%s output=%s", type_name, output_path or "-")
-        target_display = "stdout" if stream_stdout else output_path
-        reporter.info(f"Dry run: would consolidate {len(planned)} files into {target_display}")
-        for relative_path in planned:
-            reporter.detail(f"  - {relative_path.as_posix()}")
-        if not planned:
-            reporter.detail("  (no matching files found)")
-        # TODO - Return a non-zero exit code when dry-run detects unresolved issues.
+        _consolidate_dry_run(consolidate_ctx, reporter)
         return
 
     if stream_stdout:
-        LOGGER.info("event=consolidate_stream type=%s", type_name)
-        for relative_path in list_matching_source_files(
-            project_root,
-            SINGLE_TYPE_EXTENSIONS[type_name],
-            ignore_patterns,
-        ):
-            file_path = project_root / relative_path
-            try:
-                content = file_path.read_text(encoding="utf-8")
-            except (UnicodeDecodeError, OSError) as exc:
-                LOGGER.warning(
-                    "event=consolidate_skipped error_id=FS002 file=%s reason=%s",
-                    file_path,
-                    exc,
-                )
-                continue
-            print(f"# {relative_path.as_posix()}")
-            print(content)
-            print()
-        reporter.success(f"✓ Consolidated {type_name} sources to stdout", to_stderr=True)
+        _consolidate_stream(consolidate_ctx, reporter)
         return
 
     if output_path is None:
         raise RuntimeError("Output path was not resolved for consolidate command")
-    _ensure_output_path(output_path)
-    # TODO - Clean up orphaned directories when consolidation is interrupted mid-run.
-    consolidate_files(
-        project_root,
-        output_path,
-        SINGLE_TYPE_EXTENSIONS[type_name],
-        ignore_patterns,
+    allowed_root = _resolve_consolidate_allowed_root(
+        output_dir_arg, output_arg, config, output_base
     )
-    LOGGER.info("event=consolidate_completed type=%s output=%s", type_name, output_path)
-    reporter.success(f"✓ Consolidated {type_name} sources into {output_path}")
+    _consolidate_to_file(consolidate_ctx, allowed_root, reporter)
     # TODO - Offer to open the generated log automatically when running interactively.
 
 
@@ -428,61 +642,46 @@ def tree_command(args: argparse.Namespace) -> None:
     project_root = _resolve_project_root(project_root_arg, sample=sample_flag)
 
     stream_stdout = False
+    allowed_root: Path | None = None
     if output_dir_arg:
         output_base = Path(output_dir_arg).expanduser().resolve()
         output_path: Path | None = output_base / "project_tree.txt"
+        allowed_root = output_base
     elif output_arg:
         if output_arg == "-":
             stream_stdout = True
             output_path = None
         else:
             output_path = Path(output_arg).expanduser().resolve()
+            allowed_root = None
     else:
-        default_base = next(iter(_build_log_paths(config).values())).parent
+        default_base = resolve_paths(config).log_dir
         output_path = default_base / "project_tree.txt"
+        allowed_root = default_base
     # TODO - Validate that output_path is writable before starting the traversal.
 
     ignore_patterns = _augment_ignore_patterns(project_root, config)
+    tree_ctx = _TreeConfig(
+        project_root=project_root,
+        ignore_patterns=tuple(ignore_patterns),
+        include_contents=include_contents,
+        max_bytes=max_bytes,
+        stream_stdout=stream_stdout,
+        target_path=output_path,
+    )
     # TODO - Allow include/exclude filters to be provided at runtime for tree snapshots.
     # TODO - Offer machine-readable output (JSON/NDJSON) alongside the text tree view.
     if dry_run:
-        LOGGER.info("event=tree_planned output=%s", output_path or "-")
-        target_display = "stdout" if stream_stdout else output_path
-        reporter.info(f"Dry run: would write project tree to {target_display}")
-        for line in iter_filtered_tree_lines(
-            project_root,
-            ignore_patterns,
-            include_content=include_contents,
-            max_bytes=max_bytes,
-        ):
-            reporter.detail(line)
-        # TODO - Display a summary of ignored paths during dry-run previews.
+        _tree_dry_run(tree_ctx, reporter)
         return
 
     if stream_stdout:
-        LOGGER.info("event=tree_stream")
-        for line in iter_filtered_tree_lines(
-            project_root,
-            ignore_patterns,
-            include_content=include_contents,
-            max_bytes=max_bytes,
-        ):
-            print(line)
-        reporter.success("✓ Wrote project tree to stdout", to_stderr=True)
+        _tree_stream(tree_ctx, reporter)
         return
 
     if output_path is None:
         raise RuntimeError("Output path was not resolved for tree command")
-    _ensure_output_path(output_path)
-    create_filtered_tree(
-        project_root,
-        output_path,
-        ignore_patterns,
-        include_content=include_contents,
-        max_bytes=max_bytes,
-    )
-    LOGGER.info("event=tree_completed output=%s", output_path)
-    reporter.success(f"✓ Wrote project tree to {output_path}")
+    _tree_write(tree_ctx, allowed_root, reporter)
     # TODO - Provide guidance for piping output directly to stdout for scripting.
 
 

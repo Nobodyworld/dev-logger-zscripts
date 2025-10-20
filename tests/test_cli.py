@@ -104,6 +104,28 @@ def test_cli_consolidate_reports_summary(
     assert "skipped" not in captured.err
 
 
+def test_cli_consolidate_warns_when_output_outside_default_root(
+    sample_project_path: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    outside_output = tmp_path / "custom" / "python.txt"
+
+    exit_code = cli_main(
+        [
+            "consolidate",
+            "--types",
+            "python",
+            "--project-root",
+            str(sample_project_path),
+            "--output",
+            str(outside_output),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "Output path is outside the configured single-log directory" in captured.err
+
+
 def test_cli_consolidate_includes_js_variants(sample_project_path: Path, tmp_path: Path) -> None:
     output = tmp_path / "javascript.txt"
 
@@ -149,6 +171,7 @@ def test_cli_tree_respects_include_contents(sample_project_path: Path, tmp_path:
     content = tree_path.read_text(encoding="utf-8")
     assert "backend" in content
     assert "service.py" in content
+    assert "Summary:" in content
 
 
 def test_cli_collect_dry_run_skips_writes(
@@ -176,6 +199,47 @@ def test_cli_collect_dry_run_skips_writes(
     assert not output_dir.exists()
     assert "Dry run enabled" in captured.out
     assert "backend/service.py" in captured.out
+    assert "files, ~" in captured.out
+    assert "(size unavailable)" not in captured.out
+
+
+def test_cli_collect_dry_run_reports_size_errors(
+    sample_project_path: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_dir = tmp_path / "preview"
+    target_path = sample_project_path / "backend" / "service.py"
+    original_stat = Path.stat
+
+    def failing_stat(self: Path, *args, **kwargs):  # type: ignore[override]
+        follow_symlinks = kwargs.get("follow_symlinks", True)
+        if self == target_path and follow_symlinks:
+            raise OSError("permission denied")
+        return original_stat(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", failing_stat)
+
+    exit_code = cli_main(
+        [
+            "collect",
+            "--types",
+            "python",
+            "--project-root",
+            str(sample_project_path),
+            "--output-dir",
+            str(output_dir),
+            "--dry-run",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "backend/service.py (size unavailable)" in captured.out
+    assert "warning: Failed to determine size for 1 file(s) in [backend]; review logs." in captured.err
+    assert "warning: Dry run detected issues; exiting with status 1." in captured.err
+    assert "warning: Collect dry run detected issues; review warnings above." in captured.err
 
 
 def test_cli_consolidate_dry_run_lists_files(
@@ -297,6 +361,7 @@ def test_cli_tree_dry_run_prints_preview(
     assert not tree_path.exists()
     assert "Dry run: would write project tree" in captured.out
     assert sample_project_path.resolve().as_posix() in captured.out
+    assert "Summary:" in captured.out
 
 
 def test_cli_tree_streams_stdout_and_limits_bytes(
@@ -320,6 +385,7 @@ def test_cli_tree_streams_stdout_and_limits_bytes(
     assert exit_code == 0
     assert '│   """Service' in captured.out
     assert "✓ Wrote project tree to stdout" in captured.err
+    assert "Summary:" in captured.out
 
 
 def test_cli_tree_reports_summary(

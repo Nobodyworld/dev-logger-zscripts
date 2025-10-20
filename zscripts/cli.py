@@ -27,6 +27,7 @@ from .utils import (
     consolidate_files,
     create_filtered_tree,
     ensure_writable_path,
+    format_bytes,
     group_source_files_by_app,
     iter_filtered_tree_lines,
     list_matching_source_files,
@@ -52,26 +53,6 @@ _DEFAULT_COLLECTION_LOG_NAMES = get_default_collection_logs()
 _DEFAULT_SINGLE_TARGET_NAMES = get_default_single_targets()
 COLLECT_TYPE_CHOICES = ", ".join(COLLECT_TYPE_EXTENSIONS.keys())
 SINGLE_TYPE_CHOICES = ", ".join(SINGLE_TYPE_EXTENSIONS.keys())
-
-
-BYTES_STEP = 1024.0
-
-
-def _format_bytes(value: int) -> str:
-    """Return *value* in bytes as a human readable string."""
-
-    if value <= 0:
-        return "0 B"
-
-    units = ("B", "KiB", "MiB", "GiB", "TiB")
-    remainder = float(value)
-    for unit in units:
-        if remainder < BYTES_STEP or unit == units[-1]:
-            if unit == "B":
-                return f"{int(remainder)} {unit}"
-            return f"{remainder:.1f} {unit}"
-        remainder /= BYTES_STEP
-    return f"{value} B"
 
 
 @dataclass(slots=True)
@@ -126,6 +107,10 @@ def _validate_log_filenames(paths: Mapping[str, Path]) -> None:
 
 class UnknownTypeError(ValueError):
     """Raised when an unknown log type is requested."""
+
+
+class DryRunIssuesDetected(RuntimeError):
+    """Raised when a dry run encounters unresolved issues."""
 
 
 class Reporter:
@@ -296,7 +281,8 @@ def _collect_dry_run(
     log_paths: Mapping[str, Path],
     ignore_patterns: Sequence[str],
     reporter: Reporter,
-) -> None:
+) -> bool:
+    issues_detected = False
     for type_name in type_names:
         log_dir = log_paths[type_name]
         grouped = group_source_files_by_app(
@@ -310,13 +296,47 @@ def _collect_dry_run(
             reporter.detail("  - No matching files found")
             continue
         for app_name, files in grouped.items():
-            reporter.detail(f"  - [{app_name}] ({len(files)} files)")
+            sizes: list[tuple[str, int | None]] = []
+            total_bytes = 0
+            metadata_errors = 0
             for relative_path in files:
-                reporter.detail(f"    · {relative_path.as_posix()}")
-                # TODO - Show file size metadata to estimate log volume upfront.
+                file_path = project_root / relative_path
+                size: int | None
+                try:
+                    size = file_path.stat().st_size
+                except OSError as exc:
+                    LOGGER.warning(
+                        "event=collect_stat_failed type=%s file=%s reason=%s",
+                        type_name,
+                        file_path,
+                        exc,
+                    )
+                    metadata_errors += 1
+                    size = None
+                else:
+                    total_bytes += size
+                sizes.append((relative_path.as_posix(), size))
+            reporter.detail(
+                f"  - [{app_name}] ({len(files)} files, ~{format_bytes(total_bytes)})"
+            )
+            for relative_path, size in sizes:
+                if size is None:
+                    reporter.detail(f"    · {relative_path} (size unavailable)")
+                else:
+                    reporter.detail(
+                        f"    · {relative_path} ({format_bytes(size)})"
+                    )
+            if metadata_errors:
+                issues_detected = True
+                reporter.warning(
+                    f"Failed to determine size for {metadata_errors} file(s) in [{app_name}]; review logs."
+                )
 
     reporter.blank()
     reporter.info("📝 Dry run complete. No files were written.")
+    if issues_detected:
+        reporter.warning("Dry run detected issues; exiting with status 1.")
+    return issues_detected
 
 
 def _collect_execute(
@@ -347,7 +367,7 @@ def _collect_execute(
         details = [f"{stats.files_written} files"]
         if stats.files_skipped:
             details.append(f"{stats.files_skipped} skipped")
-        details.append(f"{_format_bytes(stats.bytes_written)}")
+        details.append(f"{format_bytes(stats.bytes_written)}")
         reporter.success(
             f"✓ Created {type_name} logs at {log_dir} ({', '.join(details)})"
         )
@@ -413,7 +433,7 @@ def _consolidate_stream(config: _ConsolidateConfig, reporter: Reporter) -> None:
     details = [f"{files_written} files"]
     if files_skipped:
         details.append(f"{files_skipped} skipped")
-    details.append(f"{_format_bytes(bytes_written)}")
+    details.append(f"{format_bytes(bytes_written)}")
     reporter.success(
         f"✓ Consolidated {config.type_name} sources to stdout ({', '.join(details)})",
         to_stderr=True,
@@ -446,7 +466,7 @@ def _consolidate_to_file(
     details = [f"{stats.files_written} files"]
     if stats.files_skipped:
         details.append(f"{stats.files_skipped} skipped")
-    details.append(f"{_format_bytes(stats.bytes_written)}")
+    details.append(f"{format_bytes(stats.bytes_written)}")
     reporter.success(
         f"✓ Consolidated {config.type_name} sources into {output_resolved} ({', '.join(details)})"
     )
@@ -472,7 +492,7 @@ def _tree_dry_run(config: _TreeConfig, reporter: Reporter) -> None:
         preview_lines += 1
         preview_bytes += len(f"{line}\n".encode())
     reporter.info(
-        f"Preview summary: {preview_lines} lines (~{_format_bytes(preview_bytes)})"
+        f"Preview summary: {preview_lines} lines (~{format_bytes(preview_bytes)})"
     )
 
 
@@ -490,7 +510,7 @@ def _tree_stream(config: _TreeConfig, reporter: Reporter) -> None:
         lines_emitted += 1
         bytes_written += len(f"{line}\n".encode())
     reporter.success(
-        f"✓ Wrote project tree to stdout ({lines_emitted} lines, {_format_bytes(bytes_written)})",
+        f"✓ Wrote project tree to stdout ({lines_emitted} lines, {format_bytes(bytes_written)})",
         to_stderr=True,
     )
 
@@ -518,7 +538,7 @@ def _tree_write(
     )
     reporter.success(
         f"✓ Wrote project tree to {resolved_output} ({stats.lines_emitted} lines,"
-        f" {_format_bytes(stats.bytes_written)})"
+        f" {format_bytes(stats.bytes_written)})"
     )
 
 
@@ -551,13 +571,19 @@ def collect_command(args: argparse.Namespace) -> None:
     reporter.info(f"Output directory: {base_output_dir}")
     if dry_run:
         reporter.info("Dry run enabled: no files will be written.")
-        _collect_dry_run(type_names, project_root, log_paths, ignore_patterns, reporter)
+        issues_found = _collect_dry_run(
+            type_names, project_root, log_paths, ignore_patterns, reporter
+        )
+        if issues_found:
+            raise DryRunIssuesDetected(
+                "Collect dry run detected issues; review warnings above."
+            )
         return
 
     totals = _collect_execute(type_names, project_root, log_paths, ignore_patterns, reporter)
     reporter.info(
         f"Summary: {totals.files_written} files captured"
-        f" ({_format_bytes(totals.bytes_written)})"
+        f" ({format_bytes(totals.bytes_written)})"
     )
     if totals.files_skipped:
         reporter.warning(
@@ -591,6 +617,7 @@ def consolidate_command(args: argparse.Namespace) -> None:
 
     output_base = Path(output_dir_arg).expanduser().resolve() if output_dir_arg else None
     targets = _build_single_targets(config, output_base)
+    default_single_dir = resolve_paths(config).single_log_dir
 
     stream_stdout = output_arg == "-"
     output_path = (
@@ -600,7 +627,17 @@ def consolidate_command(args: argparse.Namespace) -> None:
         if output_arg
         else targets[type_name]
     )
-    # TODO - Warn when output_path resides outside of the configured log directory.
+    if (
+        not stream_stdout
+        and output_path is not None
+        and output_dir_arg is None
+    ):
+        try:
+            output_path.resolve().relative_to(default_single_dir)
+        except ValueError:
+            reporter.warning(
+                "Output path is outside the configured single-log directory; ensure this is intentional."
+            )
     ignore_patterns = _augment_ignore_patterns(project_root, config)
     consolidate_ctx = _ConsolidateConfig(
         type_name=type_name,
@@ -794,6 +831,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         handler(args)
+    except DryRunIssuesDetected as exc:
+        LOGGER.warning(
+            "event=cli_dry_run_issues command=%s reason=%s",
+            command,
+            exc,
+        )
+        print(f"warning: {exc}", file=sys.stderr)
+        return 1
     except UnknownTypeError as exc:
         LOGGER.error(
             "event=cli_error error_id=%s command=%s reason=%s",

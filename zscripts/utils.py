@@ -7,7 +7,8 @@ import logging
 import os
 import re
 import warnings
-from collections.abc import Collection, Iterable, Iterator
+from collections.abc import Callable, Collection, Iterable, Iterator
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, TextIO
@@ -18,11 +19,20 @@ from .config import Config, get_config
 _WINDOWS = os.name == "nt"
 
 
+class InvalidIgnorePatternError(ValueError):
+    """Raised when an ignore pattern cannot be compiled."""
+
+
 @typed_lru_cache(maxsize=256)
 def _compile_pattern(pattern: str, *, case_sensitive: bool) -> re.Pattern[str]:
     flags = 0 if case_sensitive else re.IGNORECASE
     translated = fnmatch.translate(pattern)
-    return re.compile(translated, flags)
+    try:
+        return re.compile(translated, flags)
+    except re.error as exc:  # pragma: no cover - exercised via tests with monkeypatch
+        raise InvalidIgnorePatternError(
+            f"Invalid ignore pattern '{pattern}': {exc.msg if hasattr(exc, 'msg') else exc}"
+        ) from exc
 
 
 class IgnoreMatcher:
@@ -40,7 +50,6 @@ class IgnoreMatcher:
             regex = _compile_pattern(candidate, case_sensitive=self._case_sensitive)
             compiled.append((candidate, regex, is_negated))
         self._compiled: Final = compiled
-        # TODO - Track compilation failures to surface invalid glob syntax to callers.
 
     def matches(self, path: Path | str) -> bool:
         """Return ``True`` if *path* matches any configured ignore pattern."""
@@ -91,6 +100,25 @@ BASE_IGNORE_PATTERNS: Final[set[str]] = {
 }
 
 
+_BYTE_UNITS: Final[tuple[str, ...]] = ("B", "KiB", "MiB", "GiB", "TiB")
+
+
+def format_bytes(value: int) -> str:
+    """Return *value* expressed using binary prefixes."""
+
+    if value <= 0:
+        return "0 B"
+
+    remainder = float(value)
+    for unit in _BYTE_UNITS:
+        if remainder < 1024.0 or unit == _BYTE_UNITS[-1]:
+            if unit == "B":
+                return f"{int(remainder)} {unit}"
+            return f"{remainder:.1f} {unit}"
+        remainder /= 1024.0
+    return f"{value} B"
+
+
 @dataclass(frozen=True)
 class CollectionStats:
     """Summary of a ``collect_app_logs`` invocation."""
@@ -118,10 +146,11 @@ class TreeStats:
     bytes_written: int
 
 
-def expand_skip_dirs(skip_dirs: Iterable[str]) -> set[str]:
-    """Create glob-style patterns that match skip directories."""
+def expand_skip_dirs(skip_dirs: Iterable[str]) -> tuple[str, ...]:
+    """Create glob-style patterns that match skip directories preserving order."""
 
-    patterns: set[str] = set()
+    ordered: list[str] = []
+    seen: set[str] = set()
     for skip_dir in skip_dirs:
         if not isinstance(skip_dir, str):
             raise TypeError("Skip directory entries must be strings")
@@ -129,25 +158,27 @@ def expand_skip_dirs(skip_dirs: Iterable[str]) -> set[str]:
         cleaned = skip_dir.strip("/")
         if not cleaned:
             continue
-        # TODO - Preserve ordering to make debugging merged skip patterns easier.
-        patterns.update(
-            {
-                cleaned,
-                f"{cleaned}/",
-                f"*/{cleaned}",
-                f"*/{cleaned}/",
-                f"*/{cleaned}/*",
-                f"{cleaned}/*",
-            }
+        variants = (
+            cleaned,
+            f"{cleaned}/",
+            f"*/{cleaned}",
+            f"*/{cleaned}/",
+            f"*/{cleaned}/*",
+            f"{cleaned}/*",
         )
+        for variant in variants:
+            if variant not in seen:
+                ordered.append(variant)
+                seen.add(variant)
         # TODO - Detect conflicting skip directives that shadow required directories.
-    return patterns
+    return tuple(ordered)
 
 
-def _normalise_user_ignore_patterns(patterns: Iterable[str]) -> set[str]:
-    """Validate and normalise user-provided ignore patterns."""
+def _normalise_user_ignore_patterns(patterns: Iterable[str]) -> tuple[str, ...]:
+    """Validate and normalise user-provided ignore patterns preserving order."""
 
-    normalised: set[str] = set()
+    normalised: list[str] = []
+    seen: set[str] = set()
     for pattern in patterns:
         if not isinstance(pattern, str):
             raise TypeError("User ignore patterns must be strings")
@@ -158,10 +189,11 @@ def _normalise_user_ignore_patterns(patterns: Iterable[str]) -> set[str]:
         if any(control in stripped for control in ("\n", "\r")):
             raise ValueError("User ignore patterns cannot contain newline characters")
 
-        normalised.add(stripped)
+        if stripped not in seen:
+            normalised.append(stripped)
+            seen.add(stripped)
     # TODO - Persist custom ignore patterns alongside generated logs for auditing.
-    # TODO - Preserve insertion order so downstream tooling can respect priority.
-    return normalised
+    return tuple(normalised)
 
 
 def load_gitignore_patterns(
@@ -189,7 +221,7 @@ def load_gitignore_patterns(
 
     effective_skip = tuple(skip_dirs or (config.skip if config else ()))
     effective_user_patterns = (
-        tuple(sorted(_normalise_user_ignore_patterns(user_ignore_patterns)))
+        _normalise_user_ignore_patterns(user_ignore_patterns)
         if user_ignore_patterns is not None
         else tuple(sorted(config.user_ignore_patterns) if config else ())
     )
@@ -201,7 +233,7 @@ def load_gitignore_patterns(
     )
 
 
-def _ingest_ignore_file(path: Path, patterns: set[str]) -> None:
+def _ingest_ignore_file(path: Path, add_pattern: Callable[[str], None]) -> None:
     if not path.is_file():
         return
     try:
@@ -209,7 +241,7 @@ def _ingest_ignore_file(path: Path, patterns: set[str]) -> None:
             for line in file:
                 stripped_line = line.strip()
                 if stripped_line and not stripped_line.startswith("#"):
-                    patterns.add(stripped_line)
+                    add_pattern(stripped_line)
     except OSError as exc:  # pragma: no cover - unlikely on local filesystem
         warnings.warn(
             f"Failed to read ignore file {path}: {exc}",
@@ -222,16 +254,27 @@ def _ingest_ignore_file(path: Path, patterns: set[str]) -> None:
 def _load_gitignore_patterns_cached(
     root_path: Path, skip_dirs: tuple[str, ...], user_ignore_patterns: tuple[str, ...]
 ) -> tuple[str, ...]:
-    patterns: set[str] = set(BASE_IGNORE_PATTERNS)
-    patterns.update(expand_skip_dirs(skip_dirs))
-    patterns.update(user_ignore_patterns)
+    ordered_patterns: list[str] = []
+    seen: set[str] = set()
+
+    def add_pattern(value: str) -> None:
+        if value not in seen:
+            ordered_patterns.append(value)
+            seen.add(value)
+
+    for base in sorted(BASE_IGNORE_PATTERNS):
+        add_pattern(base)
+    for variant in expand_skip_dirs(skip_dirs):
+        add_pattern(variant)
+    for extra in user_ignore_patterns:
+        add_pattern(extra)
 
     gitignore_path = root_path / ".gitignore"
     info_exclude = root_path / ".git" / "info" / "exclude"
-    _ingest_ignore_file(gitignore_path, patterns)
-    _ingest_ignore_file(info_exclude, patterns)
+    _ingest_ignore_file(gitignore_path, add_pattern)
+    _ingest_ignore_file(info_exclude, add_pattern)
     # TODO - Parse gitignore escape sequences to mirror Git's matching semantics.
-    return tuple(sorted(patterns))
+    return tuple(ordered_patterns)
 
 
 def file_matches_any_pattern(file_path: Path | str, patterns: Iterable[str]) -> bool:
@@ -370,13 +413,14 @@ def collect_app_logs(
     matcher = IgnoreMatcher(ignore_patterns)
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    handles: dict[str, TextIO] = {}
     apps_written = 0
     files_written = 0
     files_skipped = 0
     bytes_written = 0
 
-    try:
+    with ExitStack() as stack:
+        handles: dict[str, TextIO] = {}
+
         for relative_root, file_path, relative_file in _iter_source_files(
             project_root, extensions, matcher
         ):
@@ -385,7 +429,7 @@ def collect_app_logs(
             if handle is None:
                 log_file_path = log_dir / f"{app_name}.txt"
                 log_file_path.parent.mkdir(parents=True, exist_ok=True)
-                handle = log_file_path.open("w", encoding="utf-8")
+                handle = stack.enter_context(log_file_path.open("w", encoding="utf-8"))
                 handle.write(f"# {app_name}\n\n")
                 handles[app_name] = handle
                 apps_written += 1
@@ -407,10 +451,6 @@ def collect_app_logs(
             bytes_written += len(entry.encode())
             # TODO - Allow configurable separators to ease downstream parsing.
             # TODO - Stream output to gzip files when log compression is desired.
-    finally:
-        for handle in handles.values():
-            handle.close()
-        # TODO - Ensure file handles are flushed even if the close operation fails.
 
     return CollectionStats(
         apps_written=apps_written,
@@ -478,7 +518,14 @@ def iter_filtered_tree_lines(
     # TODO - Make max_bytes configurable per file type for more granular control.
     # TODO - Collect traversal statistics for reporting alongside the tree snapshot.
 
+    directory_count = 0
+    file_count = 0
+    truncated_files = 0
+    skipped_files = 0
+    total_bytes = 0
+
     def _walk_tree(current: Path, prefix: str = "") -> Iterator[str]:
+        nonlocal directory_count, file_count, truncated_files, skipped_files, total_bytes
         try:
             entries = sorted(current.iterdir())
         except OSError as exc:
@@ -504,9 +551,21 @@ def iter_filtered_tree_lines(
             yield f"{prefix}{connector}{entry.name}"
 
             if entry.is_dir():
+                directory_count += 1
                 extension = "    " if is_last else "│   "
                 yield from _walk_tree(entry, prefix + extension)
             elif include_content and entry.is_file():
+                file_count += 1
+                size_bytes: int | None
+                try:
+                    size_bytes = entry.stat().st_size
+                except OSError as exc:
+                    LOGGER.warning(
+                        "event=tree_stat_failed error_id=FS005 path=%s reason=%s",
+                        entry,
+                        exc,
+                    )
+                    size_bytes = None
                 try:
                     content = entry.read_text(encoding="utf-8")
                 except (UnicodeDecodeError, OSError) as exc:
@@ -515,16 +574,55 @@ def iter_filtered_tree_lines(
                         entry,
                         exc,
                     )
+                    skipped_files += 1
                     continue
                 trimmed = content[:max_bytes]
                 if trimmed:
                     for line in trimmed.splitlines():
                         yield f"{prefix}│   {line}"
-                # TODO - Add elided content markers when files exceed max_bytes.
+                actual_size = len(content.encode()) if size_bytes is None else size_bytes
+                total_bytes += actual_size
+                if len(content) > len(trimmed) or (
+                    size_bytes is not None and size_bytes > max_bytes
+                ):
+                    truncated_files += 1
+                    yield (
+                        f"{prefix}│   … (content truncated after {max_bytes} byte"
+                        f"{'s' if max_bytes != 1 else ''})"
+                    )
+            elif entry.is_file():
+                file_count += 1
+                try:
+                    total_bytes += entry.stat().st_size
+                except OSError as exc:
+                    LOGGER.warning(
+                        "event=tree_stat_failed error_id=FS005 path=%s reason=%s",
+                        entry,
+                        exc,
+                    )
+                    skipped_files += 1
+                    continue
 
     yield root_resolved.as_posix()
     yield from _walk_tree(root_resolved)
-    # TODO - Append summary statistics (counts, sizes) at the end of the tree output.
+    yield ""
+    summary = (
+        "Summary: "
+        f"{directory_count} {'directory' if directory_count == 1 else 'directories'}, "
+        f"{file_count} {'file' if file_count == 1 else 'files'}, "
+        f"~{format_bytes(total_bytes)} of content"
+    )
+    yield summary
+    if truncated_files:
+        yield (
+            f"Note: {truncated_files} file{'s' if truncated_files != 1 else ''} truncated"
+            f" at {max_bytes} byte{'s' if max_bytes != 1 else ''}."
+        )
+    if skipped_files:
+        yield (
+            f"Warning: {skipped_files} file{'s' if skipped_files != 1 else ''} "
+            "skipped due to read errors."
+        )
 
 
 def create_filtered_tree(
@@ -596,6 +694,7 @@ def ensure_writable_path(target: Path, *, allowed_root: Path | None = None) -> P
 
 __all__ = [
     "IgnoreMatcher",
+    "InvalidIgnorePatternError",
     "load_gitignore_patterns",
     "expand_skip_dirs",
     "file_matches_any_pattern",
@@ -609,4 +708,5 @@ __all__ = [
     "CollectionStats",
     "ConsolidationStats",
     "TreeStats",
+    "format_bytes",
 ]

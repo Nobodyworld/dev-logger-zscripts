@@ -4,16 +4,19 @@ import random
 import string
 from collections.abc import Iterator
 from pathlib import Path
+from typing import TextIO
 
 import pytest
 
 from zscripts.utils import (
     IgnoreMatcher,
+    InvalidIgnorePatternError,
     collect_app_logs,
     consolidate_files,
     create_filtered_tree,
     expand_skip_dirs,
     file_matches_any_pattern,
+    format_bytes,
     group_source_files_by_app,
     iter_filtered_tree_lines,
     list_matching_source_files,
@@ -61,6 +64,22 @@ def test_ignore_matcher_supports_negation() -> None:
     matcher = IgnoreMatcher(["backend/*", "!backend/service.py"])
     assert not matcher.matches(Path("backend/service.py"))
     assert matcher.matches(Path("backend/other.py"))
+
+
+def test_ignore_matcher_raises_on_invalid_pattern(monkeypatch: pytest.MonkeyPatch) -> None:
+    import re
+
+    original_compile = re.compile
+
+    def failing_compile(pattern: str, flags: int = 0):  # type: ignore[override]
+        if "sentinel" in pattern:
+            raise re.error("unterminated character set")
+        return original_compile(pattern, flags)
+
+    monkeypatch.setattr("zscripts.utils.re.compile", failing_compile)
+
+    with pytest.raises(InvalidIgnorePatternError):
+        IgnoreMatcher(["sentinel"])
 
 
 def test_ignore_matcher_case_normalisation() -> None:
@@ -139,12 +158,106 @@ def test_create_filtered_tree_without_contents(sample_project_path: Path, tmp_pa
     assert stats.bytes_written > 0
 
 
+def test_iter_filtered_tree_lines_emits_truncation_marker(tmp_path: Path) -> None:
+    project_root = tmp_path / "proj"
+    project_root.mkdir()
+    target = project_root / "data.txt"
+    target.write_text("abcdefghijklmnopqrstuvwxyz", encoding="utf-8")
+
+    lines = list(
+        iter_filtered_tree_lines(
+            project_root,
+            [],
+            include_content=True,
+            max_bytes=5,
+        )
+    )
+
+    assert any("… (content truncated" in line for line in lines)
+    summary_line = next(line for line in lines if line.startswith("Summary:"))
+    assert "1 file" in summary_line
+    assert any(line.startswith("Note:") for line in lines)
+
+
+def test_iter_filtered_tree_lines_reports_summary_without_contents(tmp_path: Path) -> None:
+    project_root = tmp_path / "proj"
+    project_root.mkdir()
+    (project_root / "dir").mkdir()
+    (project_root / "dir" / "alpha.txt").write_text("alpha", encoding="utf-8")
+
+    lines = list(
+        iter_filtered_tree_lines(
+            project_root,
+            [],
+            include_content=False,
+        )
+    )
+
+    summary_line = next(line for line in lines if line.startswith("Summary:"))
+    assert "1 directory" in summary_line
+    assert "1 file" in summary_line
+    assert format_bytes(5) in summary_line
+
+
 def test_load_gitignore_patterns_includes_skip_dirs(sample_project_path: Path) -> None:
     gitignore = sample_project_path / ".gitignore"
     gitignore.write_text("node_modules\n", encoding="utf-8")
 
     patterns = load_gitignore_patterns(sample_project_path)
     assert "node_modules" in patterns
+
+
+def test_load_gitignore_patterns_preserves_user_order(tmp_path: Path) -> None:
+    project_root = tmp_path / "repo"
+    project_root.mkdir()
+
+    patterns = load_gitignore_patterns(
+        project_root,
+        skip_dirs=["alpha"],
+        user_ignore_patterns=["first", "second", "third"],
+    )
+
+    first_index = patterns.index("first")
+    second_index = patterns.index("second")
+    third_index = patterns.index("third")
+    assert first_index < second_index < third_index
+
+
+def test_collect_app_logs_closes_handles_on_read_error(
+    sample_project_path: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_dir = tmp_path / "logs"
+    opened_handles: list[TextIO] = []
+
+    original_open = Path.open
+
+    def tracking_open(self: Path, *args, **kwargs):  # type: ignore[override]
+        handle = original_open(self, *args, **kwargs)
+        mode = kwargs.get("mode")
+        if args:
+            mode = args[0]
+        if isinstance(mode, str) and any(flag in mode for flag in ("w", "a", "x")):
+            opened_handles.append(handle)
+        return handle
+
+    monkeypatch.setattr(Path, "open", tracking_open)
+
+    original_read_text = Path.read_text
+
+    def flaky_read_text(self: Path, *args, **kwargs):  # type: ignore[override]
+        if self.name == "service.py":
+            raise OSError("simulated failure")
+        return original_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", flaky_read_text)
+
+    stats = collect_app_logs(sample_project_path, output_dir, {".py"}, [])
+
+    assert stats.files_skipped == 1
+    assert opened_handles, "expected at least one log handle to be opened"
+    assert all(handle.closed for handle in opened_handles)
 
 
 def test_load_gitignore_patterns_includes_info_exclude(tmp_path: Path) -> None:
@@ -223,6 +336,13 @@ def test_expand_skip_dirs_generates_variants_fuzz() -> None:
             assert cleaned in patterns
             assert f"{cleaned}/" in patterns
             assert f"*/{cleaned}" in patterns
+
+
+def test_expand_skip_dirs_preserves_variant_order() -> None:
+    patterns = expand_skip_dirs(["beta", "alpha"])
+
+    assert patterns.index("beta") < patterns.index("alpha")
+    assert patterns.index("beta/") < patterns.index("alpha/")
 
 
 def test_expand_skip_dirs_requires_string_entries() -> None:

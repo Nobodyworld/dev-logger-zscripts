@@ -38,6 +38,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 LOGGER = logging.getLogger("zscripts.cli")
 ERROR_ID_UNKNOWN_TYPE = "CLI001"
 ERROR_ID_PROJECT_ROOT = "CLI002"
+ERROR_ID_PERMISSIONS = "CLI003"
 ERROR_ID_RUNTIME = "CLI999"
 
 WINDOWS_RESERVED_NAMES: Final[frozenset[str]] = frozenset(
@@ -53,6 +54,7 @@ _DEFAULT_COLLECTION_LOG_NAMES = get_default_collection_logs()
 _DEFAULT_SINGLE_TARGET_NAMES = get_default_single_targets()
 COLLECT_TYPE_CHOICES = ", ".join(COLLECT_TYPE_EXTENSIONS.keys())
 SINGLE_TYPE_CHOICES = ", ".join(SINGLE_TYPE_EXTENSIONS.keys())
+_COLLECT_PERMISSION_SENTINEL = ".zscripts-permission-check"
 
 
 @dataclass(slots=True)
@@ -60,6 +62,12 @@ class _CollectTotals:
     files_written: int = 0
     files_skipped: int = 0
     bytes_written: int = 0
+
+
+@dataclass(frozen=True)
+class _CollectPreflightResult:
+    directories: Mapping[str, Path]
+    base_directory: Path
 
 
 @dataclass(slots=True)
@@ -189,6 +197,50 @@ def _build_log_paths(config: Config, base_dir: Path | None = None) -> dict[str, 
     }
     _validate_log_filenames(paths)
     return paths
+
+
+def _preflight_collect_directories(
+    log_paths: Mapping[str, Path],
+    *,
+    allowed_root: Path | None,
+    create_parents: bool,
+) -> _CollectPreflightResult:
+    """Validate and optionally create the directories that collect will write into."""
+
+    prepared: dict[str, Path] = {}
+    for label, directory in log_paths.items():
+        sentinel = directory / _COLLECT_PERMISSION_SENTINEL
+        resolved = ensure_writable_path(
+            sentinel,
+            allowed_root=allowed_root,
+            create_parents=create_parents,
+        )
+        prepared[label] = resolved.parent
+
+    if not prepared:
+        raise RuntimeError("No collect log directories were configured")
+
+    base_candidates = {path.parent for path in prepared.values()}
+    if len(base_candidates) != 1:
+        raise RuntimeError(
+            "Collect log directories must share a common base directory"
+        )
+
+    return _CollectPreflightResult(
+        directories=prepared,
+        base_directory=base_candidates.pop(),
+    )
+
+
+def _determine_collect_base(log_paths: Mapping[str, Path]) -> Path:
+    base_candidates = {path.parent for path in log_paths.values()}
+    if not base_candidates:
+        raise RuntimeError("No collect log directories were configured")
+    if len(base_candidates) != 1:
+        raise RuntimeError(
+            "Collect log directories must share a common base directory"
+        )
+    return base_candidates.pop()
 
 
 def _build_single_targets(config: Config, base_dir: Path | None = None) -> dict[str, Path]:
@@ -563,7 +615,14 @@ def collect_command(args: argparse.Namespace) -> None:
 
     # TODO - Cache log path calculations when invoked repeatedly within same process.
     log_paths = _build_log_paths(config, output_base)
-    base_output_dir = next(iter(log_paths.values())).parent
+    allowed_root = _determine_collect_base(log_paths)
+    preflight = _preflight_collect_directories(
+        log_paths,
+        allowed_root=allowed_root,
+        create_parents=not dry_run,
+    )
+    prepared_log_paths = preflight.directories
+    base_output_dir = preflight.base_directory
     ignore_patterns = _augment_ignore_patterns(project_root, config)
 
     # TODO - Emit periodic progress updates for long scans to reassure users.
@@ -572,7 +631,7 @@ def collect_command(args: argparse.Namespace) -> None:
     if dry_run:
         reporter.info("Dry run enabled: no files will be written.")
         issues_found = _collect_dry_run(
-            type_names, project_root, log_paths, ignore_patterns, reporter
+            type_names, project_root, prepared_log_paths, ignore_patterns, reporter
         )
         if issues_found:
             raise DryRunIssuesDetected(
@@ -580,7 +639,13 @@ def collect_command(args: argparse.Namespace) -> None:
             )
         return
 
-    totals = _collect_execute(type_names, project_root, log_paths, ignore_patterns, reporter)
+    totals = _collect_execute(
+        type_names,
+        project_root,
+        prepared_log_paths,
+        ignore_patterns,
+        reporter,
+    )
     reporter.info(
         f"Summary: {totals.files_written} files captured"
         f" ({format_bytes(totals.bytes_written)})"
@@ -647,6 +712,17 @@ def consolidate_command(args: argparse.Namespace) -> None:
         target_path=output_path,
     )
     if dry_run:
+        if not stream_stdout:
+            if consolidate_ctx.target_path is None:
+                raise RuntimeError("Output path was not resolved for consolidate command")
+            allowed_root = _resolve_consolidate_allowed_root(
+                output_dir_arg, output_arg, config, output_base
+            )
+            ensure_writable_path(
+                consolidate_ctx.target_path,
+                allowed_root=allowed_root,
+                create_parents=False,
+            )
         _consolidate_dry_run(consolidate_ctx, reporter)
         return
 
@@ -695,7 +771,6 @@ def tree_command(args: argparse.Namespace) -> None:
         default_base = resolve_paths(config).log_dir
         output_path = default_base / "project_tree.txt"
         allowed_root = default_base
-    # TODO - Validate that output_path is writable before starting the traversal.
 
     ignore_patterns = _augment_ignore_patterns(project_root, config)
     tree_ctx = _TreeConfig(
@@ -709,6 +784,14 @@ def tree_command(args: argparse.Namespace) -> None:
     # TODO - Allow include/exclude filters to be provided at runtime for tree snapshots.
     # TODO - Offer machine-readable output (JSON/NDJSON) alongside the text tree view.
     if dry_run:
+        if not stream_stdout:
+            if tree_ctx.target_path is None:
+                raise RuntimeError("Output path was not resolved for tree command")
+            ensure_writable_path(
+                tree_ctx.target_path,
+                allowed_root=allowed_root,
+                create_parents=False,
+            )
         _tree_dry_run(tree_ctx, reporter)
         return
 
@@ -866,6 +949,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    except PermissionError as exc:
+        LOGGER.error(
+            "event=cli_error error_id=%s command=%s reason=%s",
+            ERROR_ID_PERMISSIONS,
+            command,
+            exc,
+        )
+        print(f"error: {exc}", file=sys.stderr)
+        return 3
     except RuntimeError as exc:
         LOGGER.error(
             "event=cli_error error_id=%s command=%s reason=%s",

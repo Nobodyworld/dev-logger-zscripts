@@ -653,35 +653,78 @@ def create_filtered_tree(
     return TreeStats(lines_emitted=line_count, bytes_written=byte_count)
 
 
-def ensure_writable_path(target: Path, *, allowed_root: Path | None = None) -> Path:
-    """Validate that *target* can be written to before heavy work begins."""
+def ensure_writable_path(
+    target: Path,
+    *,
+    allowed_root: Path | None = None,
+    create_parents: bool = True,
+) -> Path:
+    """Validate that *target* can be written to before heavy work begins.
+
+    When ``create_parents`` is ``True`` (the default) the function eagerly creates
+    parent directories to mirror the behaviour of the file-writing commands.
+    When ``False`` the function performs the same validation checks without
+    touching the filesystem, which is useful for dry-run flows that must remain
+    side-effect free.
+    """
 
     expanded = target.expanduser()
-    parent = expanded.parent
-
-    try:
-        parent.mkdir(parents=True, exist_ok=True)
-    except FileExistsError as exc:
-        raise RuntimeError(
-            f"Cannot create parent directory for output path {expanded}: {parent} is a file"
-        ) from exc
-
-    if not parent.is_dir():
-        raise RuntimeError(f"Parent path for output {expanded} is not a directory: {parent}")
-
-    if not os.access(parent, os.W_OK):
-        raise PermissionError(f"Output directory is not writable: {parent}")
-
-    resolved = expanded.resolve()
+    resolved = expanded.resolve(strict=False)
 
     if allowed_root is not None:
-        allowed_resolved = allowed_root.expanduser().resolve()
+        allowed_resolved = allowed_root.expanduser().resolve(strict=False)
+        if allowed_resolved.exists() and not allowed_resolved.is_dir():
+            raise NotADirectoryError(
+                f"Allowed root {allowed_resolved} is not a directory"
+            )
         try:
             resolved.relative_to(allowed_resolved)
         except ValueError as exc:
             raise RuntimeError(
                 f"Output path {resolved} escapes the allowed root {allowed_resolved}"
             ) from exc
+
+    parent = resolved.parent
+    parent_exists = parent.exists()
+    permission_root = parent
+
+    if parent_exists:
+        if not parent.is_dir():
+            raise RuntimeError(
+                f"Cannot create parent directory for output path {resolved}: {parent} is a file"
+            )
+    else:
+        ancestor = parent
+        while not ancestor.exists():
+            next_ancestor = ancestor.parent
+            if next_ancestor == ancestor:
+                break
+            ancestor = next_ancestor
+        if ancestor.exists():
+            if not ancestor.is_dir():
+                raise RuntimeError(
+                    f"Cannot create parent directory for output path {resolved}: {ancestor} is a file"
+                )
+            permission_root = ancestor
+        else:
+            permission_root = ancestor
+
+    if not os.access(permission_root, os.W_OK | os.X_OK):
+        raise PermissionError(f"Output directory is not writable: {permission_root}")
+
+    if create_parents and not parent_exists:
+        try:
+            parent.mkdir(parents=True, exist_ok=True)
+        except (FileExistsError, NotADirectoryError) as exc:
+            raise RuntimeError(
+                f"Cannot create parent directory for output path {resolved}: {parent} is a file"
+            ) from exc
+        parent_exists = True
+
+    if parent_exists and not parent.is_dir():
+        raise RuntimeError(
+            f"Parent path for output {resolved} is not a directory: {parent}"
+        )
 
     if resolved.exists():
         if resolved.is_dir():

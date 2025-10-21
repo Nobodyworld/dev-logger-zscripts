@@ -17,12 +17,16 @@ zscripts bundles project source files into navigable log archives. The current i
 - [x] (2025-10-16T20:06:54+00:00) Refreshed and focused the automated tests to cover new edge cases while keeping runtime low.
 - [x] (2025-10-16T20:16:34+00:00) Ran tests and updated documentation; ready to finalize the PR message.
 - [x] (2025-10-17T00:00:00+00:00) Perform RC verification: enforce lint/type/security gates, add property tests, and document operational guidance.
+- [x] (2025-10-21T06:45:00+00:00) Expand output preflight checks and CLI permission handling for production readiness.
 
 ## Surprises & Discoveries
 
 - Legacy integration tests exercised unrealistic timing guarantees. Replacing
   them with targeted filesystem checks kept runtime low while covering the
   newly added error handling.
+- CLI emits helpful warnings before permission failures (e.g., consolidate
+  warns about custom paths) which required tests to capture the final error
+  line rather than the first stderr line.
 
 ## Decision Log
 
@@ -36,6 +40,11 @@ zscripts bundles project source files into navigable log archives. The current i
   Rationale: Prevents confusing empty outputs and avoids unexpected large
   files, while giving operators an explicit opt-in flag.
   Date/Author: 2025-10-16 / gpt-5-codex
+- Decision: Raise a dedicated CLI permission error (exit code 3) and tighten
+  allowed-root validation before touching the filesystem.
+  Rationale: Operators now receive actionable feedback without creating
+  directories when misconfigured paths or ACLs block writes.
+  Date/Author: 2025-10-21 / gpt-5-codex
 
 ## Outcomes & Retrospective
 
@@ -92,6 +101,12 @@ The goal is to keep module boundaries intact while modernising their interfaces 
    - Add property-based regression tests for configuration normalisation, CLI type parsing, and ignore pattern expansion.
    - Refine sample assets to satisfy lint rules and exemplify modern patterns without dead code.
    - Provide operator-focused documentation: deterministic Makefile targets, quickstart commands, changelog, and observability notes.
+
+7. **Output preflight productionization**
+   - Make `ensure_writable_path` reject non-directory allowed roots, clarify its return contract, and capture the resolved parent in error messages.
+   - Rename and streamline the collect preflight helper so it returns resolved directories and validates they share a single base path for logging.
+   - Catch `PermissionError` explicitly in the CLI to emit actionable diagnostics instead of the generic "os error" prefix.
+   - Add regression tests for these behaviours, covering CLI flows and direct utility calls so future refactors keep the guarantees intact.
 
 ## Concrete Steps
 

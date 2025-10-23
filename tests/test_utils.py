@@ -1,3 +1,5 @@
+"""Unit tests covering the file system utility helpers exposed by :mod:`zscripts`."""
+
 from __future__ import annotations
 
 import random
@@ -23,11 +25,12 @@ from zscripts.utils import (
     load_gitignore_patterns,
 )
 
-# TODO - Expand utility tests to cover error handling branches for robustness.
+# TODO - (coverage) Expand utility tests to cover error handling branches for robustness.
 
 
 @pytest.fixture()
 def sample_project_path(tmp_path: Path) -> Path:
+    """Create a temporary project tree with backend and frontend sources."""
     project = tmp_path / "sample"
     project.mkdir()
 
@@ -55,18 +58,23 @@ def sample_project_path(tmp_path: Path) -> Path:
 
 
 def test_ignore_matcher_matches_glob_patterns() -> None:
+    """Ignore matcher should respect straightforward glob pattern behaviour."""
     matcher = IgnoreMatcher(["*.pyc", "__pycache__/"])
     assert matcher.matches(Path("__pycache__/module.pyc"))
     assert not matcher.matches(Path("module.py"))
 
 
 def test_ignore_matcher_supports_negation() -> None:
+    """Ignore matcher should support negated patterns for allowlisting paths."""
     matcher = IgnoreMatcher(["backend/*", "!backend/service.py"])
     assert not matcher.matches(Path("backend/service.py"))
     assert matcher.matches(Path("backend/other.py"))
 
 
-def test_ignore_matcher_raises_on_invalid_pattern(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ignore_matcher_raises_on_invalid_pattern(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ignore matcher should raise a helpful error for invalid regex patterns."""
     import re
 
     original_compile = re.compile
@@ -83,11 +91,15 @@ def test_ignore_matcher_raises_on_invalid_pattern(monkeypatch: pytest.MonkeyPatc
 
 
 def test_ignore_matcher_case_normalisation() -> None:
+    """Ignore matcher should treat paths case-insensitively when configured."""
     matcher = IgnoreMatcher(["frontend/app.js"], case_sensitive=False)
     assert matcher.matches(Path("frontend/App.js"))
 
 
-def test_collect_app_logs_ignores_symlinks(sample_project_path: Path, tmp_path: Path) -> None:
+def test_collect_app_logs_ignores_symlinks(
+    sample_project_path: Path, tmp_path: Path
+) -> None:
+    """Log collection should ignore symlinked files that escape the project root."""
     outside_file = tmp_path / "outside.py"
     outside_file.write_text("print('outside')\n", encoding="utf-8")
     (sample_project_path / "backend" / "escape.py").symlink_to(outside_file)
@@ -106,6 +118,7 @@ def test_collect_app_logs_ignores_symlinks(sample_project_path: Path, tmp_path: 
 def test_collect_app_logs_collects_javascript_family(
     sample_project_path: Path, tmp_path: Path
 ) -> None:
+    """Log collection should capture every supported JavaScript-family file."""
     log_dir = tmp_path / "logs"
     stats = collect_app_logs(
         sample_project_path,
@@ -132,6 +145,7 @@ def test_collect_app_logs_collects_javascript_family(
 def test_consolidate_files_handles_uppercase_extensions(
     sample_project_path: Path, tmp_path: Path
 ) -> None:
+    """File consolidation should handle uppercase extensions transparently."""
     uppercase_file = sample_project_path / "backend" / "UPPER.PY"
     uppercase_file.write_text("print('upper')\n", encoding="utf-8")
 
@@ -146,7 +160,10 @@ def test_consolidate_files_handles_uppercase_extensions(
     assert stats.bytes_written > 0
 
 
-def test_create_filtered_tree_without_contents(sample_project_path: Path, tmp_path: Path) -> None:
+def test_create_filtered_tree_without_contents(
+    sample_project_path: Path, tmp_path: Path
+) -> None:
+    """Filtered tree should omit file contents when requested."""
     output_path = tmp_path / "tree.txt"
     stats = create_filtered_tree(sample_project_path, output_path, [], include_content=False)
 
@@ -159,6 +176,7 @@ def test_create_filtered_tree_without_contents(sample_project_path: Path, tmp_pa
 
 
 def test_iter_filtered_tree_lines_emits_truncation_marker(tmp_path: Path) -> None:
+    """Tree iterator should append a truncation marker when byte limits are hit."""
     project_root = tmp_path / "proj"
     project_root.mkdir()
     target = project_root / "data.txt"
@@ -179,7 +197,10 @@ def test_iter_filtered_tree_lines_emits_truncation_marker(tmp_path: Path) -> Non
     assert any(line.startswith("Note:") for line in lines)
 
 
-def test_iter_filtered_tree_lines_reports_summary_without_contents(tmp_path: Path) -> None:
+def test_iter_filtered_tree_lines_reports_summary_without_contents(
+    tmp_path: Path,
+) -> None:
+    """Tree iterator should summarise directories even without file contents."""
     project_root = tmp_path / "proj"
     project_root.mkdir()
     (project_root / "dir").mkdir()
@@ -199,7 +220,10 @@ def test_iter_filtered_tree_lines_reports_summary_without_contents(tmp_path: Pat
     assert format_bytes(5) in summary_line
 
 
-def test_load_gitignore_patterns_includes_skip_dirs(sample_project_path: Path) -> None:
+def test_load_gitignore_patterns_includes_skip_dirs(
+    sample_project_path: Path,
+) -> None:
+    """Gitignore loader should include patterns sourced from project files."""
     gitignore = sample_project_path / ".gitignore"
     gitignore.write_text("node_modules\n", encoding="utf-8")
 
@@ -208,6 +232,7 @@ def test_load_gitignore_patterns_includes_skip_dirs(sample_project_path: Path) -
 
 
 def test_load_gitignore_patterns_preserves_user_order(tmp_path: Path) -> None:
+    """Gitignore loader should retain user-defined pattern ordering."""
     project_root = tmp_path / "repo"
     project_root.mkdir()
 
@@ -228,6 +253,7 @@ def test_collect_app_logs_closes_handles_on_read_error(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Log collection should close all file handles even after read errors."""
     output_dir = tmp_path / "logs"
     opened_handles: list[TextIO] = []
 
@@ -261,6 +287,7 @@ def test_collect_app_logs_closes_handles_on_read_error(
 
 
 def test_load_gitignore_patterns_includes_info_exclude(tmp_path: Path) -> None:
+    """Gitignore loader should respect repository-level info exclude entries."""
     project_root = tmp_path / "project"
     (project_root / ".git" / "info").mkdir(parents=True)
     (project_root / ".git" / "info" / "exclude").write_text("cache/\n", encoding="utf-8")
@@ -270,6 +297,7 @@ def test_load_gitignore_patterns_includes_info_exclude(tmp_path: Path) -> None:
 
 
 def test_load_gitignore_patterns_respects_overrides(tmp_path: Path) -> None:
+    """Gitignore loader should merge skip dirs and user ignore overrides."""
     custom_root = tmp_path / "project"
     custom_root.mkdir()
 
@@ -285,7 +313,10 @@ def test_load_gitignore_patterns_respects_overrides(tmp_path: Path) -> None:
     assert "redundant" in patterns
 
 
-def test_load_gitignore_patterns_rejects_invalid_user_entries(tmp_path: Path) -> None:
+def test_load_gitignore_patterns_rejects_invalid_user_entries(
+    tmp_path: Path,
+) -> None:
+    """Gitignore loader should enforce string-only user ignore patterns."""
     project_root = tmp_path / "root"
     project_root.mkdir()
 
@@ -294,6 +325,7 @@ def test_load_gitignore_patterns_rejects_invalid_user_entries(tmp_path: Path) ->
 
 
 def test_load_gitignore_patterns_rejects_control_characters(tmp_path: Path) -> None:
+    """Gitignore loader should reject patterns containing control characters."""
     project_root = tmp_path / "root"
     project_root.mkdir()
 
@@ -302,6 +334,7 @@ def test_load_gitignore_patterns_rejects_control_characters(tmp_path: Path) -> N
 
 
 def test_load_gitignore_patterns_requires_directory(tmp_path: Path) -> None:
+    """Gitignore loader should require the root path to be a directory."""
     file_root = tmp_path / "file.txt"
     file_root.write_text("content", encoding="utf-8")
 
@@ -310,6 +343,7 @@ def test_load_gitignore_patterns_requires_directory(tmp_path: Path) -> None:
 
 
 def test_load_gitignore_patterns_requires_existing_path(tmp_path: Path) -> None:
+    """Gitignore loader should require the target path to exist."""
     missing_root = tmp_path / "missing"
 
     with pytest.raises(FileNotFoundError):
@@ -317,6 +351,7 @@ def test_load_gitignore_patterns_requires_existing_path(tmp_path: Path) -> None:
 
 
 def test_expand_skip_dirs_generates_variants_fuzz() -> None:
+    """Fuzz-test that skip dir expansion generates expected pattern variants."""
     rng = random.Random(2)
     alphabet = string.ascii_lowercase
     for _ in range(50):
@@ -339,6 +374,7 @@ def test_expand_skip_dirs_generates_variants_fuzz() -> None:
 
 
 def test_expand_skip_dirs_preserves_variant_order() -> None:
+    """Skip dir expansion should preserve input ordering across variants."""
     patterns = expand_skip_dirs(["beta", "alpha"])
 
     assert patterns.index("beta") < patterns.index("alpha")
@@ -346,6 +382,7 @@ def test_expand_skip_dirs_preserves_variant_order() -> None:
 
 
 def test_expand_skip_dirs_requires_string_entries() -> None:
+    """Skip dir expansion should raise when encountering non-string entries."""
     class CustomIterable:
         def __iter__(self) -> Iterator[object]:
             yield "valid"
@@ -355,7 +392,10 @@ def test_expand_skip_dirs_requires_string_entries() -> None:
         expand_skip_dirs(CustomIterable())
 
 
-def test_group_source_files_by_app_returns_sorted(sample_project_path: Path) -> None:
+def test_group_source_files_by_app_returns_sorted(
+    sample_project_path: Path,
+) -> None:
+    """Grouping helper should return deterministic ordering by application."""
     mapping = group_source_files_by_app(
         sample_project_path,
         {".py", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"},
@@ -379,6 +419,7 @@ def test_group_source_files_by_app_returns_sorted(sample_project_path: Path) -> 
 def test_list_matching_source_files_produces_relative_paths(
     sample_project_path: Path,
 ) -> None:
+    """Source file listing should return sorted, relative paths."""
     extra = sample_project_path / "backend" / "extra.PY"
     extra.write_text("print('extra')\n", encoding="utf-8")
 
@@ -389,12 +430,14 @@ def test_list_matching_source_files_produces_relative_paths(
 
 
 def test_file_matches_any_pattern_accepts_strings() -> None:
+    """Pattern helper should accept string paths without requiring Path objects."""
     assert file_matches_any_pattern("backend/service.py", ["backend/*.py"])
 
 
 def test_iter_filtered_tree_lines_supports_dry_run_preview(
     sample_project_path: Path,
 ) -> None:
+    """Tree iterator should yield a preview when used in dry-run contexts."""
     lines = list(
         iter_filtered_tree_lines(
             sample_project_path,
@@ -410,6 +453,7 @@ def test_iter_filtered_tree_lines_supports_dry_run_preview(
 def test_iter_filtered_tree_lines_rejects_negative_limits(
     sample_project_path: Path,
 ) -> None:
+    """Tree iterator should reject negative byte limits with a ValueError."""
     with pytest.raises(ValueError):
         list(
             iter_filtered_tree_lines(

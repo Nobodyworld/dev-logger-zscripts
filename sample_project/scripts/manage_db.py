@@ -1,4 +1,4 @@
-"""Utility script for managing the sample in-memory database."""
+"""CLI entry point for managing the sample project's in-memory database."""
 
 from __future__ import annotations
 
@@ -133,11 +133,15 @@ class DatabaseManager:
 
 
 def _configure_logging(verbose: bool) -> None:
+    """Initialise logging with INFO or DEBUG verbosity."""
+
     level = logging.DEBUG if verbose else logging.INFO
     logging.basicConfig(level=level, format="%(levelname)s %(name)s %(message)s")
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Create the argument parser shared across invocations."""
+
     parser = argparse.ArgumentParser(
         description="Database management for Task Management System",
     )
@@ -161,6 +165,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def dispatch(manager: DatabaseManager, command: str, direction: str) -> None:
+    """Execute the requested *command* on *manager* with optional *direction*."""
+
     commands: dict[str, Callable[[], None]] = {
         "create": manager.create_tables,
         "drop": manager.drop_tables,
@@ -173,6 +179,8 @@ def dispatch(manager: DatabaseManager, command: str, direction: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Entrypoint used by the ``manage_db`` script and tests."""
+
     parser = build_parser()
     args = parser.parse_args(argv)
     verbose_flag = cast(bool, getattr(args, "verbose", False))

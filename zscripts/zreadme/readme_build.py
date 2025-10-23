@@ -1,4 +1,4 @@
-"""Assemble README.md from individual section templates."""
+"""Compile README.md from curated text fragments stored alongside the source."""
 
 from __future__ import annotations
 
@@ -8,6 +8,8 @@ from pathlib import Path
 
 
 def compile_readme() -> None:
+    """Write the combined README.md file using the canonical section ordering."""
+
     readme_dir = Path("zscripts/zreadme")
     build_order = [
         "0-Overview.txt",

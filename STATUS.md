@@ -14,3 +14,12 @@
 - Upgraded CLI UX with structured execution summaries (file counts, skips, byte volumes) backed by new instrumentation in `collect`, `consolidate`, and `tree` flows.
 - Refactored command implementations into composable helpers with typed dataclass contexts, lowering complexity and surfacing reusable filesystem stats APIs.
 - Next: propagate the new statistics into machine-readable outputs (JSON/NDJSON) and wire metrics into the planned observability stack.
+
+## 2025-02-14
+- Completed a documentation sweep: added comprehensive docstrings across config,
+  sample project modules, and README build tooling.
+- Expanded README, architecture, agent interface, and support docs with
+  quickstarts, integration maps, and troubleshooting material to align developer
+  onboarding.
+- Next: introduce JSON exports for execution summaries and update docs once the
+  feature lands.

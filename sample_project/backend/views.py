@@ -1,4 +1,4 @@
-"""Django-style views for the sample project API."""
+"""Presentation helpers that emulate REST-style views for the sample project."""
 
 from __future__ import annotations
 

@@ -8,10 +8,14 @@ from uuid import uuid4
 
 
 def _now() -> datetime:
+    """Return the current timestamp as a timezone-naïve :class:`datetime`."""
+
     return datetime.now()
 
 
 def _new_id() -> str:
+    """Return a new unique identifier for model instances."""
+
     return str(uuid4())
 
 

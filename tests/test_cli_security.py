@@ -1,8 +1,12 @@
+"""Security-oriented CLI tests guarding against unsafe filesystem writes."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
+
+# TODO - (permissions) Simulate Windows ACL failures to ensure parity coverage.
 
 from zscripts import cli
 from zscripts.utils import ensure_writable_path
@@ -11,6 +15,7 @@ from zscripts.utils import ensure_writable_path
 def test_ensure_writable_path_rejects_non_writable_parent(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Writable-path helper should fail when parent directory lacks permissions."""
     target = tmp_path / "nested" / "output.txt"
     parent = target.parent
     parent.mkdir()
@@ -31,6 +36,7 @@ def test_ensure_writable_path_rejects_non_writable_parent(
 
 
 def test_ensure_writable_path_rejects_directory_target(tmp_path: Path) -> None:
+    """Writable-path helper should reject directory targets."""
     target_dir = tmp_path / "logs"
     target_dir.mkdir()
 
@@ -41,6 +47,7 @@ def test_ensure_writable_path_rejects_directory_target(tmp_path: Path) -> None:
 def test_ensure_writable_path_allows_existing_writable_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Writable-path helper should allow pre-existing writable files."""
     target = tmp_path / "existing.txt"
     target.write_text("hello", encoding="utf-8")
 
@@ -54,6 +61,7 @@ def test_ensure_writable_path_allows_existing_writable_file(
 def test_ensure_writable_path_dry_run_respects_permissions(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Writable-path helper should not create directories during dry runs."""
     target = tmp_path / "nested" / "output.txt"
 
     def fake_access(path: str | Path, mode: int) -> bool:  # pragma: no cover - helper
@@ -73,6 +81,7 @@ def test_ensure_writable_path_dry_run_respects_permissions(
 def test_ensure_writable_path_allowed_root_blocks_without_creating(
     tmp_path: Path,
 ) -> None:
+    """Writable-path helper should prevent escaping the allowed root directory."""
     allowed_root = tmp_path / "safe"
     allowed_root.mkdir()
     escape_target = allowed_root / ".." / "evil" / "output.txt"
@@ -85,6 +94,7 @@ def test_ensure_writable_path_allowed_root_blocks_without_creating(
 
 
 def test_ensure_writable_path_rejects_file_allowed_root(tmp_path: Path) -> None:
+    """Writable-path helper should enforce directory-only allowed roots."""
     allowed_root = tmp_path / "config.json"
     allowed_root.write_text("{}", encoding="utf-8")
     target = tmp_path / "logs" / "output.txt"
@@ -98,6 +108,7 @@ def test_ensure_writable_path_rejects_file_allowed_root(tmp_path: Path) -> None:
 def test_consolidate_errors_when_parent_is_file(
     tmp_path: Path, sample_project_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """Consolidate command should surface errors when parent path is a file."""
     parent = tmp_path / "blocked"
     parent.write_text("content", encoding="utf-8")
     target = parent / "output.txt"
@@ -123,6 +134,7 @@ def test_consolidate_errors_when_parent_is_file(
 def test_collect_errors_when_output_dir_parent_is_file(
     tmp_path: Path, sample_project_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """Collect command should error when output dir's parent is a file."""
     blocked = tmp_path / "blocked"
     blocked.write_text("content", encoding="utf-8")
 
@@ -147,6 +159,7 @@ def test_collect_errors_when_output_dir_parent_is_file(
 def test_collect_dry_run_errors_when_output_dir_parent_is_file(
     tmp_path: Path, sample_project_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """Collect dry run should also error when parent is a file."""
     blocked = tmp_path / "blocked"
     blocked.write_text("content", encoding="utf-8")
 
@@ -175,6 +188,7 @@ def test_collect_errors_when_output_dir_not_writable(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Collect command should fail when the output directory is not writable."""
     blocked = tmp_path / "logs"
     blocked.mkdir()
 
@@ -210,6 +224,7 @@ def test_collect_dry_run_errors_when_output_dir_not_writable(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Collect dry run should fail when the output directory is not writable."""
     blocked = tmp_path / "logs"
     blocked.mkdir()
 
@@ -243,6 +258,7 @@ def test_collect_dry_run_errors_when_output_dir_not_writable(
 def test_consolidate_dry_run_errors_when_parent_is_file(
     tmp_path: Path, sample_project_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """Consolidate dry run should error when the parent of the output path is a file."""
     parent = tmp_path / "blocked"
     parent.write_text("content", encoding="utf-8")
     target = parent / "output.txt"
@@ -271,6 +287,7 @@ def test_consolidate_errors_when_output_dir_not_writable(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Consolidate command should fail when it cannot write to the output directory."""
     blocked = tmp_path / "logs"
     blocked.mkdir()
     target = blocked / "output.txt"
@@ -307,6 +324,7 @@ def test_consolidate_dry_run_errors_when_output_dir_not_writable(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Consolidate dry run should also respect output directory write permissions."""
     blocked = tmp_path / "logs"
     blocked.mkdir()
     target = blocked / "output.txt"
@@ -341,6 +359,7 @@ def test_consolidate_dry_run_errors_when_output_dir_not_writable(
 def test_tree_errors_when_output_is_directory(
     tmp_path: Path, sample_project_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """Tree command should error when given an output path that is a directory."""
     target_dir = tmp_path / "logs"
     target_dir.mkdir()
 
@@ -362,6 +381,7 @@ def test_tree_errors_when_output_is_directory(
 def test_tree_dry_run_errors_when_output_is_directory(
     tmp_path: Path, sample_project_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """Tree dry run should match the behaviour for real execution when misconfigured."""
     target_dir = tmp_path / "logs"
     target_dir.mkdir()
 
@@ -387,6 +407,7 @@ def test_tree_errors_when_output_dir_not_writable(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Tree command should fail when the output directory is not writable."""
     blocked = tmp_path / "logs"
     blocked.mkdir()
 
@@ -419,6 +440,7 @@ def test_tree_dry_run_errors_when_output_dir_not_writable(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Tree dry run should fail when output directory permissions are insufficient."""
     blocked = tmp_path / "logs"
     blocked.mkdir()
 

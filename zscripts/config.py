@@ -77,6 +77,8 @@ class Config:
     single_targets: Mapping[str, str]
 
     def to_dict(self) -> SerializableConfig:
+        """Return a mutable representation suitable for JSON serialisation."""
+
         return {
             "skip": list(self.skip),
             "file_types": dict(self.file_types),
@@ -112,6 +114,8 @@ class ResolvedPaths:
 
 
 def _load_raw_config(config_path: Path | None = None) -> dict[str, JSONValue]:
+    """Read raw JSON data from *config_path* applying standard validations."""
+
     path = config_path or _determine_default_config_path()
     try:
         with path.open("r", encoding="utf-8") as handle:
@@ -149,6 +153,8 @@ def _load_raw_config(config_path: Path | None = None) -> dict[str, JSONValue]:
 
 
 def _warn_on_duplicates(name: str, duplicates: Iterable[str]) -> None:
+    """Emit a warning summarising duplicate entries discovered while parsing."""
+
     duplicate_list = sorted(set(duplicates))
     if duplicate_list:
         warnings.warn(
@@ -159,6 +165,8 @@ def _warn_on_duplicates(name: str, duplicates: Iterable[str]) -> None:
 
 
 def _ensure_iterable_of_strings(value: JSONValue | None, *, name: str) -> tuple[str, ...]:
+    """Return a tuple of strings parsed from *value* or raise descriptive errors."""
+
     if value is None:
         return ()
     if isinstance(value, str | bytes) or not isinstance(value, Iterable):
@@ -180,6 +188,8 @@ def _ensure_iterable_of_strings(value: JSONValue | None, *, name: str) -> tuple[
 
 
 def _ensure_mapping_of_strings(value: JSONValue | None, *, name: str) -> dict[str, str]:
+    """Return a mapping of stripped string keys to string values."""
+
     if value is None:
         return {}
     if not isinstance(value, Mapping):
@@ -198,10 +208,14 @@ def _ensure_mapping_of_strings(value: JSONValue | None, *, name: str) -> dict[st
 
 
 def _freeze_mapping(mapping: Mapping[str, str]) -> Mapping[str, str]:
+    """Return an immutable view over *mapping* to guard against accidental mutation."""
+
     return MappingProxyType(dict(mapping))
 
 
 def _normalise_raw_config(raw: JSONMapping) -> Config:
+    """Convert loosely typed JSON *raw* data into an immutable :class:`Config`."""
+
     return Config(
         skip=_ensure_iterable_of_strings(raw.get("skip"), name="skip"),
         file_types=_freeze_mapping(
@@ -225,6 +239,8 @@ def _normalise_raw_config(raw: JSONMapping) -> Config:
 
 
 def _merge_config_data(defaults: Config, overrides: Config) -> Config:
+    """Return a new :class:`Config` combining *defaults* with *overrides*."""
+
     combined_skip: list[str] = list(defaults.skip)
     for value in overrides.skip:
         if value not in combined_skip:
@@ -252,6 +268,8 @@ def _merge_config_data(defaults: Config, overrides: Config) -> Config:
 
 
 def _ensure_within_root(root: Path, candidate: Path, *, label: str) -> Path:
+    """Ensure *candidate* resolves within *root* raising :class:`RuntimeError` otherwise."""
+
     try:
         candidate.resolve().relative_to(root)
     except ValueError as exc:
@@ -262,6 +280,8 @@ def _ensure_within_root(root: Path, candidate: Path, *, label: str) -> Path:
 
 
 def resolve_paths(config: Config, *, base_dir: Path | None = None) -> ResolvedPaths:
+    """Compute concrete :class:`ResolvedPaths` from *config* relative to *base_dir*."""
+
     root_dir = (base_dir or SCRIPT_DIR).resolve()
 
     log_dir = _ensure_within_root(
@@ -365,15 +385,21 @@ def resolve_paths(config: Config, *, base_dir: Path | None = None) -> ResolvedPa
 
 @typed_lru_cache(maxsize=1)
 def _get_default_config() -> Config:
+    """Return the process-wide cached configuration loaded from disk once."""
+
     return _normalise_raw_config(_load_raw_config())
 
 
 @typed_lru_cache(maxsize=1)
 def _get_default_paths() -> ResolvedPaths:
+    """Return cached resolved directories derived from the default configuration."""
+
     return resolve_paths(_get_default_config())
 
 
 def load_config(path: Path | str | None = None) -> Config:
+    """Load configuration from *path* or fall back to the default singleton cache."""
+
     if path is None:
         return _get_default_config()
 
@@ -383,10 +409,14 @@ def load_config(path: Path | str | None = None) -> Config:
 
 
 def get_config() -> Config:
+    """Return the cached default configuration object."""
+
     return _get_default_config()
 
 
 def get_file_group_resolver() -> dict[str, str]:
+    """Return a copy of the configured filename-to-group mapping."""
+
     return dict(_get_default_config().file_types)
 
 
@@ -416,6 +446,8 @@ _CONFIG_EXPORTS: dict[str, Callable[[], object]] = {
 
 
 def __getattr__(name: str) -> Any:  # pragma: no cover - simple delegation
+    """Support legacy constant-style imports backed by cached configuration values."""
+
     exporter = _CONFIG_EXPORTS.get(name)
     if exporter is not None:
         return exporter()

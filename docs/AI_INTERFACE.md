@@ -2,7 +2,19 @@
 
 This repository ships an agent-facing adapter that describes the CLI surface in a
 machine-readable format. Use it to feed MCP/AgentKit style systems or other
-assistant frameworks that need declarative command metadata.
+assistant frameworks that need declarative command metadata. The adapter mirrors
+the CLI defaults so that orchestration layers never fall out of sync with new
+releases.
+
+## Integration Checklist
+
+1. Add `agents/` to the Python path of your automation runtime.
+2. Call `agents.cli_adapter.export_cli_metadata()` during startup or during
+   capability discovery.
+3. Persist the returned payload (JSON/YAML/etc.) or feed it directly into the
+   tooling interface that renders commands to the end user.
+4. Re-run the export whenever you bump the `zscripts` dependency to pick up new
+   presets or command flags.
 
 ## Python API
 
@@ -21,6 +33,15 @@ metadata = export_cli_metadata()
   entries mirror the CLI options (`python`, `html`, `css`, `js`, `python_html`,
   plus aggregated `all/any` choices) and include default log/target names.
 
+Every command definition also exposes:
+
+- **`parameters`** – each parameter object contains type hints, default values,
+  enumerated `choices` (when applicable), and an example snippet.
+- **`examples`** – concrete CLI strings intended for insertion into prompts or
+  documentation.
+- **`returns`** – human-readable expectations that downstream systems can turn
+  into tooltips or success criteria.
+
 ## Parameter Schema
 
 Each command parameter payload contains:
@@ -33,6 +54,7 @@ Each command parameter payload contains:
 | `required` | Whether the parameter must be provided. |
 | `default` | Default value when applicable. |
 | `choices` | Enumerated options (empty when free-form). |
+| `example` | Copy-pastable snippet showing typical usage. |
 
 ## Example Payload
 
@@ -57,6 +79,18 @@ Each command parameter payload contains:
   ]
 }
 ```
+
+## Troubleshooting
+
+- **Missing commands:** Ensure your automation environment imports the correct
+  version of `zscripts`. Running `python -m zscripts --help` locally should list
+  the same commands as the exported payload.
+- **Stale presets:** If metadata lacks new presets, confirm that
+  `export_cli_metadata()` is executed after dependency upgrades (e.g., during
+  container build or agent startup).
+- **Schema drift:** The payload intentionally avoids optional fields. If a field
+  appears unexpectedly, upgrade your integration to consume the richer contract
+  instead of filtering it out.
 
 ## Extending the Adapter
 

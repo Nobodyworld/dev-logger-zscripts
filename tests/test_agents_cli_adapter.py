@@ -1,6 +1,10 @@
+"""Tests validating the metadata exported for agent CLI interoperability."""
+
 from __future__ import annotations
 
 from agents.cli_adapter import CLICommandSpec, export_cli_metadata, get_cli_command_specs
+
+# TODO - (metadata) Exercise adapter behaviour for optional command arguments.
 
 
 def test_cli_command_specs_cover_expected_commands() -> None:

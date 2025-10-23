@@ -1,3 +1,5 @@
+"""Unit tests validating configuration loading and path resolution behaviour."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -8,8 +10,11 @@ import pytest
 from zscripts import config
 from zscripts.config import Config, get_config, get_file_group_resolver, load_config, resolve_paths
 
+# TODO - (validation) Add tests for partial configuration updates merging deeply nested keys.
+
 
 def test_config_loading_returns_expected_types() -> None:
+    """The convenience accessor should hydrate the Config dataclass with immutable views."""
     config = get_config()
     assert isinstance(config, Config)
     assert isinstance(config.skip, tuple)
@@ -21,6 +26,7 @@ def test_config_loading_returns_expected_types() -> None:
 
 
 def test_load_config_merges_with_defaults(tmp_path: Path) -> None:
+    """Explicit config values should merge with defaults rather than replace them."""
     config_path = tmp_path / "config.json"
     config_path.write_text(
         '{"skip": ["custom"],"directories": {"log_root": "custom_logs"}}',
@@ -35,6 +41,7 @@ def test_load_config_merges_with_defaults(tmp_path: Path) -> None:
 
 
 def test_load_config_rejects_invalid_types(tmp_path: Path) -> None:
+    """Loading a config with invalid schema types should raise a runtime error."""
     invalid_config = tmp_path / "invalid.json"
     invalid_config.write_text('{"skip": "not-a-list"}', encoding="utf-8")
 
@@ -43,6 +50,7 @@ def test_load_config_rejects_invalid_types(tmp_path: Path) -> None:
 
 
 def test_load_config_warns_on_duplicate_entries(tmp_path: Path) -> None:
+    """Duplicate skip entries should warn while returning the deduplicated values."""
     config_path = tmp_path / "config.json"
     config_path.write_text('{"skip": ["dup", "dup", "dup "]}', encoding="utf-8")
 
@@ -53,6 +61,7 @@ def test_load_config_warns_on_duplicate_entries(tmp_path: Path) -> None:
 
 
 def test_resolve_paths_returns_expected_structure(tmp_path: Path) -> None:
+    """Path resolution should anchor directories under the provided base directory."""
     config = get_config()
     resolved = resolve_paths(config, base_dir=tmp_path)
 
@@ -62,6 +71,7 @@ def test_resolve_paths_returns_expected_structure(tmp_path: Path) -> None:
 
 
 def test_resolve_paths_rejects_escape(tmp_path: Path) -> None:
+    """Path resolution should reject directories that escape the project root."""
     config_path = tmp_path / "config.json"
     config_path.write_text('{"directories": {"log_root": "../escape"}}', encoding="utf-8")
 
@@ -72,6 +82,7 @@ def test_resolve_paths_rejects_escape(tmp_path: Path) -> None:
 
 
 def test_config_to_dict_round_trip() -> None:
+    """Serialising to a dictionary should return mutable copies of configuration values."""
     config = get_config()
     serialized = config.to_dict()
 
@@ -89,12 +100,14 @@ def test_config_to_dict_round_trip() -> None:
 
 
 def test_file_group_resolver_returns_copy() -> None:
+    """The file group resolver should return a fresh copy when invoked."""
     resolver = get_file_group_resolver()
     resolver["new.py"] = "new"
     assert "new.py" not in get_config().file_types
 
 
 def test_config_mappings_are_immutable() -> None:
+    """Mapping properties exposed on Config should prevent in-place mutations."""
     config = get_config()
 
     with pytest.raises(TypeError):
@@ -108,6 +121,7 @@ def test_config_mappings_are_immutable() -> None:
 
 
 def test_to_dict_returns_mutable_copies() -> None:
+    """The ``to_dict`` helper should produce deep copies of nested dictionaries."""
     config = get_config()
     serialized = config.to_dict()
 
@@ -118,6 +132,7 @@ def test_to_dict_returns_mutable_copies() -> None:
 def test_environment_override_loads_custom_default(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Environment variable override should change the default configuration file."""
     custom_config = tmp_path / "custom.json"
     custom_config.write_text('{"skip": ["env-skip"]}', encoding="utf-8")
 
@@ -133,6 +148,7 @@ def test_environment_override_loads_custom_default(
 
 
 def test_unknown_keys_raise_helpful_error(tmp_path: Path) -> None:
+    """Loading unknown configuration keys should raise a contextual RuntimeError."""
     config_path = tmp_path / "config.json"
     config_path.write_text('{"unexpected": 1}', encoding="utf-8")
 

@@ -1,3 +1,5 @@
+"""Integration tests exercising the public :mod:`zscripts.cli` entry points."""
+
 from __future__ import annotations
 
 import json
@@ -6,6 +8,8 @@ import string
 from pathlib import Path
 
 import pytest
+
+# TODO - (platform-parity) Extend CLI integration tests for Windows-specific path rules.
 
 from zscripts.cli import (
     COLLECT_TYPE_EXTENSIONS,
@@ -18,6 +22,7 @@ from zscripts.config import get_config
 
 
 def test_cli_collect_writes_logs(sample_project_path: Path, tmp_path: Path) -> None:
+    """Collect command should materialise language-specific logs within the target."""
     config = get_config()
     log_dir_name = config.collection_logs.get("python", "logs_apps_pyth")
     output_dir = tmp_path / "logs"
@@ -43,6 +48,7 @@ def test_cli_collect_writes_logs(sample_project_path: Path, tmp_path: Path) -> N
 def test_cli_collect_reports_summary(
     sample_project_path: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """Collect command should emit a human-readable capture summary."""
     exit_code = cli_main(
         [
             "collect",
@@ -62,6 +68,7 @@ def test_cli_collect_reports_summary(
 
 
 def test_cli_consolidate_writes_file(sample_project_path: Path, tmp_path: Path) -> None:
+    """Consolidate command should write merged source content to the output file."""
     output = tmp_path / "python.txt"
 
     exit_code = cli_main(
@@ -84,6 +91,7 @@ def test_cli_consolidate_writes_file(sample_project_path: Path, tmp_path: Path) 
 def test_cli_consolidate_reports_summary(
     sample_project_path: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """Consolidate command should report statistics without warnings."""
     output = tmp_path / "python.txt"
 
     exit_code = cli_main(
@@ -107,6 +115,7 @@ def test_cli_consolidate_reports_summary(
 def test_cli_consolidate_warns_when_output_outside_default_root(
     sample_project_path: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """Consolidate should warn if the output directory escapes the configured root."""
     outside_output = tmp_path / "custom" / "python.txt"
 
     exit_code = cli_main(
@@ -126,7 +135,10 @@ def test_cli_consolidate_warns_when_output_outside_default_root(
     assert "Output path is outside the configured single-log directory" in captured.err
 
 
-def test_cli_consolidate_includes_js_variants(sample_project_path: Path, tmp_path: Path) -> None:
+def test_cli_consolidate_includes_js_variants(
+    sample_project_path: Path, tmp_path: Path
+) -> None:
+    """Consolidate should capture all supported JavaScript-family file extensions."""
     output = tmp_path / "javascript.txt"
 
     exit_code = cli_main(
@@ -153,7 +165,10 @@ def test_cli_consolidate_includes_js_variants(sample_project_path: Path, tmp_pat
     assert "App.cts" in content
 
 
-def test_cli_tree_respects_include_contents(sample_project_path: Path, tmp_path: Path) -> None:
+def test_cli_tree_respects_include_contents(
+    sample_project_path: Path, tmp_path: Path
+) -> None:
+    """Tree command should inline file contents when requested."""
     tree_path = tmp_path / "tree.txt"
 
     exit_code = cli_main(
@@ -179,6 +194,7 @@ def test_cli_collect_dry_run_skips_writes(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    """Collect dry run should avoid touching the filesystem while previewing work."""
     output_dir = tmp_path / "preview"
 
     exit_code = cli_main(
@@ -209,6 +225,7 @@ def test_cli_collect_dry_run_reports_size_errors(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Collect dry run should surface file size probe failures as warnings."""
     output_dir = tmp_path / "preview"
     target_path = sample_project_path / "backend" / "service.py"
     original_stat = Path.stat
@@ -247,6 +264,7 @@ def test_cli_consolidate_dry_run_lists_files(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    """Consolidate dry run should list files without writing the output artifact."""
     output = tmp_path / "python.txt"
 
     exit_code = cli_main(
@@ -272,6 +290,7 @@ def test_cli_consolidate_dry_run_lists_files(
 def test_cli_collect_warns_when_types_empty(
     sample_project_path: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """Collect should warn when no type filters are supplied by the operator."""
     exit_code = cli_main(
         [
             "collect",
@@ -296,6 +315,7 @@ def test_cli_consolidate_warns_when_types_empty(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    """Consolidate should warn but still succeed when no types are provided."""
     output = tmp_path / "python.txt"
 
     exit_code = cli_main(
@@ -320,6 +340,7 @@ def test_cli_consolidate_streams_to_stdout(
     sample_project_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    """Consolidate should respect stdout streaming when '-' is supplied."""
     exit_code = cli_main(
         [
             "consolidate",
@@ -343,6 +364,7 @@ def test_cli_tree_dry_run_prints_preview(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    """Tree dry run should preview output instead of writing to disk."""
     tree_path = tmp_path / "tree.txt"
 
     exit_code = cli_main(
@@ -368,6 +390,7 @@ def test_cli_tree_streams_stdout_and_limits_bytes(
     sample_project_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    """Tree should stream to stdout and respect byte limits for content previews."""
     exit_code = cli_main(
         [
             "tree",
@@ -391,6 +414,7 @@ def test_cli_tree_streams_stdout_and_limits_bytes(
 def test_cli_tree_reports_summary(
     sample_project_path: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """Tree command should report totals when writing to disk."""
     tree_path = tmp_path / "tree.txt"
 
     exit_code = cli_main(
@@ -412,6 +436,7 @@ def test_cli_tree_reports_summary(
 def test_cli_collect_auto_detects_project_root(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Collect should derive the project root from the current working directory."""
     project_root = tmp_path / "auto-project"
     nested = project_root / "nested" / "deep"
     nested.mkdir(parents=True)
@@ -445,6 +470,7 @@ def test_cli_collect_rejects_invalid_log_filename(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    """Collect should validate configured log filenames for portability."""
     default_config_path = Path("zscripts.config.json")
     config_data = json.loads(default_config_path.read_text(encoding="utf-8"))
     config_data["collection_logs"]["python"] = "invalid:name"
@@ -472,6 +498,7 @@ def test_cli_collect_rejects_invalid_log_filename(
 def test_cli_rejects_unknown_type(
     sample_project_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """Collect should reject unknown type identifiers with a helpful message."""
     exit_code = cli_main(
         [
             "collect",
@@ -490,6 +517,7 @@ def test_cli_rejects_unknown_type(
 def test_cli_requires_existing_project_root(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """Collect should fail fast when the supplied project root is missing."""
     missing_root = tmp_path / "does-not-exist"
     exit_code = cli_main(
         [
@@ -505,6 +533,7 @@ def test_cli_requires_existing_project_root(
 
 
 def test_parse_type_list_whitespace_normalises_fuzz() -> None:
+    """Fuzz-test that type parser trims whitespace and preserves order."""
     rng = random.Random(0)
     for _ in range(50):
         count = rng.randint(0, 6)
@@ -529,6 +558,7 @@ def test_parse_type_list_whitespace_normalises_fuzz() -> None:
 
 
 def test_parse_type_list_rejects_invalid_values_fuzz() -> None:
+    """Fuzz-test that the type parser rejects unknown identifiers."""
     rng = random.Random(1)
     alphabet = string.ascii_lowercase
     for _ in range(100):
@@ -541,12 +571,14 @@ def test_parse_type_list_rejects_invalid_values_fuzz() -> None:
 
 
 def test_consolidate_type_parser_accepts_known_values() -> None:
+    """Type parser should accept every single-target extension preset."""
     for type_name in SINGLE_TYPE_EXTENSIONS:
         parsed = _parse_type_list(type_name, allowed=SINGLE_TYPE_EXTENSIONS)
         assert parsed == (type_name,)
 
 
 def test_parse_type_list_handles_duplicates_and_case() -> None:
+    """Type parser should de-duplicate identifiers regardless of casing."""
     raw = "Python, css , PYTHON , Js"
     parsed = _parse_type_list(raw, allowed=COLLECT_TYPE_EXTENSIONS)
     assert parsed == ("python", "css", "js")

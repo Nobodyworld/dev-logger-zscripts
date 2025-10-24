@@ -9,6 +9,7 @@ Java, Go, Rust, .NET, Docker, and CI ecosystems.
 
 - **Unified CLI**: `python cli.py` exposes subcommands to collect, parse,
   summarize, explain, redact, and inspect guardrails.
+- **Application Service Layer**: `zscripts.application.services.ToolkitService` provides the same orchestration for programmatic integrations.
 - **Structured Schema**: Normalize logs into a JSON schema (`schemas/normalized_log.json`)
   backed by typed dataclasses.
 - **Safety Guardrails**: Sandboxed subprocess execution, path allowlists, and
@@ -17,6 +18,23 @@ Java, Go, Rust, .NET, Docker, and CI ecosystems.
   ecosystems.
 - **Examples & Docs**: Bundled sample logs and quickstart guides for each
   adapter.
+
+## Architecture
+
+The codebase follows a clean-architecture layout to keep adapters, I/O, and
+policy decisions isolated:
+
+- **Domain protocols** under `zscripts.domain` describe the behaviors adapters,
+  redactors, repositories, and sandbox runners must implement.
+- **Application services** in `zscripts.application` coordinate those
+  protocols. The `ToolkitService` used by the CLI is also safe to reuse inside
+  other tooling or tests.
+- **Infrastructure adapters** located in `zscripts.infrastructure` bridge the
+  domain contracts to the existing modules in `adapters/` and `scripts/` while
+  wiring configuration from `zscripts.config`.
+
+Each layer depends only on the one below it so that domain rules remain
+testable and independent of concrete infrastructure details.
 
 ## Quick Start
 

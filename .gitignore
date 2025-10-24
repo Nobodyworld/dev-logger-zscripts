@@ -159,3 +159,6 @@ cython_debug/
 
 # Build artifacts
 artifacts/
+
+# Commit structured sample fixtures for adapters
+!examples/**/*.log

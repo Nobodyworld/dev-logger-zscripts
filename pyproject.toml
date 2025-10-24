@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zscripts"
-version = "0.2.0"
-description = "Toolkit for aggregating source files into navigable log bundles"
+version = "1.0.0"
+description = "Universal build log and LLM operations toolkit"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = {text = "Proprietary (All Rights Reserved)"}
 authors = [
   {name = "Zscripts Maintainers"}
 ]
@@ -16,17 +16,34 @@ keywords = ["logs", "tooling", "documentation", "automation"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Topic :: Software Development :: Build Tools",
 ]
-dependencies = []
+dependencies = [
+  "jsonschema>=4.21",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4",
+  "ruff>=0.2",
+  "mypy>=1.8",
+]
 
 [project.scripts]
 zscripts = "zscripts.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["zscripts*", "adapters*", "scripts*", "schemas*"]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"schemas" = ["*.json"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"
@@ -49,9 +66,9 @@ docstring-code-format = true
 select = ["E", "F", "I", "N", "W", "B", "UP", "PL"]
 ignore = ["E203", "E501"]
 
+
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["PLR2004"]
-"zscripts/utils.py" = ["PLR0913"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -65,7 +82,6 @@ disallow_any_expr = true
 disallow_any_decorated = true
 disallow_any_generics = true
 enable_error_code = ["ignore-without-code"]
-exclude = ["tests/tmp-case", "tests/tmp-case2"]
 
 [[tool.mypy.overrides]]
 module = "tests.*"

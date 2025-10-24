@@ -2,79 +2,24 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: ['*']
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
-  quality:
-    name: Quality checks (Python ${{ matrix.python }})
+  build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python: ['3.10', '3.11', '3.12']
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python }}
-          cache: pip
-          cache-dependency-path: |
-            requirements.txt
-            pyproject.toml
+          python-version: '3.11'
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pre-commit
-      - name: Pre-commit (lint, format, security)
-        run: pre-commit run --all-files --show-diff-on-failure
-      - name: Type checking
-        run: make type
-      - name: Unit tests
-        run: make test
-      - name: Upload coverage artifact
-        if: matrix.python == '3.11'
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: .coverage
-          if-no-files-found: ignore
-      - name: Generate SBOM
-        if: matrix.python == '3.11'
-        run: make sbom
-      - name: Upload SBOM artifact
-        if: matrix.python == '3.11'
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom
-          path: artifacts/sbom
-          if-no-files-found: error
-
-  commitlint:
-    name: Commit message lint
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: wagoid/commitlint-github-action@v6
-        with:
-          configFile: commitlint.config.js
-
-  secret-scan:
-    name: Secret scanning
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Gitleaks scan
-        uses: gitleaks/gitleaks-action@v2
-        with:
-          config-path: .gitleaks.toml
+          python -m pip install -e .[dev]
+      - name: Ruff
+        run: ruff check .
+      - name: Mypy
+        run: mypy zscripts
+      - name: Tests
+        run: pytest

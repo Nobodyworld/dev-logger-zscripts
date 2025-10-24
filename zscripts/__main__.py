@@ -1,8 +1,6 @@
-"""Enable ``python -m zscripts`` invocations."""
+"""Module entry point to run the zscripts CLI with ``python -m zscripts``."""
 
-from .cli import main
+from zscripts.cli import main
 
-# TODO - Allow passing argv through environment variable for easier scripting.
-
-if __name__ == "__main__":  # pragma: no cover - CLI entry point
-    raise SystemExit(main())
+if __name__ == "__main__":
+    main()

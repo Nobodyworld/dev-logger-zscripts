@@ -1,0 +1,62 @@
+# ToolkitService API Reference
+
+`zscripts.application.services.ToolkitService` orchestrates adapters, sandbox
+execution, schema validation, and guardrails. The methods below represent the
+primary integration surface for automation.
+
+## Construction
+
+```python
+from zscripts.infrastructure import build_toolkit_service
+from zscripts.infrastructure.adapters import AdapterRegistry
+from zscripts import get_default_config
+
+registry = AdapterRegistry()
+config = get_default_config()
+service = build_toolkit_service(config, adapter_registry=registry)
+```
+
+## Methods
+
+### `collect_logs(*, adapter_key, input_path, command, stdin_fallback, redact)`
+- Resolves the requested adapter and captures raw logs from either a sandboxed
+  command, an input path, or STDIN.
+- Rejects empty STDIN payloads and ensures command sequences include an
+  executable token before invoking the sandbox.
+- When `redact=True`, the configured redactor masks sensitive substrings before
+  returning the payload.
+
+### `parse_logs(*, adapter_key, raw_text)`
+- Delegates parsing to the resolved adapter and validates the resulting
+  `NormalizedLog` document via the configured schema validator.
+
+### `summarize_logs(*, adapter_key, raw_text)` and `explain_logs(...)`
+- Parse logs as above and invoke adapter-specific summary/explanation helpers to
+  produce CLI-friendly prose.
+
+### `guardrails_snapshot()`
+- Returns a JSON-serialisable mapping describing sandbox allow-listed paths,
+  timeout, and whether dangerous mode is active.
+
+### `redact_text(text)`
+- Applies the configured redaction pipeline to arbitrary text, enabling manual
+  scrubbing of logs before sharing with third parties.
+
+### `list_examples(adapter_filter=None)`
+- Lists bundled example log paths as strings, optionally filtered to a single
+  adapter.
+
+## Error Handling
+
+- Raises `ValueError` when no log source is provided or when STDIN is empty.
+- Raises `ValueError` when `command` lacks an executable token; callers should
+  surface the message to end users (the CLI handles this automatically).
+
+## Usage Tips
+
+- Cache the constructed service for the lifetime of your process so sandbox
+  runners can be reused efficiently.
+- Consider applying your own redactors by wrapping the configured one if custom
+  patterns are needed for organisation-specific secrets.
+- Always validate adapter identifiers against `AdapterRegistry.available()` to
+  provide meaningful feedback in user interfaces.

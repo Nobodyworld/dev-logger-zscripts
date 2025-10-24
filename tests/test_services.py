@@ -103,6 +103,16 @@ class StubSandboxRunner(SandboxRunnerProtocol):
         return self.result
 
 
+class RecordingSandboxFactory:
+    def __init__(self, runner: SandboxRunnerProtocol) -> None:
+        self._runner = runner
+        self.calls = 0
+
+    def __call__(self, _: SandboxOptions) -> SandboxRunnerProtocol:
+        self.calls += 1
+        return self._runner
+
+
 @pytest.fixture()
 def service_components() -> dict[str, object]:
     adapter = FakeAdapter()
@@ -111,9 +121,7 @@ def service_components() -> dict[str, object]:
     redactor = RecordingRedactor()
     examples = StaticExamples([Path("examples/python/sample.log")])
     sandbox_runner = StubSandboxRunner()
-
-    def factory(_: SandboxOptions) -> SandboxRunnerProtocol:
-        return sandbox_runner
+    factory = RecordingSandboxFactory(sandbox_runner)
 
     service = ToolkitService(
         adapter_registry=registry,
@@ -131,6 +139,7 @@ def service_components() -> dict[str, object]:
         "redactor": redactor,
         "examples": examples,
         "sandbox": sandbox_runner,
+        "sandbox_factory": factory,
         "registry": registry,
     }
 
@@ -200,6 +209,73 @@ def test_collect_logs_includes_returncode_on_failure(
 
     assert payload == "Command exited with 7"
     assert sandbox.commands == [("echo", "hi")]
+
+
+def test_collect_logs_reuses_cached_sandbox_runner(
+    service_components: dict[str, object]
+) -> None:
+    service: ToolkitService = service_components["service"]  # type: ignore[assignment]
+    sandbox: StubSandboxRunner = service_components["sandbox"]  # type: ignore[assignment]
+    factory: RecordingSandboxFactory = service_components["sandbox_factory"]  # type: ignore[assignment]
+
+    service.collect_logs(
+        adapter_key=None,
+        input_path=None,
+        command=["echo", "first"],
+        stdin_fallback=None,
+        redact=False,
+    )
+    service.collect_logs(
+        adapter_key=None,
+        input_path=None,
+        command=["echo", "second"],
+        stdin_fallback=None,
+        redact=False,
+    )
+
+    assert sandbox.commands == [("echo", "first"), ("echo", "second")]
+    assert factory.calls == 1
+
+
+def test_collect_logs_requires_a_source(service_components: dict[str, object]) -> None:
+    service: ToolkitService = service_components["service"]  # type: ignore[assignment]
+
+    with pytest.raises(ValueError, match="No log source provided"):
+        service.collect_logs(
+            adapter_key=None,
+            input_path=None,
+            command=None,
+            stdin_fallback=None,
+            redact=False,
+        )
+
+
+def test_collect_logs_rejects_empty_stdin(service_components: dict[str, object]) -> None:
+    service: ToolkitService = service_components["service"]  # type: ignore[assignment]
+
+    with pytest.raises(ValueError, match="STDIN data was empty"):
+        service.collect_logs(
+            adapter_key=None,
+            input_path=None,
+            command=None,
+            stdin_fallback="   ",
+            redact=False,
+        )
+
+
+def test_collect_logs_rejects_empty_command_sequence(
+    service_components: dict[str, object]
+) -> None:
+    service: ToolkitService = service_components["service"]  # type: ignore[assignment]
+
+    with pytest.raises(ValueError, match="Command must include an executable"):
+        service.collect_logs(
+            adapter_key=None,
+            input_path=None,
+            command=[],
+            stdin_fallback=None,
+            redact=False,
+        )
 
 
 def test_guardrails_snapshot_reflects_sandbox_options(service_components: dict[str, object]) -> None:

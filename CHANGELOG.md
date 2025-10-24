@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 ### Added
+- Architecture, API, workflow, dependency, and final summary documentation under `docs/` to support the Codex refinement chain.
+- README usage walkthroughs and CLI help examples for common collection flows.
 - Strict linting, typing, security scanning, and property tests wired into `make check` and pre-commit hooks.
 - Structured logging with error identifiers across CLI utilities and the sample database manager.
 - Hypothesis-based regression tests covering CLI parsers and ignore pattern expansion.
@@ -13,6 +15,8 @@
 - Tests covering output-path validation and agent metadata payloads.
 
 ### Changed
+- ToolkitService now caches sandbox runners and validates sandbox command sequences before execution.
+- CLI collect handler surfaces friendly error messages (exit code 2) when log sources are missing or malformed.
 - Sample project models refactored to dataclasses with deterministic timestamps.
 - Legacy wrapper scripts simplified to import the shared CLI directly.
 - README now documents verification commands, observability practices, and SLO expectations.
@@ -21,6 +25,7 @@
 - README, ARCHITECTURE, and AI interface documentation updated for agent workflows.
 
 ### Fixed
+- Prevent empty `--command` sequences from reaching the sandbox, ensuring actionable validation errors reach users.
 - Lint violations throughout the sample assets and wrappers detected by Ruff.
 - Consolidated dependency list with pinned tooling for reproducible local runs.
 - Config loader now warns on duplicate entries and rejects paths that escape the configured log root.

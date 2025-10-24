@@ -21,6 +21,7 @@
 ## Security Tooling
 - Bandit, mypy (strict), Ruff, and pytest run in CI for every change.
 - Upcoming additions: SBOM generation, dependency and secret scanning, Renovate automation.
+- Dependency posture is tracked in `docs/DEPENDENCIES.md`; review quarterly or after major advisories.
 
 ## Responsible Disclosure
 We appreciate coordinated disclosure and are happy to credit researchers unless anonymity is requested.

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import textwrap
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -12,6 +13,10 @@ from zscripts import get_default_config
 from zscripts.application.services import ToolkitService
 from zscripts.infrastructure import build_toolkit_service
 from zscripts.infrastructure.adapters import AdapterRegistry
+
+
+class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter):
+    """Pretty-print help text while preserving manual newlines."""
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -35,7 +40,17 @@ def main(argv: list[str] | None = None) -> None:
 def _build_parser(adapter_choices: Sequence[str]) -> argparse.ArgumentParser:
     """Construct the argument parser for the CLI."""
 
-    parser = argparse.ArgumentParser(description="Universal build log toolkit")
+    parser = argparse.ArgumentParser(
+        description="Universal build log toolkit",
+        formatter_class=_HelpFormatter,
+        epilog=textwrap.dedent(
+            """
+            Examples:
+              python cli.py collect --command pytest --redact
+              python cli.py parse --adapter python --input examples/python/sample.log
+            """
+        ).strip(),
+    )
     parser.add_argument(
         "--adapter",
         help="Adapter to use when parsing logs.",
@@ -51,7 +66,11 @@ def _build_parser(adapter_choices: Sequence[str]) -> argparse.ArgumentParser:
 
     collect_parser = subparsers.add_parser("collect", help="Collect log output")
     collect_parser.add_argument("--input", help="Path to existing log file")
-    collect_parser.add_argument("--command", nargs=argparse.REMAINDER, help="Command to execute")
+    collect_parser.add_argument(
+        "--command",
+        nargs=argparse.REMAINDER,
+        help="Command to execute inside the sandbox (e.g. pytest -q)",
+    )
     collect_parser.add_argument("--output", help="Write collected logs to this path")
     collect_parser.add_argument(
         "--redact",
@@ -90,18 +109,25 @@ def _build_parser(adapter_choices: Sequence[str]) -> argparse.ArgumentParser:
 
 def _handle_collect(args: argparse.Namespace, service: ToolkitService) -> None:
     input_path = Path(args.input) if args.input else None
-    command = args.command if args.command else None
+    command: Sequence[str] | None = None
+    if args.command is not None:
+        if not args.command:
+            _fail("Provide at least one argument after --command.")
+        command = args.command
     stdin_payload = None
     if not command and not input_path:
         stdin_payload = sys.stdin.read()
 
-    payload = service.collect_logs(
-        adapter_key=args.adapter,
-        input_path=input_path,
-        command=command,
-        stdin_fallback=stdin_payload,
-        redact=bool(args.redact),
-    )
+    try:
+        payload = service.collect_logs(
+            adapter_key=args.adapter,
+            input_path=input_path,
+            command=command,
+            stdin_fallback=stdin_payload,
+            redact=bool(args.redact),
+        )
+    except ValueError as exc:
+        _fail(str(exc))
     _write_output(payload, args.output)
 
 
@@ -151,6 +177,11 @@ def _write_output(payload: str, output_path: str | None) -> None:
         Path(output_path).write_text(payload, encoding="utf-8")
     else:
         print(payload)
+
+
+def _fail(message: str) -> None:
+    print(f"error: {message}", file=sys.stderr)
+    raise SystemExit(2)
 
 
 __all__ = ["main"]

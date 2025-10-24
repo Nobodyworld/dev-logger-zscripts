@@ -44,6 +44,7 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
 
 ## Documentation Standards
 - Update README.md, relevant docs, and changelog entries for new features.
+- Record dependency rationale updates in `docs/DEPENDENCIES.md` whenever packages change.
 - Include inline docstrings and type hints for new modules.
 - Capture architectural decisions as ADRs under `docs/adr/`.
 

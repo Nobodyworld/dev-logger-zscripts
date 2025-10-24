@@ -11,6 +11,7 @@ from zscripts.domain.interfaces import (
     LogAdapterProtocol,
     RedactorProtocol,
     SandboxRunnerFactory,
+    SandboxRunnerProtocol,
     SchemaValidatorProtocol,
 )
 from zscripts.domain.models import SandboxOptions, SandboxResult
@@ -38,6 +39,7 @@ class ToolkitService:
         self._redactor = redactor
         self._sandbox_options = sandbox_options
         self._default_adapter = default_adapter
+        self._sandbox_runner: SandboxRunnerProtocol | None = None
 
     def collect_logs(
         self,
@@ -48,44 +50,76 @@ class ToolkitService:
         stdin_fallback: str | None,
         redact: bool,
     ) -> str:
-        """Collect raw logs from a file, STDIN, or sandboxed command."""
+        """Collect raw logs from the requested source.
+
+        Args:
+            adapter_key: Identifier of the adapter requested by the caller. If
+                omitted, the configured default adapter is used.
+            input_path: Optional path to a pre-existing log file that should be
+                ingested.
+            command: Command sequence to execute in the sandbox when logs need
+                to be captured live.
+            stdin_fallback: Raw log text read from STDIN. The value must be a
+                non-empty string when provided.
+            redact: Whether to apply the configured redaction patterns to the
+                collected payload before returning it.
+
+        Returns:
+            The collected log text, optionally redacted.
+
+        Raises:
+            ValueError: If none of ``command``, ``input_path``, or
+                ``stdin_fallback`` provide usable log content.
+        """
 
         adapter = self._resolve_adapter(adapter_key)
-        payload: str
-        if command:
-            payload = self._run_command(command)
-        elif input_path:
-            payload = adapter.collect(input_path, self._sandbox_options)
-        elif stdin_fallback is not None:
-            payload = stdin_fallback
-        else:
-            payload = ""
+        payload = self._collect_from_source(
+            adapter=adapter,
+            input_path=input_path,
+            command=command,
+            stdin_fallback=stdin_fallback,
+        )
         if redact:
-            payload = self._redactor.redact(payload)
+            return self._redactor.redact(payload)
         return payload
 
     def parse_logs(self, *, adapter_key: str | None, raw_text: str) -> NormalizedLog:
-        """Parse raw logs into a normalized representation."""
+        """Parse raw logs into a normalized representation.
+
+        Args:
+            adapter_key: Identifier of the adapter that should interpret the
+                ``raw_text`` payload.
+            raw_text: Raw log output collected from any source.
+
+        Returns:
+            The normalized log document produced by the chosen adapter after
+            schema validation has been performed.
+        """
 
         adapter = self._resolve_adapter(adapter_key)
         return self._parse_with_adapter(adapter, raw_text)
 
     def summarize_logs(self, *, adapter_key: str | None, raw_text: str) -> str:
-        """Parse raw logs and return a concise summary."""
+        """Produce a concise summary for the supplied log text."""
 
         adapter = self._resolve_adapter(adapter_key)
         normalized = self._parse_with_adapter(adapter, raw_text)
         return adapter.summarize(normalized)
 
     def explain_logs(self, *, adapter_key: str | None, raw_text: str) -> str:
-        """Parse raw logs and build a detailed explanation."""
+        """Produce a detailed explanation for the supplied log text."""
 
         adapter = self._resolve_adapter(adapter_key)
         normalized = self._parse_with_adapter(adapter, raw_text)
         return self._build_explanation(normalized)
 
     def guardrails_snapshot(self) -> dict[str, object]:
-        """Expose sandbox configuration for inspection."""
+        """Expose sandbox configuration for inspection.
+
+        Returns:
+            A JSON-serializable mapping describing the active sandbox guardrail
+            configuration.
+        """
 
         return {
             "allowed_paths": [str(path) for path in self._sandbox_options.allowed_paths],
@@ -94,12 +128,27 @@ class ToolkitService:
         }
 
     def redact_text(self, text: str) -> str:
-        """Redact sensitive information using configured patterns."""
+        """Redact sensitive information using configured patterns.
+
+        Args:
+            text: Arbitrary log text that may contain secrets or identifiers.
+
+        Returns:
+            The sanitized payload after the configured redaction rules run.
+        """
 
         return self._redactor.redact(text)
 
     def list_examples(self, adapter_filter: str | None = None) -> list[str]:
-        """Return example log paths as strings for display."""
+        """Return example log paths as strings for display.
+
+        Args:
+            adapter_filter: Optional adapter identifier used to scope results.
+
+        Returns:
+            File-system paths to bundled example logs encoded as strings for
+            CLI presentation.
+        """
 
         examples = self._examples.list_examples(adapter_filter)
         return [str(path) for path in examples]
@@ -109,12 +158,17 @@ class ToolkitService:
         return self._registry.resolve(key)
 
     def _run_command(self, command: Sequence[str]) -> str:
-        runner = self._sandbox_factory(self._sandbox_options)
-        result = runner.run(command)
+        """Execute the provided command using the configured sandbox runner."""
+
+        sanitized = self._ensure_command(command)
+        runner = self._get_sandbox_runner()
+        result = runner.run(sanitized)
         return self._format_command_output(result)
 
     @staticmethod
     def _format_command_output(result: SandboxResult) -> str:
+        """Normalize sandbox output into a printable payload."""
+
         sections = [segment for segment in (result.stdout, result.stderr) if segment]
         payload = "\n".join(sections)
         if result.returncode != 0:
@@ -126,12 +180,63 @@ class ToolkitService:
     def _parse_with_adapter(
         self, adapter: LogAdapterProtocol, raw_text: str
     ) -> NormalizedLog:
+        """Delegate parsing and ensure the resulting payload is validated."""
+
         normalized = adapter.parse(raw_text)
         self._validator.validate(normalized)
         return normalized
 
+    def _collect_from_source(
+        self,
+        *,
+        adapter: LogAdapterProtocol,
+        input_path: Path | None,
+        command: Sequence[str] | None,
+        stdin_fallback: str | None,
+    ) -> str:
+        """Resolve the caller's desired collection source.
+
+        The method enforces that a non-empty source is supplied so callers
+        receive explicit feedback instead of silently getting an empty string
+        when no inputs are provided.
+        """
+
+        if command is not None:
+            return self._run_command(command)
+        if input_path:
+            return adapter.collect(input_path, self._sandbox_options)
+        if stdin_fallback is not None:
+            if stdin_fallback.strip():
+                return stdin_fallback
+            raise ValueError(
+                "STDIN data was empty; provide a command or --input path instead."
+            )
+        raise ValueError(
+            "No log source provided. Supply --command, --input, or pipe log data via STDIN."
+        )
+
+    def _get_sandbox_runner(self) -> SandboxRunnerProtocol:
+        """Instantiate and cache the sandbox runner for reuse."""
+
+        if self._sandbox_runner is None:
+            self._sandbox_runner = self._sandbox_factory(self._sandbox_options)
+        return self._sandbox_runner
+
+    @staticmethod
+    def _ensure_command(command: Sequence[str]) -> Sequence[str]:
+        """Validate that a sandbox command contains an executable token."""
+
+        sanitized = tuple(command)
+        if not sanitized or not sanitized[0].strip():
+            raise ValueError(
+                "Command must include an executable before passing to the sandbox."
+            )
+        return sanitized
+
     @staticmethod
     def _build_explanation(normalized: NormalizedLog) -> str:
+        """Format an explanatory report for display in the CLI."""
+
         lines = [
             f"Tool: {normalized.tool}",
             f"Ecosystem: {normalized.ecosystem}",

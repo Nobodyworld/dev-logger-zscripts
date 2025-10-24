@@ -36,6 +36,29 @@ policy decisions isolated:
 Each layer depends only on the one below it so that domain rules remain
 testable and independent of concrete infrastructure details.
 
+## Setup
+
+1. **Clone the repository** and create a virtual environment:
+
+   ```bash
+   git clone https://github.com/zscripts/zscripts.git
+   cd zscripts
+   python -m venv .venv
+   source .venv/bin/activate
+   ```
+
+2. **Install dependencies** (runtime + developer tooling):
+
+   ```bash
+   python -m pip install -e .[dev]
+   ```
+
+3. **Sanity-check the environment** using the aggregated make target:
+
+   ```bash
+   make check
+   ```
+
 ## Quick Start
 
 ```bash
@@ -45,6 +68,32 @@ python cli.py summarize --adapter docker --input examples/docker/sample.log
 ```
 
 See `docs/INDEX.md` for full documentation.
+
+## Usage Examples
+
+### Collect logs from a sandboxed command
+
+```bash
+python cli.py collect --command pytest --redact --output logs.txt
+```
+
+The CLI now validates that `--command` includes an executable token and surfaces
+actionable error messages (exit code 2) instead of raw tracebacks when a log
+source is missing.
+
+### Parse and summarize existing logs
+
+```bash
+python cli.py parse --input examples/python/sample.log --output normalized.json
+python cli.py summarize --input examples/python/sample.log
+```
+
+### Inspect guardrails and available examples
+
+```bash
+python cli.py guardrails
+python cli.py examples --adapter python
+```
 
 ## CLI Reference
 
@@ -81,3 +130,11 @@ pytest
 ```
 
 CI runs linting, type checks, and tests automatically.
+
+## Further Reading
+
+- [Architecture deep-dive](docs/architecture.md)
+- [ToolkitService API surface](docs/api.md)
+- [End-to-end workflows](docs/workflows.md)
+- [Dependency audit & policy](docs/DEPENDENCIES.md)
+- [Final refinement report](docs/final_report.md)

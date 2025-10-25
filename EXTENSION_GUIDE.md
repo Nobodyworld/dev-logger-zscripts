@@ -26,7 +26,9 @@ Edit the generated module:
   manager, and active configuration.
 - Add a handler method (e.g. `handle_cli`) to perform your extension-specific
   work. Use `zscripts.observability.logging.get_logger` for structured logs and
-  `context.telemetry.span(...)` when recording metrics.
+  `context.telemetry.span(...)` when recording metrics. The telemetry context
+  also exposes `context.telemetry.metrics` so you can increment counters or
+  histograms alongside the core CLI metrics.
 
 ## 3. Enable the extension
 

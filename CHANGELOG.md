@@ -4,6 +4,9 @@
 ### Added
 - Observability stack (`zscripts/observability`) with structured logging,
   Prometheus-compatible metrics, tracing spans, and a background health server.
+- CLI instrumentation emits correlation IDs and dedicated metrics
+  (`zscripts_cli_invocations_total`, `zscripts_cli_duration_seconds`) for every
+  command, and the telemetry server now shuts down cleanly after execution.
 - Telemetry-aware CLI flags (`--enable-telemetry`, `--log-level`, `--log-format`,
   `--telemetry-host`, `--telemetry-port`) plus an `extensions` subcommand to
   enumerate loaded plugins.
@@ -16,6 +19,8 @@
   automation playbook, incident response runbook, and roadmap.
 - GitHub workflow (`ci.yml`) and Dependabot configuration to keep dependencies
   fresh.
+- Stewardship artifacts (`STEWARDS_REPORT.md`, `AUTOMATION_ROLES.md`) describing
+  Stage 4 audit metrics, agent responsibilities, and future roadmap.
 ### Added
 - Trace-friendly pytest harness (`scripts/run_pytest_with_trace.py`) and a generated summary stored at `reports/coverage_summary.txt`.
 - Expanded configuration loader tests covering JSON files, delimiter handling, and defensive error paths.
@@ -35,6 +40,9 @@
 - `cli.py` now pre-parses global options, loads extensions before command
   parsing, and passes a `TelemetryManager` into `ToolkitService` for automatic
   span recording.
+- CLI telemetry instrumentation records status and duration exactly once via a
+  unified `finally` block and tags agent automation hooks around command
+  dispatch.
 - `ToolkitService` wraps public methods in telemetry spans, emitting counters and
   latency histograms for collect/parse/summarise/guardrail operations.
 - Configuration loader accepts new telemetry/logging/extension keys while

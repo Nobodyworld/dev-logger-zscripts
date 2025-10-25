@@ -6,6 +6,8 @@ import argparse
 import json
 import sys
 import textwrap
+import time
+import uuid
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -20,12 +22,15 @@ from zscripts.configuration import (
 from zscripts.extensions import ExtensionContext, ExtensionLoadError, load_extensions
 from zscripts.infrastructure import build_toolkit_service
 from zscripts.infrastructure.adapters import AdapterRegistry
-from zscripts.observability.logging import get_logger
+from zscripts.observability.logging import bind_correlation_id, get_logger
 from zscripts.observability.telemetry import TelemetryManager, TelemetrySettings
 
 
 class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter):
     """Pretty-print help text while preserving manual newlines."""
+
+
+_CLI_LOGGER = get_logger("cli")
 
 
 def _build_global_parser() -> argparse.ArgumentParser:
@@ -70,39 +75,28 @@ def main(argv: list[str] | None = None) -> None:
     )
     telemetry.start()
 
-    extension_context = ExtensionContext(
-        config=config,
-        adapter_registry=registry,
-        telemetry=telemetry,
-        logger=get_logger("extensions"),
-    )
+    correlation_id = uuid.uuid4().hex
     try:
-        extensions = load_extensions(config.extensions, context=extension_context)
-    except ExtensionLoadError as exc:
-        _fail(str(exc))
+        with bind_correlation_id(correlation_id):
+            extension_context = ExtensionContext(
+                config=config,
+                adapter_registry=registry,
+                telemetry=telemetry,
+                logger=get_logger("extensions"),
+            )
+            try:
+                extensions = load_extensions(config.extensions, context=extension_context)
+            except ExtensionLoadError as exc:
+                _fail(str(exc))
 
-    parser = _build_parser(registry.available(), extensions, extension_context)
-    args = parser.parse_args(raw_args)
-
-    _merge_cli_toggles(config, args)
-    if args.dangerous is True:
-        config.dangerous_mode = True
-    if args.adapter:
-        config.default_adapter = args.adapter
-
-    telemetry.start()
-
-    args.extensions_loaded = extensions
-    service = build_toolkit_service(
-        config,
-        adapter_registry=registry,
-        telemetry=telemetry,
-    )
-    for extension in extensions:
-        extension.after_service_ready(service, extension_context)
-
-    handler: Callable[[argparse.Namespace, ToolkitService], None] = args.func
-    handler(args, service)
+            _prepare_and_execute(
+                raw_args,
+                telemetry,
+                extension_context,
+                extensions,
+            )
+    finally:
+        telemetry.stop()
 
 
 def _build_parser(
@@ -142,6 +136,7 @@ def _build_parser(
     collect_parser.add_argument("--input", help="Path to existing log file")
     collect_parser.add_argument(
         "--command",
+        dest="command_args",
         nargs=argparse.REMAINDER,
         help="Command to execute inside the sandbox (e.g. pytest -q)",
     )
@@ -251,10 +246,11 @@ def _merge_cli_toggles(config: ToolkitConfig, args: argparse.Namespace) -> None:
 def _handle_collect(args: argparse.Namespace, service: ToolkitService) -> None:
     input_path = Path(args.input) if args.input else None
     command: Sequence[str] | None = None
-    if args.command is not None:
-        if not args.command:
+    command_tokens = getattr(args, "command_args", None)
+    if command_tokens is not None:
+        if not command_tokens:
             _fail("Provide at least one argument after --command.")
-        command = args.command
+        command = command_tokens
     stdin_payload = None
     if not command and not input_path:
         stdin_payload = sys.stdin.read()
@@ -334,9 +330,88 @@ def _write_output(payload: str, output_path: str | None) -> None:
         print(payload)
 
 
+def _record_cli_metrics(
+    telemetry: TelemetryManager,
+    labels: dict[str, str],
+    status: str,
+    duration_seconds: float,
+) -> None:
+    # agent-safe-task: extend metrics without affecting CLI control flow
+    enriched = {**labels, "status": status}
+    safe_duration = duration_seconds if duration_seconds >= 0 else 0.0
+    telemetry.metrics.counter(
+        "zscripts_cli_invocations_total",
+        "CLI invocations processed by zscripts.",
+    ).inc(labels=enriched)
+    telemetry.metrics.histogram(
+        "zscripts_cli_duration_seconds",
+        "Duration of zscripts CLI commands in seconds.",
+    ).observe(safe_duration, labels=enriched)
+
+
 def _fail(message: str) -> None:
     print(f"error: {message}", file=sys.stderr)
     raise SystemExit(2)
+
+
+def _prepare_and_execute(
+    raw_args: Sequence[str],
+    telemetry: TelemetryManager,
+    extension_context: ExtensionContext,
+    extensions: Sequence[object],
+) -> None:
+    registry = extension_context.adapter_registry
+    config = extension_context.config
+    parser = _build_parser(registry.available(), extensions, extension_context)
+    args = parser.parse_args(raw_args)
+
+    _merge_cli_toggles(config, args)
+    if args.dangerous is True:
+        config.dangerous_mode = True
+    if args.adapter:
+        config.default_adapter = args.adapter
+
+    args.extensions_loaded = extensions
+    service = build_toolkit_service(
+        config,
+        adapter_registry=registry,
+        telemetry=telemetry,
+    )
+    for extension in extensions:
+        extension.after_service_ready(service, extension_context)
+
+    handler: Callable[[argparse.Namespace, ToolkitService], None] = args.func
+
+    _execute_command(args, handler, service, telemetry)
+
+
+def _execute_command(
+    args: argparse.Namespace,
+    handler: Callable[[argparse.Namespace, ToolkitService], None],
+    service: ToolkitService,
+    telemetry: TelemetryManager,
+) -> None:
+    command_name = getattr(args, "command", "unknown") or "unknown"
+    labels = {"command": command_name}
+    status = "success"
+    start_time = time.perf_counter()
+    try:
+        # agent-entrypoint: centralized automation hook for CLI command execution
+        with telemetry.span(f"cli.{command_name}", attributes=labels):
+            handler(args, service)
+    except SystemExit as exc:
+        status = "success" if exc.code in (None, 0) else "error"
+        raise
+    except Exception:
+        status = "error"
+        _CLI_LOGGER.exception(
+            "cli.command.failure",
+            extra={"command": command_name},
+        )
+        raise
+    finally:
+        duration = time.perf_counter() - start_time
+        _record_cli_metrics(telemetry, labels, status, duration)
 
 
 __all__ = ["main"]

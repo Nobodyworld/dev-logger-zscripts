@@ -125,7 +125,9 @@ python cli.py examples --adapter python
 
 ## Telemetry & Health
 
-Enable telemetry when running commands that should expose liveness and metrics:
+Enable telemetry when running commands that should expose liveness and metrics. Every
+CLI command now binds a correlation ID and emits Prometheus metrics that capture
+command outcome and duration, making it easy to trace automation runs end-to-end:
 
 ```bash
 python cli.py --enable-telemetry --telemetry-port 9100 guardrails
@@ -133,9 +135,12 @@ python cli.py --enable-telemetry --telemetry-port 9100 guardrails
 
 - `/healthz` returns a JSON payload with status and version information.
 - `/metrics` exposes Prometheus-formatted counters and histograms (e.g.
-  `zscripts_requests_total`).
+  `zscripts_requests_total`, `zscripts_cli_invocations_total`, and
+  `zscripts_cli_duration_seconds`).
 - Use `--log-format json` and `--log-level DEBUG` to tune structured logging for
   automated ingestion.
+- Logs generated outside of adapter spans inherit the per-invocation correlation ID,
+  so cross-component traces can be stitched together from log aggregation systems.
 
 ## CLI Reference
 
@@ -172,6 +177,8 @@ mypy zscripts/configuration.py zscripts/config.py zscripts/__init__.py
 pytest
 python scripts/dev_start.py  # runs lint/type/security/tests with coverage ≥85%
 python -m trace --count --summary --coverdir=coverage_reports scripts/run_pytest_with_trace.py
+# Offline fallback when coverage plugins are unavailable
+python -m trace --count --coverdir trace_cov --module pytest
 ```
 
 CI runs linting, type checks, and tests automatically.

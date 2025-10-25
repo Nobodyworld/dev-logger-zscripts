@@ -10,8 +10,14 @@ This guide summarises how automated agents should interact with the toolkit.
   `http://<host>:<port>/healthz` and `/metrics` for liveness checks and
   Prometheus scrapes. Host and port are configurable via `telemetry_host` and
   `telemetry_port`.
+- CLI invocations increment `zscripts_cli_invocations_total` and
+  `zscripts_cli_duration_seconds` metrics labelled by command and status. Alert
+  on sustained `status="error"` counts and track latency percentiles using the
+  histogram buckets.
 - Logs use structured key/value format. Set `--log-format json` for machine
   parsing or `--log-level DEBUG` to increase verbosity.
+- Each CLI run binds a correlation ID that is propagated into span logs, so log
+  aggregators can group related events without additional hints.
 
 ## Quality Gate
 
@@ -37,7 +43,8 @@ This guide summarises how automated agents should interact with the toolkit.
 
 - The health server (`/healthz`) returns JSON describing status, version, and
   active telemetry endpoints. Pair it with `/metrics` to inspect counters for
-  CLI operations and sandbox outcomes.
+  CLI operations and sandbox outcomes. Use the correlation ID from log records
+  when pivoting between logs and metrics for a specific automation run.
 - Consult `docs/operations/INCIDENT_RESPONSE.md` for runbook procedures,
   including suggested queries and log correlation strategies.
 

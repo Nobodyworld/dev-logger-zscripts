@@ -32,7 +32,9 @@ how they interact at runtime.
 - **Observability Hub** (`zscripts/observability/`) provides structured logging,
   a Prometheus-compatible metrics registry, tracing spans, and an optional HTTP
   health server (`/healthz` and `/metrics`). The CLI activates the server when
-  `telemetry_enabled` is true or `--enable-telemetry` is passed.
+  `telemetry_enabled` is true or `--enable-telemetry` is passed, and records
+  dedicated CLI metrics (`zscripts_cli_invocations_total`,
+  `zscripts_cli_duration_seconds`) labelled by command and outcome.
 - **Extensions** live under `zscripts/extensions`. `ExtensionContext` exposes
   the active configuration, adapter registry, and telemetry handle so plugins
   can register CLI commands or react after the service is ready.
@@ -46,11 +48,12 @@ how they interact at runtime.
 3. Extensions listed under `config.extensions` are imported via
    `load_extensions`, receive the current `ExtensionContext`, and may register
    new CLI commands.
-4. The CLI executes the requested command. Each public method on
-   `ToolkitService` runs inside a telemetry span which records counters,
-   histograms, and structured logs.
+4. The CLI executes the requested command inside a telemetry span that applies
+   a per-invocation correlation ID, increments CLI counters/histograms, and then
+   delegates into `ToolkitService`, whose public methods also instrument spans.
 5. After completion, `TelemetryManager` can be queried by automation agents via
-   `/healthz` and `/metrics` to verify liveness and scrape metrics.
+   `/healthz` and `/metrics` to verify liveness and scrape service-level and
+   CLI-level metrics.
 
 ## Key Modules
 

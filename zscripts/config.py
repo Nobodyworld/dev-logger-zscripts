@@ -1,10 +1,10 @@
-"""Configuration dataclasses and defaults for the toolkit."""
-
+"""Configuration primitives used by the zscripts toolkit."""
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import TypedDict
 
 
 @dataclass
@@ -18,6 +18,13 @@ class ToolkitConfig:
         default_adapter: Adapter key to use when one is not specified.
         redact_patterns: Collection of string patterns that should be masked
             before presenting logs.
+        examples_path: Directory containing bundled example logs exposed by the CLI.
+        telemetry_enabled: Whether to expose the HTTP health and metrics server.
+        telemetry_host: Interface the telemetry server should bind to.
+        telemetry_port: Port number for the telemetry server.
+        log_level: Minimum log level for structured logging.
+        log_format: Output format for structured logs (``text`` or ``json``).
+        extensions: Sequence of dotted module paths for toolkit extensions.
     """
 
     allowed_paths: Sequence[Path] = field(default_factory=lambda: (Path.cwd(),))
@@ -31,9 +38,33 @@ class ToolkitConfig:
             r"([A-Fa-f0-9]{32,})",
         ]
     )
+    examples_path: Path = field(default_factory=lambda: Path("examples"))
+    telemetry_enabled: bool = False
+    telemetry_host: str = "127.0.0.1"
+    telemetry_port: int = 9464
+    log_level: str = "INFO"
+    log_format: str = "text"
+    extensions: Sequence[str] = field(default_factory=tuple)
 
 
-DEFAULT_CONFIG: dict[str, object] = {
+class ToolkitConfigDict(TypedDict):
+    """Typed mapping describing :class:`ToolkitConfig` construction parameters."""
+
+    allowed_paths: tuple[Path, ...]
+    timeout_seconds: int
+    dangerous_mode: bool
+    default_adapter: str
+    redact_patterns: tuple[str, ...]
+    examples_path: Path
+    telemetry_enabled: bool
+    telemetry_host: str
+    telemetry_port: int
+    log_level: str
+    log_format: str
+    extensions: tuple[str, ...]
+
+
+DEFAULT_CONFIG: ToolkitConfigDict = {
     "allowed_paths": (Path.cwd(),),
     "timeout_seconds": 120,
     "dangerous_mode": False,
@@ -43,7 +74,25 @@ DEFAULT_CONFIG: dict[str, object] = {
         r"(?i)token\s*=\s*([A-Za-z0-9_-]{10,})",
         r"([A-Fa-f0-9]{32,})",
     ),
+    "examples_path": Path("examples"),
+    "telemetry_enabled": False,
+    "telemetry_host": "127.0.0.1",
+    "telemetry_port": 9464,
+    "log_level": "INFO",
+    "log_format": "text",
+    "extensions": (),
 }
 
 
-__all__ = ["ToolkitConfig", "DEFAULT_CONFIG"]
+def clone_config(config: ToolkitConfig) -> ToolkitConfig:
+    """Return a shallow copy of ``config`` suitable for safe mutation."""
+
+    return replace(
+        config,
+        allowed_paths=tuple(config.allowed_paths),
+        redact_patterns=tuple(config.redact_patterns),
+        extensions=tuple(config.extensions),
+    )
+
+
+__all__ = ["ToolkitConfig", "ToolkitConfigDict", "DEFAULT_CONFIG", "clone_config"]

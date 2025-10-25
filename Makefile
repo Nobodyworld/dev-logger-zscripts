@@ -13,7 +13,15 @@ security:
 	bandit -q -r zscripts sample_project
 
 test:
-	pytest
+        pytest
+
+coverage:
+        coverage run -m pytest
+        coverage json -o reports/coverage.json
+        coverage report
+
+quality:
+        python scripts/dev_start.py
 
 check: fmt lint type security test
 

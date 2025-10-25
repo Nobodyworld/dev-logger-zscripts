@@ -8,7 +8,6 @@ from pathlib import Path
 from adapters import available_adapters, get_adapter
 from adapters.base import LogAdapter as ConcreteLogAdapter
 from scripts import SandboxSettings
-
 from zscripts.domain.interfaces import AdapterRegistryProtocol, LogAdapterProtocol
 from zscripts.domain.models import SandboxOptions
 from zscripts.schemas import NormalizedLog

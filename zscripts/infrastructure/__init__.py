@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from zscripts.application.services import ToolkitService
 from zscripts.config import ToolkitConfig
 from zscripts.domain.interfaces import AdapterRegistryProtocol
@@ -13,10 +11,14 @@ from zscripts.infrastructure.examples import FileSystemExampleRepository
 from zscripts.infrastructure.redaction import RegexRedactor
 from zscripts.infrastructure.sandbox import build_sandbox_runner
 from zscripts.infrastructure.schema import JsonSchemaValidator
+from zscripts.observability.telemetry import TelemetryManager
 
 
 def build_toolkit_service(
-    config: ToolkitConfig, *, adapter_registry: AdapterRegistryProtocol | None = None
+    config: ToolkitConfig,
+    *,
+    adapter_registry: AdapterRegistryProtocol | None = None,
+    telemetry: TelemetryManager | None = None,
 ) -> ToolkitService:
     """Assemble a :class:`ToolkitService` wired to in-repo infrastructure."""
 
@@ -27,7 +29,7 @@ def build_toolkit_service(
     )
     registry_impl = adapter_registry or AdapterRegistry()
     validator = JsonSchemaValidator()
-    examples = FileSystemExampleRepository(Path("examples"))
+    examples = FileSystemExampleRepository(config.examples_path)
     redactor = RegexRedactor(config.redact_patterns)
     return ToolkitService(
         adapter_registry=registry_impl,
@@ -37,6 +39,7 @@ def build_toolkit_service(
         redactor=redactor,
         sandbox_options=sandbox_options,
         default_adapter=config.default_adapter,
+        telemetry=telemetry,
     )
 
 

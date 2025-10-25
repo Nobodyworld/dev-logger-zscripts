@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 
 from zscripts.domain.interfaces import (
@@ -15,13 +16,14 @@ from zscripts.domain.interfaces import (
     SchemaValidatorProtocol,
 )
 from zscripts.domain.models import SandboxOptions, SandboxResult
+from zscripts.observability.telemetry import TelemetryManager
 from zscripts.schemas import NormalizedLog
 
 
 class ToolkitService:
     """Coordinates adapters, sandboxing, and validation for CLI use cases."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - dependency injection requires explicit parameters
         self,
         *,
         adapter_registry: AdapterRegistryProtocol,
@@ -31,6 +33,7 @@ class ToolkitService:
         redactor: RedactorProtocol,
         sandbox_options: SandboxOptions,
         default_adapter: str,
+        telemetry: TelemetryManager | None = None,
     ) -> None:
         self._registry = adapter_registry
         self._sandbox_factory = sandbox_factory
@@ -40,6 +43,7 @@ class ToolkitService:
         self._sandbox_options = sandbox_options
         self._default_adapter = default_adapter
         self._sandbox_runner: SandboxRunnerProtocol | None = None
+        self._telemetry = telemetry
 
     def collect_logs(
         self,
@@ -73,15 +77,17 @@ class ToolkitService:
         """
 
         adapter = self._resolve_adapter(adapter_key)
-        payload = self._collect_from_source(
-            adapter=adapter,
-            input_path=input_path,
-            command=command,
-            stdin_fallback=stdin_fallback,
-        )
-        if redact:
-            return self._redactor.redact(payload)
-        return payload
+        attributes = {"adapter": adapter.identifier}
+        with self._instrument("collect_logs", attributes):
+            payload = self._collect_from_source(
+                adapter=adapter,
+                input_path=input_path,
+                command=command,
+                stdin_fallback=stdin_fallback,
+            )
+            if redact:
+                return self._redactor.redact(payload)
+            return payload
 
     def parse_logs(self, *, adapter_key: str | None, raw_text: str) -> NormalizedLog:
         """Parse raw logs into a normalized representation.
@@ -97,21 +103,24 @@ class ToolkitService:
         """
 
         adapter = self._resolve_adapter(adapter_key)
-        return self._parse_with_adapter(adapter, raw_text)
+        with self._instrument("parse_logs", {"adapter": adapter.identifier}):
+            return self._parse_with_adapter(adapter, raw_text)
 
     def summarize_logs(self, *, adapter_key: str | None, raw_text: str) -> str:
         """Produce a concise summary for the supplied log text."""
 
         adapter = self._resolve_adapter(adapter_key)
-        normalized = self._parse_with_adapter(adapter, raw_text)
-        return adapter.summarize(normalized)
+        with self._instrument("summarize_logs", {"adapter": adapter.identifier}):
+            normalized = self._parse_with_adapter(adapter, raw_text)
+            return adapter.summarize(normalized)
 
     def explain_logs(self, *, adapter_key: str | None, raw_text: str) -> str:
         """Produce a detailed explanation for the supplied log text."""
 
         adapter = self._resolve_adapter(adapter_key)
-        normalized = self._parse_with_adapter(adapter, raw_text)
-        return self._build_explanation(normalized)
+        with self._instrument("explain_logs", {"adapter": adapter.identifier}):
+            normalized = self._parse_with_adapter(adapter, raw_text)
+            return self._build_explanation(normalized)
 
     def guardrails_snapshot(self) -> dict[str, object]:
         """Expose sandbox configuration for inspection.
@@ -121,11 +130,12 @@ class ToolkitService:
             configuration.
         """
 
-        return {
-            "allowed_paths": [str(path) for path in self._sandbox_options.allowed_paths],
-            "timeout_seconds": self._sandbox_options.timeout_seconds,
-            "dangerous_mode": self._sandbox_options.dangerous_mode,
-        }
+        with self._instrument("guardrails_snapshot", None):
+            return {
+                "allowed_paths": [str(path) for path in self._sandbox_options.allowed_paths],
+                "timeout_seconds": self._sandbox_options.timeout_seconds,
+                "dangerous_mode": self._sandbox_options.dangerous_mode,
+            }
 
     def redact_text(self, text: str) -> str:
         """Redact sensitive information using configured patterns.
@@ -137,7 +147,8 @@ class ToolkitService:
             The sanitized payload after the configured redaction rules run.
         """
 
-        return self._redactor.redact(text)
+        with self._instrument("redact_text", None):
+            return self._redactor.redact(text)
 
     def list_examples(self, adapter_filter: str | None = None) -> list[str]:
         """Return example log paths as strings for display.
@@ -150,8 +161,10 @@ class ToolkitService:
             CLI presentation.
         """
 
-        examples = self._examples.list_examples(adapter_filter)
-        return [str(path) for path in examples]
+        attributes = {"adapter_filter": adapter_filter or "<any>"}
+        with self._instrument("list_examples", attributes):
+            examples = self._examples.list_examples(adapter_filter)
+            return [str(path) for path in examples]
 
     def _resolve_adapter(self, adapter_key: str | None) -> LogAdapterProtocol:
         key = adapter_key or self._default_adapter
@@ -232,6 +245,13 @@ class ToolkitService:
                 "Command must include an executable before passing to the sandbox."
             )
         return sanitized
+
+    def _instrument(
+        self, operation: str, attributes: Mapping[str, str] | None
+    ) -> AbstractContextManager[object]:
+        if self._telemetry is None:
+            return nullcontext()
+        return self._telemetry.span(operation, attributes=attributes)
 
     @staticmethod
     def _build_explanation(normalized: NormalizedLog) -> str:

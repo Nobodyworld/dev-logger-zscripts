@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from scripts.redaction import Redactor
-
 from zscripts.domain.interfaces import RedactorProtocol
 
 

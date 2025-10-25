@@ -7,6 +7,9 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
 - Use [Conventional Commits](https://www.conventionalcommits.org/) for every commit message.
 - Open an issue before large or breaking work; share an execution plan for complex refactors.
 - Keep pull requests focused and include tests/docs for any user-visible change.
+- Run `python scripts/dev_start.py` (or `make quality`) before opening a pull
+  request. The quality gate enforces lint/type/security/tests and ≥85%
+  coverage.
 
 ## Development Environment
 1. **Clone & Bootstrap**
@@ -21,9 +24,10 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
    ```
 2. **One-Command Check**
    ```bash
-   make check
+   make quality
    ```
-   This runs formatting, lint, type checks, security scanning, and the pytest suite.
+   This runs formatting, lint, type checks, security scanning, pytest with
+   coverage, and writes a report to `reports/quality_gate.json`.
 
 3. **Pre-commit Hooks**
    - `pre-commit run --all-files` runs Ruff (format + lint), mypy, Bandit, and detect-secrets using `.secrets.baseline`.
@@ -44,6 +48,8 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
 
 ## Documentation Standards
 - Update README.md, relevant docs, and changelog entries for new features.
+- Extensions must follow [AGENTS.md](zscripts/extensions/AGENTS.md) and be
+  documented in [EXTENSION_GUIDE.md](EXTENSION_GUIDE.md).
 - Record dependency rationale updates in `docs/DEPENDENCIES.md` whenever packages change.
 - Include inline docstrings and type hints for new modules.
 - Capture architectural decisions as ADRs under `docs/adr/`.

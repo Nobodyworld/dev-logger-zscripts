@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from scripts import SandboxRunner, SandboxSettings
-
 from zscripts.domain.interfaces import SandboxRunnerProtocol
 from zscripts.domain.models import SandboxOptions, SandboxResult
 

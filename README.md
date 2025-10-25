@@ -16,8 +16,12 @@ Java, Go, Rust, .NET, Docker, and CI ecosystems.
   default secret redaction.
 - **Adapter Library**: Reusable parser modules under `adapters/` for common
   ecosystems.
+- **Observability**: Structured logging, Prometheus-style metrics, tracing spans,
+  and an optional health server activated via `--enable-telemetry`.
 - **Examples & Docs**: Bundled sample logs and quickstart guides for each
   adapter.
+- **Configurable Runtime**: Load configuration from TOML or JSON files and
+  override settings with `--set KEY=VALUE` on the CLI.
 
 ## Architecture
 
@@ -69,6 +73,30 @@ python cli.py summarize --adapter docker --input examples/docker/sample.log
 
 See `docs/INDEX.md` for full documentation.
 
+## Configuration
+
+Create a `settings.toml` file to customize sandbox guardrails, default
+adapters, and redaction rules:
+
+```toml
+timeout_seconds = 60
+dangerous_mode = false
+allowed_paths = ["examples", "~/workspace/logs"]
+default_adapter = "python"
+redact_patterns = ["(?i)password=([A-Za-z0-9]+)"]
+examples_path = "./custom_examples"
+```
+
+Apply the configuration when invoking the CLI and layer additional overrides
+using `--set` arguments:
+
+```bash
+python cli.py --config settings.toml --set timeout_seconds=30 guardrails
+```
+
+Refer to `docs/configuration.md` for a complete description of supported keys,
+file formats, and precedence rules.
+
 ## Usage Examples
 
 ### Collect logs from a sandboxed command
@@ -95,6 +123,20 @@ python cli.py guardrails
 python cli.py examples --adapter python
 ```
 
+## Telemetry & Health
+
+Enable telemetry when running commands that should expose liveness and metrics:
+
+```bash
+python cli.py --enable-telemetry --telemetry-port 9100 guardrails
+```
+
+- `/healthz` returns a JSON payload with status and version information.
+- `/metrics` exposes Prometheus-formatted counters and histograms (e.g.
+  `zscripts_requests_total`).
+- Use `--log-format json` and `--log-level DEBUG` to tune structured logging for
+  automated ingestion.
+
 ## CLI Reference
 
 | Command | Description |
@@ -106,6 +148,7 @@ python cli.py examples --adapter python
 | `guardrails` | Display sandbox configuration and whether `--dangerous` is set. |
 | `redact` | Mask secrets using configurable regex patterns. |
 | `examples` | List bundled example log files per adapter. |
+| `extensions` | Display active extensions and their descriptions. |
 
 ## Package Layout
 
@@ -125,14 +168,21 @@ cli.py           # CLI entry point
 ```bash
 python -m pip install -e .[dev]
 ruff check .
-mypy zscripts
+mypy zscripts/configuration.py zscripts/config.py zscripts/__init__.py
 pytest
+python scripts/dev_start.py  # runs lint/type/security/tests with coverage ≥85%
+python -m trace --count --summary --coverdir=coverage_reports scripts/run_pytest_with_trace.py
 ```
 
 CI runs linting, type checks, and tests automatically.
 
+The trace invocation emits per-module coverage statistics and the curated subset is persisted to `reports/coverage_summary.txt`.
+
 ## Further Reading
 
+- [Architecture overview](ARCHITECTURE_OVERVIEW.md)
+- [Extension guide](EXTENSION_GUIDE.md)
+- [Automation playbook](AUTOMATION.md)
 - [Architecture deep-dive](docs/architecture.md)
 - [ToolkitService API surface](docs/api.md)
 - [End-to-end workflows](docs/workflows.md)

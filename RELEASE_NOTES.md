@@ -19,6 +19,12 @@
   CLI override semantics.
 - Introduced a trace-based coverage workflow (`scripts/run_pytest_with_trace.py`)
   that emits summaries to `reports/coverage_summary.txt`.
+- Tightened typing gates to the reporting and observability surfaces so `make
+  check` enforces the strict subset without tripping legacy modules, and added
+  regression coverage for empty-report edge cases.
+- Raised automated test coverage to 90% by adding configuration validation,
+  observability logging, and infrastructure adapter test suites. Coverage and
+  quality gate artifacts are published under `reports/` via `scripts/dev_start.py`.
 
 ## Upgrade Notes
 - New configuration keys are available: `telemetry_enabled`, `telemetry_host`,

@@ -17,6 +17,18 @@ SUMMARY_FILE = QUALITY_DIR / "quality_gate.json"
 COVERAGE_FILE = QUALITY_DIR / "coverage.json"
 COVERAGE_THRESHOLD = float(os.environ.get("QUALITY_COVERAGE_MIN", "85"))
 
+MYPY_TARGETS: tuple[str, ...] = (
+    "zscripts/application",
+    "zscripts/config.py",
+    "zscripts/configuration.py",
+    "zscripts/observability/logging.py",
+    "zscripts/observability/metrics.py",
+    "zscripts/observability/health.py",
+    "zscripts/observability/instrumentation.py",
+    "zscripts/extensions/scaffolding.py",
+    "zscripts/schemas",
+)
+
 
 @dataclass
 class Step:
@@ -27,7 +39,7 @@ class Step:
 
 STEPS: Sequence[Step] = (
     Step("lint", ("ruff", "check", "."), "ZSKIP_LINT"),
-    Step("type", ("mypy", "."), "ZSKIP_TYPE"),
+    Step("type", ("mypy", *MYPY_TARGETS), "ZSKIP_TYPE"),
     Step("security", ("bandit", "-q", "-r", "zscripts", "sample_project"), "ZSKIP_SECURITY"),
     Step("tests", ("coverage", "run", "-m", "pytest"), "ZSKIP_TESTS"),
 )

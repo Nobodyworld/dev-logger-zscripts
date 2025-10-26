@@ -11,7 +11,7 @@ from pathlib import Path
 try:  # pragma: no cover - platform specific branch
     import resource
 except ImportError:  # pragma: no cover - Windows fallback
-    resource = None  # type: ignore
+    resource = None  # type: ignore[assignment]
 
 
 @dataclass

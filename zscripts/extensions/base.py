@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from zscripts.config import ToolkitConfig
 from zscripts.domain.interfaces import AdapterRegistryProtocol
+from zscripts.observability.instrumentation import InstrumentationManager
 from zscripts.observability.telemetry import TelemetryManager
 
 if TYPE_CHECKING:  # pragma: no cover - imported for type checking only
@@ -22,6 +23,7 @@ class ExtensionContext:
     config: ToolkitConfig
     adapter_registry: AdapterRegistryProtocol
     telemetry: TelemetryManager | None
+    instrumentation: InstrumentationManager
     logger: logging.Logger
 
 
@@ -51,7 +53,19 @@ class ToolkitExtension:
     name = "extension"
     description = "Toolkit extension"
 
+    def __init__(self) -> None:
+        self._context: ExtensionContext | None = None
+
+    @property
+    def context(self) -> ExtensionContext:
+        """Return the most recent extension context."""
+
+        if self._context is None:
+            raise RuntimeError("Extension context has not been initialised yet.")
+        return self._context
+
     def on_load(self, context: ExtensionContext) -> None:  # noqa: D401 - default no-op
+        self._context = context
         context.logger.debug(
             "extension.loaded",
             extra={"extension": self.name},

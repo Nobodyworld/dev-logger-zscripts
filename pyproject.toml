@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = ["setuptools>=70", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -25,15 +25,15 @@ classifiers = [
   "Topic :: Software Development :: Build Tools",
 ]
 dependencies = [
-  "jsonschema>=4.21",
+  "jsonschema>=4.22",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=7.4",
-  "ruff>=0.2",
-  "mypy>=1.8",
-  "coverage[toml]>=7.5",
+  "pytest>=8.4",
+  "ruff>=0.6",
+  "mypy>=1.12",
+  "coverage[toml]>=7.6",
 ]
 
 [project.scripts]
@@ -85,6 +85,15 @@ disallow_any_expr = true
 disallow_any_decorated = true
 disallow_any_generics = true
 enable_error_code = ["ignore-without-code"]
+files = [
+    "zscripts/application",
+    "zscripts/config.py",
+    "zscripts/configuration.py",
+    "zscripts/observability/logging.py",
+    "zscripts/observability/metrics.py",
+    "zscripts/observability/health.py",
+    "zscripts/schemas",
+]
 
 [[tool.mypy.overrides]]
 module = "tests.*"

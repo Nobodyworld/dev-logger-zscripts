@@ -102,6 +102,8 @@ _KNOWN_KEYS: Final[tuple[str, ...]] = (
     "log_level",
     "log_format",
     "extensions",
+    "report_format",
+    "report_redact",
 )
 
 
@@ -123,7 +125,7 @@ def _apply_config_values(  # noqa: PLR0912 - configuration fan-out requires expl
         elif key == "timeout_seconds":
             config.timeout_seconds = _coerce_timeout(raw, source)
         elif key == "dangerous_mode":
-            config.dangerous_mode = _coerce_bool(raw, source)
+            config.dangerous_mode = _coerce_bool(raw, source, field="dangerous_mode")
         elif key == "default_adapter":
             config.default_adapter = _coerce_string(raw, source, field="default_adapter")
         elif key == "redact_patterns":
@@ -131,7 +133,7 @@ def _apply_config_values(  # noqa: PLR0912 - configuration fan-out requires expl
         elif key == "examples_path":
             config.examples_path = _coerce_path(raw, source)
         elif key == "telemetry_enabled":
-            config.telemetry_enabled = _coerce_bool(raw, source)
+            config.telemetry_enabled = _coerce_bool(raw, source, field="telemetry_enabled")
         elif key == "telemetry_host":
             config.telemetry_host = _coerce_string(raw, source, field="telemetry_host")
         elif key == "telemetry_port":
@@ -145,6 +147,10 @@ def _apply_config_values(  # noqa: PLR0912 - configuration fan-out requires expl
                     f"log_format in {source} must be 'text' or 'json'."
                 )
             config.log_format = candidate
+        elif key == "report_format":
+            config.report_format = _coerce_report_format(raw, source)
+        elif key == "report_redact":
+            config.report_redact = _coerce_bool(raw, source, field="report_redact")
         elif key == "extensions":
             config.extensions = _coerce_string_sequence(raw, source, field="extensions")
     return config
@@ -194,7 +200,7 @@ def _coerce_timeout(value: object, source: str) -> int:
     return _coerce_positive_int(value, source, field="timeout_seconds")
 
 
-def _coerce_bool(value: object, source: str) -> bool:
+def _coerce_bool(value: object, source: str, *, field: str) -> bool:
     if isinstance(value, bool):
         return value
     if isinstance(value, int | float):
@@ -204,7 +210,7 @@ def _coerce_bool(value: object, source: str) -> bool:
         if numeric == 1:
             return True
         raise ConfigurationError(
-            f"dangerous_mode in {source} must be true/false or 0/1."
+            f"{field} in {source} must be true/false or 0/1."
         )
     if isinstance(value, str):
         normalized = value.strip().lower()
@@ -213,11 +219,20 @@ def _coerce_bool(value: object, source: str) -> bool:
         if normalized in _STR_FALSE:
             return False
         raise ConfigurationError(
-            f"dangerous_mode in {source} must be a boolean-like string."
+            f"{field} in {source} must be a boolean-like string."
         )
     raise ConfigurationError(
-        f"dangerous_mode in {source} must be a boolean or boolean-like value."
+        f"{field} in {source} must be a boolean or boolean-like value."
     )
+
+
+def _coerce_report_format(value: object, source: str) -> str:
+    candidate = _coerce_string(value, source, field="report_format").lower()
+    if candidate not in {"json", "markdown"}:
+        raise ConfigurationError(
+            f"report_format in {source} must be 'json' or 'markdown'."
+        )
+    return candidate
 
 
 def _coerce_string(value: object, source: str, *, field: str) -> str:

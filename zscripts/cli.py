@@ -6,12 +6,14 @@ import argparse
 import json
 import sys
 import textwrap
-import time
 import uuid
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from zscripts import get_default_config
+from zscripts.application.report_formatters import get_report_formatter
 from zscripts.application.services import ToolkitService
 from zscripts.config import ToolkitConfig
 from zscripts.configuration import (
@@ -20,10 +22,14 @@ from zscripts.configuration import (
     parse_override_pairs,
 )
 from zscripts.extensions import ExtensionContext, ExtensionLoadError, load_extensions
+from zscripts.extensions.scaffolding import scaffold_extension
 from zscripts.infrastructure import build_toolkit_service
 from zscripts.infrastructure.adapters import AdapterRegistry
 from zscripts.observability.logging import bind_correlation_id, get_logger
 from zscripts.observability.telemetry import TelemetryManager, TelemetrySettings
+
+if TYPE_CHECKING:  # pragma: no cover - import for static typing only
+    from zscripts.observability.instrumentation import InstrumentationManager, OperationResult
 
 
 class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter):
@@ -31,6 +37,15 @@ class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescrip
 
 
 _CLI_LOGGER = get_logger("cli")
+
+
+@dataclass(slots=True)
+class _CliRuntime:
+    """Aggregate telemetry dependencies for CLI command execution."""
+
+    telemetry: TelemetryManager
+    instrumentation: InstrumentationManager
+    correlation_id: str
 
 
 def _build_global_parser() -> argparse.ArgumentParser:
@@ -74,14 +89,22 @@ def main(argv: list[str] | None = None) -> None:
         )
     )
     telemetry.start()
+    cli_instrumentation = telemetry.create_instrumentation(component="cli")
+    extension_instrumentation = telemetry.create_instrumentation(component="extensions")
 
     correlation_id = uuid.uuid4().hex
+    runtime = _CliRuntime(
+        telemetry=telemetry,
+        instrumentation=cli_instrumentation,
+        correlation_id=correlation_id,
+    )
     try:
         with bind_correlation_id(correlation_id):
             extension_context = ExtensionContext(
                 config=config,
                 adapter_registry=registry,
                 telemetry=telemetry,
+                instrumentation=extension_instrumentation,
                 logger=get_logger("extensions"),
             )
             try:
@@ -91,7 +114,7 @@ def main(argv: list[str] | None = None) -> None:
 
             _prepare_and_execute(
                 raw_args,
-                telemetry,
+                runtime,
                 extension_context,
                 extensions,
             )
@@ -173,9 +196,45 @@ def _build_parser(
     examples_parser.add_argument("--adapter", help="Filter examples by adapter")
     examples_parser.set_defaults(func=_handle_examples)
 
-    extensions_parser = subparsers.add_parser("extensions", help="List loaded extensions")
+    extensions_parser = subparsers.add_parser("extensions", help="Manage extensions")
     extensions_parser.add_argument("--output", help="Destination for the extension list")
-    extensions_parser.set_defaults(func=_handle_extensions)
+    extensions_parser.set_defaults(func=_handle_extensions_list)
+    extensions_subparsers = extensions_parser.add_subparsers(
+        dest="extensions_subcommand",
+        required=False,
+    )
+    extensions_subparsers.add_parser("list", help="List loaded extensions").set_defaults(
+        func=_handle_extensions_list
+    )
+    scaffold_parser = extensions_subparsers.add_parser(
+        "scaffold",
+        help="Generate a starter extension module.",
+    )
+    scaffold_parser.add_argument("name", help="Extension module name (snake_case)")
+    scaffold_parser.add_argument(
+        "--directory",
+        default="zscripts/extensions",
+        help="Directory where the extension module should be created.",
+    )
+    scaffold_parser.set_defaults(func=_handle_extensions_scaffold)
+
+    report_parser = subparsers.add_parser("report", help="Generate a comprehensive report")
+    report_parser.add_argument("--input", help="Path to the log file (defaults to STDIN)")
+    report_parser.add_argument("--output", help="Destination for the rendered report")
+    report_parser.add_argument(
+        "--format",
+        dest="report_format",
+        choices=("json", "markdown"),
+        help="Report output format (defaults to configuration).",
+    )
+    report_parser.add_argument(
+        "--redact",
+        dest="report_redact",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable or disable redaction of textual fields (defaults to configuration).",
+    )
+    report_parser.set_defaults(func=_handle_report)
 
     for extension in extensions:
         register = getattr(extension, "register_cli", None)
@@ -303,7 +362,7 @@ def _handle_examples(args: argparse.Namespace, service: ToolkitService) -> None:
     print("\n".join(entries))
 
 
-def _handle_extensions(args: argparse.Namespace, service: ToolkitService) -> None:
+def _handle_extensions_list(args: argparse.Namespace, service: ToolkitService) -> None:
     loaded = getattr(args, "extensions_loaded", [])
     if not loaded:
         payload = "No extensions configured."
@@ -314,6 +373,35 @@ def _handle_extensions(args: argparse.Namespace, service: ToolkitService) -> Non
             for ext in loaded
         ]
         payload = "\n".join(lines)
+    _write_output(payload, getattr(args, "output", None))
+
+
+def _handle_extensions_scaffold(args: argparse.Namespace, service: ToolkitService) -> None:
+    directory = Path(getattr(args, "directory", "zscripts/extensions")).expanduser()
+    try:
+        module_path = scaffold_extension(args.name, directory)
+    except (ValueError, FileExistsError) as exc:
+        _fail(str(exc))
+    _CLI_LOGGER.info(
+        "extensions.scaffold.created",
+        extra={"path": str(module_path)},
+    )
+    print(module_path)
+
+
+def _handle_report(args: argparse.Namespace, service: ToolkitService) -> None:
+    raw_text = _load_input(args.input)
+    bundle = service.generate_report(
+        adapter_key=args.adapter,
+        raw_text=raw_text,
+        redact=getattr(args, "resolved_report_redact", False),
+    )
+    formatter_name = getattr(args, "resolved_report_format", "json")
+    try:
+        formatter = get_report_formatter(formatter_name)
+    except ValueError as exc:
+        _fail(str(exc))
+    payload = formatter(bundle)
     _write_output(payload, getattr(args, "output", None))
 
 
@@ -331,7 +419,7 @@ def _write_output(payload: str, output_path: str | None) -> None:
 
 
 def _record_cli_metrics(
-    telemetry: TelemetryManager,
+    instrumentation: InstrumentationManager,
     labels: dict[str, str],
     status: str,
     duration_seconds: float,
@@ -339,11 +427,11 @@ def _record_cli_metrics(
     # agent-safe-task: extend metrics without affecting CLI control flow
     enriched = {**labels, "status": status}
     safe_duration = duration_seconds if duration_seconds >= 0 else 0.0
-    telemetry.metrics.counter(
+    instrumentation.counter(
         "zscripts_cli_invocations_total",
         "CLI invocations processed by zscripts.",
     ).inc(labels=enriched)
-    telemetry.metrics.histogram(
+    instrumentation.histogram(
         "zscripts_cli_duration_seconds",
         "Duration of zscripts CLI commands in seconds.",
     ).observe(safe_duration, labels=enriched)
@@ -356,7 +444,7 @@ def _fail(message: str) -> None:
 
 def _prepare_and_execute(
     raw_args: Sequence[str],
-    telemetry: TelemetryManager,
+    runtime: _CliRuntime,
     extension_context: ExtensionContext,
     extensions: Sequence[object],
 ) -> None:
@@ -375,43 +463,71 @@ def _prepare_and_execute(
     service = build_toolkit_service(
         config,
         adapter_registry=registry,
-        telemetry=telemetry,
+        telemetry=runtime.telemetry,
     )
     for extension in extensions:
         extension.after_service_ready(service, extension_context)
 
     handler: Callable[[argparse.Namespace, ToolkitService], None] = args.func
 
-    _execute_command(args, handler, service, telemetry)
+    if hasattr(args, "report_format"):
+        if args.report_format:
+            config.report_format = args.report_format
+        args.resolved_report_format = config.report_format
+    if hasattr(args, "report_redact"):
+        if args.report_redact is not None:
+            config.report_redact = args.report_redact
+        args.resolved_report_redact = config.report_redact
+
+    _execute_command(args, handler, service, runtime)
+
+
+def _resolve_command_labels(args: argparse.Namespace) -> tuple[str, dict[str, str]]:
+    """Return a stable command label tuple for metrics and logging."""
+
+    command_name = getattr(args, "command", None) or "unknown"
+    labels = {"command": command_name}
+    if command_name == "extensions":
+        subcommand = getattr(args, "extensions_subcommand", None)
+        if subcommand:
+            command_name = f"extensions.{subcommand}"
+            labels["command"] = command_name
+    return command_name, labels
 
 
 def _execute_command(
     args: argparse.Namespace,
     handler: Callable[[argparse.Namespace, ToolkitService], None],
     service: ToolkitService,
-    telemetry: TelemetryManager,
+    runtime: _CliRuntime,
 ) -> None:
-    command_name = getattr(args, "command", "unknown") or "unknown"
-    labels = {"command": command_name}
-    status = "success"
-    start_time = time.perf_counter()
+    command_name, labels = _resolve_command_labels(args)
+    op_result: OperationResult | None = None
     try:
         # agent-entrypoint: centralized automation hook for CLI command execution
-        with telemetry.span(f"cli.{command_name}", attributes=labels):
-            handler(args, service)
-    except SystemExit as exc:
-        status = "success" if exc.code in (None, 0) else "error"
+        with runtime.instrumentation.operation(
+            command_name,
+            attributes=labels,
+            correlation_id=runtime.correlation_id,
+        ) as result:
+            op_result = result
+            try:
+                handler(args, service)
+            except SystemExit as exc:
+                result.status = "success" if exc.code in (None, 0) else "error"
+                raise
+    except SystemExit:
         raise
     except Exception:
-        status = "error"
         _CLI_LOGGER.exception(
             "cli.command.failure",
             extra={"command": command_name},
         )
         raise
     finally:
-        duration = time.perf_counter() - start_time
-        _record_cli_metrics(telemetry, labels, status, duration)
+        final_status = op_result.status if op_result is not None else "error"
+        final_duration = op_result.duration_seconds if op_result is not None else 0.0
+        _record_cli_metrics(runtime.instrumentation, labels, final_status, final_duration)
 
 
 __all__ = ["main"]

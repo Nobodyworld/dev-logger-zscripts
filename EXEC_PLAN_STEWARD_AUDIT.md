@@ -10,37 +10,35 @@ We will complete the Stage 4 stewardship audit to ensure the zscripts toolkit op
 
 ## Progress
 
-- [x] (2025-10-25T17:34Z) Drafted the stewardship ExecPlan and recorded repository orientation notes.
-- [x] (2025-10-25T17:36Z) Ran baseline `pytest` suite to confirm green state and captured warning noise.
-- [x] (2025-10-25T17:37Z) Gathered quality metrics (coverage via `trace`, cyclomatic complexity script, dependency depth, package size/time).
-- [x] (2025-10-25T17:39Z) Simplified CLI telemetry orchestration with a unified `finally` block and automation tags.
-- [x] (2025-10-25T17:39Z) Updated documentation and authored `STEWARDS_REPORT.md` plus `AUTOMATION_ROLES.md` to reflect the audit.
-- [x] (2025-10-25T17:39Z) Tagged agent-safe automation entry points in `zscripts/cli.py` and documented usage in the new roles guide.
-- [x] (2025-10-25T17:41Z) Finalized the steward report, updated ExecPlan outcomes, and prepared release documentation.
+- [x] (2025-10-26T02:32Z) Verified the baseline with `coverage run -m pytest` so coverage data could feed Stage 4 metrics.
+- [x] (2025-10-26T02:35Z) Authored `scripts/collect_quality_metrics.py` and captured coverage, complexity, dependency, and build outputs into `reports/metrics.json`.
+- [x] (2025-10-26T02:37Z) Refactored CLI telemetry dispatch by introducing `_resolve_command_labels` for consistent logging and metrics labels.
+- [x] (2025-10-26T02:39Z) Updated README, AUTOMATION guides, and the stewardship report to document the new metrics workflow and remove stale trace instructions.
+- [x] (2025-10-26T02:41Z) Finalised STEWARDS_REPORT updates, refreshed ExecPlan sections, and captured latency measurements for `cli guardrails`.
 
 ## Surprises & Discoveries
 
-- Observation: Network egress is blocked, preventing `pip` from installing tooling such as `coverage`, `radon`, and `pipdeptree`.
-  Evidence: `pip` install attempts returned `ProxyError` 403 Forbidden responses.
+- Observation: Network egress remains restricted; attempts to install `radon` still fail with proxy 403 errors, so complexity metrics now rely on the in-repo AST walker.
+  Evidence: `python -m pip install radon` emitted repeated `ProxyError` messages. (`9cc13f`)
 
-- Observation: Python's built-in `trace` module successfully generated per-line execution counts as an alternative coverage source.
-  Evidence: `python -m trace --count --coverdir trace_cov --module pytest` produced `.cover` files for every `zscripts` module.
+- Observation: Native coverage tooling is available, yielding 89.67% total statement coverage with the CLI at 65%, highlighting remaining hot spots.
+  Evidence: `coverage report` summarised module coverage after the audit run. (`9a6f04`)
 
-- Observation: Strict mypy checking reports longstanding `Any` usage across infrastructure and adapter modules.
-  Evidence: `mypy zscripts` surfaced 153 baseline errors spanning schema, metrics, and adapter packages.
+- Observation: The guardrails command completes in ~0.34s even with telemetry spans enabled, confirming the simplified metrics path has minimal overhead.
+  Evidence: Timed invocation of `python cli.py guardrails` recorded 0.344 seconds. (`a03684`)
 
 ## Decision Log
 
-- Decision: Use `python -m trace` to approximate coverage metrics since third-party packages cannot be fetched behind the proxy.
-  Rationale: Maintains offline reproducibility and provides deterministic `.cover` artifacts for audit.
-  Date/Author: 2025-10-25T17:37Z / Steward Agent
-- Decision: Extracted `_prepare_and_execute` and `_execute_command` helpers from `main()` to reduce complexity and satisfy lint checks.
-  Rationale: Keeps `main()` focused on configuration + context wiring while consolidating automation hooks in a reusable helper.
-  Date/Author: 2025-10-25T17:41Z / Steward Agent
+- Decision: Build the `scripts/collect_quality_metrics.py` AST walker instead of relying on `radon`, which cannot be fetched behind the proxy.
+  Rationale: Ensures repeatable complexity and dependency metrics using only stdlib dependencies.
+  Date/Author: 2025-10-26T02:35Z / Steward Agent
+- Decision: Introduce `_resolve_command_labels` to compute telemetry labels before entering the instrumentation span.
+  Rationale: Eliminates duplicated string handling and guarantees metrics and logs share the same command label.
+  Date/Author: 2025-10-26T02:37Z / Steward Agent
 
 ## Outcomes & Retrospective
 
-CLI telemetry orchestration is now centralized within `_execute_command`, reducing redundant state handling while preserving logging and spans. The stewardship report and automation roles catalog document reproducible health metrics, proxy limitations, and agent responsibilities. Ruff passes cleanly, pytest remains green, and mypy highlights pre-existing debt for future remediation.
+CLI telemetry orchestration now relies on `_resolve_command_labels`, so metrics and logs derive from a single source of truth and the finally block stays minimal. The new metrics script produces repeatable coverage, complexity, and dependency data for `STEWARDS_REPORT.md`, while documentation updates direct agents to the unified workflow. Ruff and mypy baselines are unchanged, and pytest with coverage continues to pass.
 
 ## Context and Orientation
 
@@ -50,31 +48,25 @@ The telemetry stack relies on `TelemetryManager` (`zscripts/observability/teleme
 
 ## Plan of Work
 
-1. Run `pytest` from the repository root to confirm the current baseline passes before refactoring.
-2. Attempt to capture coverage metrics via `pytest --cov=zscripts`; if coverage tooling is unavailable, note the limitation for later documentation.
-3. Estimate cyclomatic complexity using `radon cc` if available; otherwise compute manually for the primary CLI module and describe reasoning in the steward report.
-4. Analyze dependency structure by parsing `pyproject.toml` and enumerating package imports to derive a qualitative depth/cohesion ratio for the steward report.
-5. Measure package footprint using `python -m build` if available or, failing that, `du -sh zscripts zscripts/config.py` to approximate install size.
-6. Review `zscripts/cli.py` to simplify telemetry handling by consolidating the status tracking and ensuring metrics emission occurs in a single finally block; preserve logging.
-7. Annotate relevant orchestration points with `# agent-entrypoint` or `# agent-safe-task` where future automation could hook in, particularly around CLI command dispatch and telemetry metrics.
-8. Update documentation to align with simplified code and new automation guidance: revise README sections if they mention old telemetry behavior, append entries to CHANGELOG and RELEASE_NOTES summarizing audit outcomes, and add `STEWARDS_REPORT.md` with the requested metrics table and roadmap.
-9. Create `AUTOMATION_ROLES.md` describing candidate agent jobs and triggers if clarity benefits stewardship.
-10. Re-run tests (`pytest`) and, when tools are available, lint (`ruff check`) and type-check (`mypy`) to ensure no regressions.
-11. Update this ExecPlan's progress, decisions, surprises, and outcomes sections to reflect discoveries, then prepare commit and PR messaging summarizing the audit.
+1. Run `coverage run -m pytest` from the repository root to confirm the baseline and produce machine-readable coverage metrics.
+2. Generate holistic metrics by executing `scripts/collect_quality_metrics.py --output reports/metrics.json`; if the script does not exist, implement the AST-based complexity/dependency walker using stdlib modules.
+3. Measure CLI latency for a representative command (e.g., `python cli.py guardrails`) to confirm telemetry overhead stays within acceptable bounds.
+4. Review `zscripts/cli.py` and simplify command/label handling while preserving instrumentation semantics.
+5. Update documentation (README, AUTOMATION guides, operations, steward report) to reference the deterministic metrics workflow and remove stale trace-only guidance.
+6. Refresh `STEWARDS_REPORT.md` with the new metrics table, simplification log, and roadmap updates.
+7. Re-run quality checks (`coverage report`, `pytest`, `ruff check`, optional `mypy`) and capture relevant artefacts for the report.
+8. Update this ExecPlan's progress, discoveries, decisions, and outcomes sections before preparing commit and PR messaging.
 
 ## Concrete Steps
 
-1. From `/workspace/zscripts`, run `pytest` and capture results.
-2. Run `pytest --cov=zscripts` to gather coverage or record the failure reason.
-3. Try `python -m pip show radon`; if missing, install locally with `python -m pip install radon` (acceptable for tooling) and execute `radon cc -s -a zscripts` to compute complexity. Record values.
-4. Inspect dependencies by reading `pyproject.toml` and generating an import graph with `python -m pip install pipdeptree` followed by `pipdeptree --json-tree`. If installation is impossible, document the limitation and approximate manually.
-5. Measure build footprint using `python -m pip install build` and `python -m build`, capturing the elapsed time with `/usr/bin/time -f '%E' python -m build`. If tooling installation fails, fall back to `du -sh zscripts` size measurement and note the gap.
-6. Modify `zscripts/cli.py` to streamline telemetry instrumentation and insert automation tags. Ensure `_record_cli_metrics` handles caching gracefully.
-7. Draft `STEWARDS_REPORT.md` containing the metrics table, recommendations, simplification log, and roadmap. Include coverage of automation entry points and risks.
-8. Draft `AUTOMATION_ROLES.md` outlining agent responsibilities and triggers.
-9. Update README/CHANGELOG/RELEASE_NOTES if behavior or instructions change.
-10. Run quality checks: `pytest`, `ruff check`, and `mypy`. Capture outputs for the report.
-11. Update ExecPlan narrative sections with findings, set remaining progress items to complete, and summarize outcomes.
+1. From `/workspace/zscripts`, run `coverage run -m pytest` and capture results (coverage + test output).
+2. Execute `python scripts/collect_quality_metrics.py --output reports/metrics.json` to generate coverage, complexity, dependency, and build statistics.
+3. Time `python cli.py guardrails` with telemetry enabled to gather latency data for the steward report.
+4. Update `zscripts/cli.py` by adding `_resolve_command_labels` and refactoring `_execute_command` to use it.
+5. Revise README, AUTOMATION guides, and `docs/operations.md` to describe the metrics workflow and correct outdated telemetry references.
+6. Refresh `STEWARDS_REPORT.md` with the new metrics table, simplification log, and roadmap bullets.
+7. Run `coverage report` (plus optional `ruff check`/`mypy`) and archive artefacts (`reports/coverage.json`, `reports/metrics.json`).
+8. Update ExecPlan narrative sections (progress, discoveries, decisions, outcomes) before preparing commit messaging.
 
 ## Validation and Acceptance
 
@@ -92,10 +84,11 @@ All commands are safe to rerun. Installing tooling with `pip` affects only the e
 
 ## Artifacts and Notes
 
-- `pytest` (45 passed, 1 warning): see chunk `2e15c4`.
-- `python -m trace --count --coverdir trace_cov --module pytest`: generated `.cover` files prior to cleanup.
-- `ruff check`: clean run after CLI refactor (chunk `2de275`).
-- `mypy zscripts`: surfaced baseline typing issues outside this audit's scope (chunk `93c55a`).
+- `coverage run -m pytest` (89 tests, 7.67s): see chunk `c56283`.
+- `coverage report`: detailed module coverage including CLI hot spots (chunk `9a6f04`).
+- `python scripts/collect_quality_metrics.py --output reports/metrics.json`: outputs captured in `reports/metrics.json`.
+- `python -m pip install radon`: proxy failures recorded for complexity tooling (chunk `9cc13f`).
+- Timed `python cli.py guardrails` invocation for latency measurement (chunk `a03684`).
 
 ## Interfaces and Dependencies
 

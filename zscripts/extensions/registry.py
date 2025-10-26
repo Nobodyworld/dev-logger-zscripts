@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import importlib
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from types import ModuleType
 from typing import cast
 
 from zscripts.extensions.base import ExtensionContext, ToolkitExtensionProtocol
@@ -23,28 +24,38 @@ def load_extensions(
 
     loaded: list[ToolkitExtensionProtocol] = []
     logger = get_logger("extensions.loader")
+    instrumentation = context.instrumentation
     for module_path in modules:
-        try:
-            module = importlib.import_module(module_path)
-        except ImportError as exc:  # pragma: no cover - exercised via tests
-            message = f"Failed to import extension '{module_path}': {exc}".rstrip()
-            logger.error("extension.import_failed", extra={"extension": module_path})
-            raise ExtensionLoadError(message) from exc
-        factory = getattr(module, "get_extension", None)
-        if callable(factory):
-            extension = factory()
-        elif hasattr(module, "Extension"):
-            extension_cls = cast(type[ToolkitExtensionProtocol], module.Extension)
-            extension = extension_cls()
-        else:
-            raise ExtensionLoadError(
-                f"Extension module '{module_path}' must expose get_extension() or Extension class."
+        with instrumentation.operation(
+            "extension.load",
+            attributes={"extension": module_path},
+        ):
+            try:
+                module: ModuleType = importlib.import_module(module_path)
+            except ImportError as exc:  # pragma: no cover - exercised via tests
+                message = f"Failed to import extension '{module_path}': {exc}".rstrip()
+                logger.error("extension.import_failed", extra={"extension": module_path})
+                raise ExtensionLoadError(message) from exc
+            factory: object = getattr(module, "get_extension", None)
+            if callable(factory):
+                extension_factory = cast(Callable[[], ToolkitExtensionProtocol], factory)
+                extension = extension_factory()
+            elif hasattr(module, "Extension"):
+                extension_cls = cast(type[ToolkitExtensionProtocol], module.Extension)
+                extension = extension_cls()
+            else:
+                raise ExtensionLoadError(
+                    f"Extension module '{module_path}' must expose get_extension() or Extension class."
+                )
+            context.logger.debug(
+                "extension.instantiate", extra={"extension": getattr(extension, "name", module_path)}
             )
-        context.logger.debug(
-            "extension.instantiate", extra={"extension": getattr(extension, "name", module_path)}
-        )
-        extension.on_load(context)
-        loaded.append(extension)
+            extension.on_load(context)
+            loaded.append(extension)
+    instrumentation.gauge(
+        "zscripts_extensions_active",
+        "Number of active toolkit extensions.",
+    ).set(len(loaded), labels={"loader": "runtime"})
     return loaded
 
 

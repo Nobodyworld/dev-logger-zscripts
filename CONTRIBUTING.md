@@ -10,6 +10,8 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
 - Run `python scripts/dev_start.py` (or `make quality`) before opening a pull
   request. The quality gate enforces lint/type/security/tests and ≥85%
   coverage.
+- Annotate TODOs with priority and effort using `TODO(P1, est:4h): context` so
+  automation can triage outstanding work.
 
 ## Development Environment
 1. **Clone & Bootstrap**
@@ -18,16 +20,17 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
    cd zscripts
    python -m venv .venv
    source .venv/bin/activate
-   pip install -r requirements.txt
-   pre-commit install
-   pre-commit install --hook-type commit-msg
+   python scripts/bootstrap.py
    ```
+   The bootstrap script installs runtime/dev dependencies and registers
+   `pre-commit` hooks (including commit message validation).
 2. **One-Command Check**
    ```bash
-   make quality
+   python scripts/agent_guard.py
    ```
-   This runs formatting, lint, type checks, security scanning, pytest with
-   coverage, and writes a report to `reports/quality_gate.json`.
+   This runs lint, type checks, Bandit, and pytest. Use `--only`/`--skip` to
+   tailor the workflow; `make quality` remains available for coverage-enforced
+   pipelines and produces `reports/quality_gate.json`.
 
 3. **Pre-commit Hooks**
    - `pre-commit run --all-files` runs Ruff (format + lint), mypy, Bandit, and detect-secrets using `.secrets.baseline`.

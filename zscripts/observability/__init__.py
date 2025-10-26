@@ -1,6 +1,7 @@
 """Observability utilities for the zscripts toolkit."""
 
 from zscripts.observability.health import HealthTelemetryServer
+from zscripts.observability.instrumentation import InstrumentationManager, OperationResult
 from zscripts.observability.logging import (
     bind_correlation_id,
     configure_logging,
@@ -9,6 +10,7 @@ from zscripts.observability.logging import (
 )
 from zscripts.observability.metrics import (
     CounterMetric,
+    GaugeMetric,
     HistogramMetric,
     MetricsRegistry,
     default_registry,
@@ -18,9 +20,12 @@ from zscripts.observability.tracing import Span, start_span
 
 __all__ = [
     "HealthTelemetryServer",
+    "InstrumentationManager",
+    "OperationResult",
     "TelemetryManager",
     "TelemetrySettings",
     "CounterMetric",
+    "GaugeMetric",
     "HistogramMetric",
     "MetricsRegistry",
     "default_registry",

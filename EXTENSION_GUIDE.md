@@ -5,12 +5,12 @@ new plugin system.
 
 ## 1. Scaffold a module
 
-Use the scaffold script to generate a template module. The script ensures
-naming conventions and boilerplate are consistent with
+Use the built-in CLI scaffolder to generate a template module. The command
+ensures naming conventions and boilerplate remain consistent with
 `zscripts.extensions.base.ToolkitExtension`.
 
 ```bash
-python scripts/scaffold_extension.py demo_adapter
+python cli.py extensions scaffold demo_adapter
 ```
 
 The command creates `zscripts/extensions/demo_adapter.py` with a skeleton
@@ -23,12 +23,11 @@ Edit the generated module:
 - Update `name` and `description` to describe your extension.
 - Implement `register_cli` to add CLI options or subcommands using the provided
   `ExtensionContext`. The context exposes the adapter registry, telemetry
-  manager, and active configuration.
+  manager, instrumentation manager, and active configuration.
 - Add a handler method (e.g. `handle_cli`) to perform your extension-specific
-  work. Use `zscripts.observability.logging.get_logger` for structured logs and
-  `context.telemetry.span(...)` when recording metrics. The telemetry context
-  also exposes `context.telemetry.metrics` so you can increment counters or
-  histograms alongside the core CLI metrics.
+  work. Use `context.instrumentation.operation(...)` to record spans, metrics,
+  and correlation IDs for long-running operations. Structured logs written via
+  `context.logger` automatically include the current correlation ID.
 
 ## 3. Enable the extension
 

@@ -21,8 +21,10 @@ how they interact at runtime.
 ```
 
 - **CLI Layer** parses global options (configuration, telemetry flags) before
-  loading extensions. Extensions may register additional subcommands and are
-  listed via `python cli.py extensions`.
+  loading extensions. An `InstrumentationManager` wraps every command, binding
+  correlation IDs and emitting CLI/operation metrics. Extensions may register
+  additional subcommands and are managed via `python cli.py extensions` (which
+  now includes a `scaffold` helper for generating new modules).
 - **Application Services** coordinate adapters, sandbox execution, schema
   validation, and now route every public method through telemetry spans. The
   service receives a `TelemetryManager` so instrumentation remains opt-in and
@@ -31,13 +33,16 @@ how they interact at runtime.
   implement. They are unchanged by the new observability layer.
 - **Observability Hub** (`zscripts/observability/`) provides structured logging,
   a Prometheus-compatible metrics registry, tracing spans, and an optional HTTP
-  health server (`/healthz` and `/metrics`). The CLI activates the server when
-  `telemetry_enabled` is true or `--enable-telemetry` is passed, and records
-  dedicated CLI metrics (`zscripts_cli_invocations_total`,
-  `zscripts_cli_duration_seconds`) labelled by command and outcome.
+  health server (`/healthz`, `/healthz/ready`, `/healthz/live`, `/metrics`). The
+  CLI activates the server when `telemetry_enabled` is true or
+  `--enable-telemetry` is passed, and records dedicated metrics
+  (`zscripts_cli_invocations_total`, `zscripts_cli_duration_seconds`,
+  `zscripts_operations_total`, `zscripts_operation_duration_seconds`,
+  `zscripts_extensions_active`).
 - **Extensions** live under `zscripts/extensions`. `ExtensionContext` exposes
-  the active configuration, adapter registry, and telemetry handle so plugins
-  can register CLI commands or react after the service is ready.
+  the active configuration, adapter registry, telemetry manager, and
+  instrumentation manager so plugins can register CLI commands or react after
+  the service is ready with full observability.
 
 ## Runtime Flow
 
@@ -47,27 +52,39 @@ how they interact at runtime.
    HTTP server on the requested host/port and configures structured logging.
 3. Extensions listed under `config.extensions` are imported via
    `load_extensions`, receive the current `ExtensionContext`, and may register
-   new CLI commands.
-4. The CLI executes the requested command inside a telemetry span that applies
-   a per-invocation correlation ID, increments CLI counters/histograms, and then
-   delegates into `ToolkitService`, whose public methods also instrument spans.
+   new CLI commands. The loader itself is instrumented so extension imports and
+   instantiation are counted and timed.
+4. The CLI executes the requested command inside an instrumentation operation
+   that applies a per-invocation correlation ID, records CLI/operation metrics,
+   and then delegates into `ToolkitService`, whose public methods also
+   instrument spans.
 5. After completion, `TelemetryManager` can be queried by automation agents via
    `/healthz` and `/metrics` to verify liveness and scrape service-level and
    CLI-level metrics.
 
 ## Key Modules
 
-- `zscripts/observability/metrics.py` — thread-safe counters and histograms with
-  Prometheus exposition.
+- `zscripts/observability/instrumentation.py` — unified spans, metrics, and
+  correlation ID binding for CLI and extensions.
+- `zscripts/observability/metrics.py` — thread-safe counters, gauges, and
+  histograms with Prometheus exposition.
 - `zscripts/observability/tracing.py` — context manager for spans that update
   metrics and logging in lockstep.
 - `zscripts/observability/health.py` — background HTTP server exposing health
-  and metrics.
+  (readiness/liveness) and metrics.
 - `zscripts/extensions/base.py` — defines `ExtensionContext` and the
   `ToolkitExtension` contract.
+- `zscripts/extensions/scaffolding.py` — renders starter modules instrumented
+  with telemetry helpers.
+- `scripts/bootstrap.py` — installs dependencies and configures pre-commit
+  hooks.
 - `scripts/dev_start.py` — runs lint/type/security/tests/coverage checks and
   enforces an 85% coverage threshold.
+- `scripts/agent_guard.py` — runs lint, mypy, bandit, and pytest for quick
+  agent-friendly validation.
+- `scripts/tag_release.py` — bumps semantic versions and optionally creates git
+  tags to anchor release notes.
 
 Refer to `EXTENSION_GUIDE.md` for hands-on steps to create a new extension using
-`scaffold_extension.py`, and `AUTOMATION.md` for guidance on operating the
-telemetry endpoints and quality gates in automated environments.
+`python cli.py extensions scaffold`, and `AUTOMATION.md` for guidance on
+operating the telemetry endpoints and quality gates in automated environments.

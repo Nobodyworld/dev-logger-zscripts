@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 
+from zscripts.application.reporting import ReportBundle
 from zscripts.domain.interfaces import (
     AdapterRegistryProtocol,
     ExampleRepositoryProtocol,
@@ -121,6 +122,35 @@ class ToolkitService:
         with self._instrument("explain_logs", {"adapter": adapter.identifier}):
             normalized = self._parse_with_adapter(adapter, raw_text)
             return self._build_explanation(normalized)
+
+    def generate_report(
+        self,
+        *,
+        adapter_key: str | None,
+        raw_text: str,
+        redact: bool,
+    ) -> ReportBundle:
+        """Create a comprehensive report bundle for downstream presentation."""
+
+        adapter = self._resolve_adapter(adapter_key)
+        with self._instrument("generate_report", {"adapter": adapter.identifier}):
+            normalized = self._parse_with_adapter(adapter, raw_text)
+            summary = adapter.summarize(normalized)
+            explanation = self._build_explanation(normalized)
+        guardrails = self.guardrails_snapshot()
+        redacted_text = None
+        if redact:
+            summary = self._redactor.redact(summary)
+            explanation = self._redactor.redact(explanation)
+            redacted_text = self._redactor.redact(raw_text)
+        return ReportBundle(
+            normalized=normalized,
+            summary=summary,
+            explanation=explanation,
+            guardrails=guardrails,
+            collected_text=raw_text,
+            redacted_text=redacted_text,
+        )
 
     def guardrails_snapshot(self) -> dict[str, object]:
         """Expose sandbox configuration for inspection.

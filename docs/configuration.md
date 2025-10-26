@@ -37,6 +37,10 @@ The configuration file accepts the keys below. All keys are optional.
   an ephemeral port.
 - `log_level` (string): Minimum structured log level (e.g. `INFO`, `DEBUG`).
 - `log_format` (string): Structured log format, either `text` or `json`.
+- `report_format` (string): Default formatter for the `report` command (`json`
+  or `markdown`).
+- `report_redact` (boolean): When `true`, redacts textual fields in generated
+  reports by default.
 - `extensions` (array or string): Dotted module paths for extensions to load.
   Strings accept separators in the same fashion as `allowed_paths`.
 
@@ -57,6 +61,8 @@ telemetry_host = "0.0.0.0"
 telemetry_port = 9464
 log_level = "INFO"
 log_format = "json"
+report_format = "json"
+report_redact = false
 extensions = ["zscripts.extensions.examples.plugin_echo"]
 ```
 
@@ -73,6 +79,8 @@ extensions = ["zscripts.extensions.examples.plugin_echo"]
   "telemetry_port": 9464,
   "log_level": "INFO",
   "log_format": "json",
+  "report_format": "json",
+  "report_redact": false,
   "extensions": ["zscripts.extensions.examples.plugin_echo"]
 }
 ```
@@ -93,6 +101,8 @@ Repeat `--set` for each key you want to change.
 - `--enable-telemetry`: starts the telemetry server for the current command.
 - `--telemetry-host`, `--telemetry-port`: override host/port at runtime.
 - `--log-level`, `--log-format`: adjust logging without editing configuration.
+- `--redact/--no-redact`: override the reporting redaction toggle for a single
+  invocation.
 - `--adapter`: override the default adapter for the command being executed.
 - `--dangerous`: temporarily disable guardrails.
 

@@ -1,102 +1,104 @@
 # Steward's Audit Report — Stage 4
 
-This report records the Stage 4 stewardship review of the zscripts toolkit, capturing
-measured quality signals, simplifications, and forward-looking actions that keep the
+This report captures the Stage 4 stewardship audit of the zscripts toolkit. It records
+empirical quality metrics, code simplifications, and the roadmap items that will keep the
 project observable, teachable, and automation-ready.
 
 ## System Health Metrics
 
 | Metric | Value | Notes |
 | --- | --- | --- |
-| Test coverage | 100% of 1,254 executable lines (via `python -m trace --count`) | Derived from deterministic `.cover` artifacts under `trace_cov/`; offline-friendly fallback while proxy blocks `coverage` and `pytest-cov` downloads. |
-| Average cyclomatic complexity | 3.12 (module average across 18 analyzed files) | Highest hotspots: `configuration._apply_config_values` (CC 31), `cli.main` (CC 21); generated via custom AST walker (`python complexity_probe.py`). |
-| Dependency cohesion ratio | 0.40 internal / 0.60 external imports | Computed by scanning import statements across `zscripts/`; internal dependency depth averages 2.74 package segments. |
-| Build footprint | 0.46s bytecode compilation (`time python -m compileall zscripts`); 416 KiB package size (`du -sh zscripts`) | Serves as proxy for sdists/wheels because `python -m build` cannot run offline. |
-| CLI execution latency | Single instrumentation path; metrics recorded once per invocation | Consolidated telemetry updates reduce overhead to one histogram/counter write per command. |
+| Test coverage | 89.67% statements across 1,606 lines (`coverage run -m pytest`) | Sourced from `reports/coverage.json`; quality gate threshold remains 85%. |
+| Average cyclomatic complexity | 2.70 (5-module average hotspot max of 19) | Computed by `scripts/collect_quality_metrics.py` using an internal AST walker; highest hotspots are `zscripts/configuration.py` (max 19) and `zscripts/application/report_formatters.py` (max 13). |
+| Dependency cohesion ratio | 0.39 internal / 0.61 external imports | Derived from the same metrics script by scanning import graphs under `zscripts/`; internal dependency depth averages 2.76 segments. |
+| Build footprint | 0.055s bytecode compilation; 291 KiB package | `compileall` timing is captured via `scripts/collect_quality_metrics.py`; package size measured by summing tracked files. |
+| CLI guardrails latency | 0.344s for `python cli.py guardrails` | Measured with `time.perf_counter()` to confirm telemetry instrumentation overhead is bounded. |
 
 ## Key Findings & Recommendations
 
-1. **Telemetry Simplification** — Consolidating CLI metrics inside a single `finally`
-   block keeps spans, logging, and counter updates synchronized, eliminating repeated
-   counter instantiation and clarifying where automation hooks belong.
-2. **Offline Tooling Strategy** — Retain the documented `trace`-based coverage recipe so
-   contributors behind strict proxies can still produce verifiable reports; include
-   clean-up instructions for `trace_cov/` in contributor docs.
-3. **Complexity Hotspots** — Address the 20+ CC functions in `zscripts/configuration.py`
-   and `zscripts/cli.py` by splitting coercion helpers and command dispatchers into
-   smaller composable units during future hardening work.
+1. **Deterministic Metrics Pipeline** — Automating quality collection with
+   `scripts/collect_quality_metrics.py` replaces the undocumented trace workflow and
+   gives agents a single command to refresh coverage, complexity, dependency, and build
+   data.
+2. **CLI Label Simplification** — `_resolve_command_labels` centralises command naming and
+   label generation, eliminating ad hoc string rebuilding and making telemetry outputs
+   easier to correlate across commands.
+3. **Coverage Hotspots** — The CLI (`65%`) and adapter orchestration code remain the
+   lowest-covered modules. Adding focused CLI handler tests and sandbox mocks should be a
+   priority for the next iteration to push coverage above 92% overall.
 
 ## Simplification Log
 
-- Streamlined CLI error handling to set the command status exactly once while emitting
-  telemetry metrics in a single `finally` clause; exceptions automatically bubble with
-  correlation-aware logging.
-- Tagged the primary CLI execution point with `# agent-entrypoint` and the metrics
-  helper with `# agent-safe-task` to clarify where agents may extend automation without
-  affecting control flow.
-- Adopted built-in tracing coverage to avoid optional dependency churn and documented
-  the workaround in the ExecPlan and this report.
+- Added `_resolve_command_labels` so `_execute_command` no longer mutates label dictionaries
+  in-place, reducing branching and clarifying the metrics payload used in the finally block.
+- Introduced `scripts/collect_quality_metrics.py` to consolidate coverage, complexity,
+  dependency, and build-time calculations without external tooling such as `radon` (blocked
+  behind the network proxy).
+- Normalised documentation to remove references to the non-existent
+  `python cli.py telemetry health` command and to direct contributors toward the new metrics
+  workflow.
 
 ## Documentation & Automation Updates
 
-- README keeps the telemetry narrative accurate and already references the `trace`
-  coverage workflow; no further changes were required beyond cross-checking the
-  instructions.
-- Added `STEWARDS_REPORT.md` (this document) as the canonical health ledger and created
-  `AUTOMATION_ROLES.md` to describe safe agent responsibilities and triggers.
-- Recorded proxy limitations and coverage decisions inside `EXEC_PLAN_STEWARD_AUDIT.md`
-  to preserve institutional knowledge for offline environments.
+- `README.md` now advertises the metrics script and clarifies when to fall back to the
+  built-in trace coverage approach.
+- `AUTOMATION.md` and `AUTOMATION_ROLES.md` instruct agents to run both
+  `scripts/dev_start.py` and `scripts/collect_quality_metrics.py` when preparing reports.
+- `docs/operations.md` documents the correct HTTP call for retrieving live health data.
 
 ## Forward Roadmap
 
 ### Short Term (1–2 iterations)
 
-1. Refactor `zscripts.configuration._apply_config_values` to reduce branching and make
-   coercion helpers individually testable.
-2. Extract CLI command handlers into discrete modules so feature additions only touch
-   isolated files, improving cyclomatic complexity and readability.
-3. Automate trace coverage cleanup by adding a `make coverage-trace` target that also
-   prunes `trace_cov/` artifacts.
+1. Write integration tests for CLI subcommands that currently exercise only success paths
+   so coverage exceeds 92%.
+2. Extract configuration coercion helpers from `zscripts/configuration.py` to drop its
+   maximum cyclomatic complexity below 12.
+3. Add dependency graph visualisation to `scripts/collect_quality_metrics.py` (e.g., DOT
+   export) for faster hotspot identification.
 
 ### Mid Term (quarterly)
 
-1. Introduce a plug-in telemetry exporter interface (e.g., OpenTelemetry) that can be
-   toggled via configuration while retaining the existing Prometheus path.
-2. Provide containerized dev environment definitions (e.g., `devcontainer.json`) so
-   remote agents and humans share identical tooling.
-3. Build targeted scenario tests for adapters with large sample logs to validate
-   performance and normalization fidelity.
+1. Provide containerised development environments (`devcontainer.json`) so remote agents
+   and humans share identical tooling (and coverage wheels).
+2. Implement a plug-in interface for telemetry exporters (OpenTelemetry vs. Prometheus) to
+   future-proof observability targets.
+3. Extend adapter tests with fixture-driven performance cases to watch for latency
+   regressions as new ecosystems are added.
 
 ### Long Term (semiannual)
 
-1. Enable multi-tenant operation by isolating adapter registries per execution context
-   and enforcing quota-aware sandbox pools.
-2. Launch a policy-driven automation scheduler that can run periodic doc refreshes or
-   dependency audits using the `# agent-entrypoint` tags as injection markers.
-3. Explore AI-assisted log remediation flows that propose redaction rules or guardrail
-   adjustments automatically.
+1. Add multi-tenant execution contexts that isolate extension registries and enforce
+   workload quotas per tenant.
+2. Launch an automation scheduler that uses `# agent-entrypoint` tags as orchestration
+   hooks for recurring compliance checks.
+3. Explore AI-assisted remediation flows that recommend redaction rules based on observed
+   guardrail violations.
 
 ## Emerging Risks
 
-- **Dependency Staleness** — Without network egress, manual mirroring of development
-  dependencies is necessary; missing tooling can slow audits.
-- **Configuration Complexity** — High cyclomatic complexity in configuration loaders
-  increases the risk of regression when adding new settings.
-- **Observability Drift** — Metrics naming needs regular review to prevent divergence
-  from documentation and dashboards as new commands or adapters join.
+- **Dependency Gaps** — The offline environment still blocks fetching new tooling (e.g.,
+  `radon`), so future audits must keep the internal metrics script up to date.
+- **Coverage Blind Spots** — CLI command branching remains sparsely tested; regression risk
+  increases as more adapters integrate with the CLI entry point.
+- **Configuration Complexity** — Max complexity of 19 in `zscripts/configuration.py`
+  signals a refactor should remain on the roadmap.
 
 ## Potential Agent Roles
 
-See `AUTOMATION_ROLES.md` for detailed responsibilities. Recommended initial agents:
+Recommended automation roles are documented in `AUTOMATION_ROLES.md`. Suggested
+priorities:
 
-- **Test Maintainer** — Runs `pytest` and trace-based coverage, files failure reports.
-- **Doc Updater** — Refreshes READMEs and reports when instrumentation or workflows
-  change.
-- **Perf Optimizer** — Tracks CLI latency metrics and suggests caching/backpressure
-  tweaks for heavy adapters.
+- **Test Maintainer** — Runs `pytest`, the quality gate, and the metrics script; tracks
+  coverage deltas.
+- **Doc Steward** — Keeps README, steward report, and operations guides aligned with
+  observed behaviour.
+- **Observability Analyst** — Monitors CLI telemetry labels and ensures `_resolve_command_labels`
+  remains in sync with documentation.
 
 ## Outcomes & Next Steps
 
-The toolkit meets Stage 4 expectations with green tests, reproducible metrics, and a
-clear automation narrative. Future cycles should focus on taming configuration
-complexity and expanding observability exporters while preserving the lean CLI surface.
+The toolkit satisfies Stage 4 requirements with reproducible metrics, simplified CLI
+telemetry orchestration, and updated documentation for automation agents. Future cycles
+should prioritise higher CLI coverage and reduced configuration complexity while building on
+the deterministic metrics workflow added in this audit.

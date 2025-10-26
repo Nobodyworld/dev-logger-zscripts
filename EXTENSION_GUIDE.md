@@ -20,7 +20,10 @@ extension that registers a CLI command and exports `get_extension()`.
 
 Edit the generated module:
 
-- Update `name` and `description` to describe your extension.
+- Update `name`, `description`, and `version` to describe your extension.
+- Declare `capabilities` (e.g. `("cli", "ingest")`) so automation can route
+  traffic based on supported behaviours. Optionally set `config_keys` to list
+  configuration entries your extension honours.
 - Implement `register_cli` to add CLI options or subcommands using the provided
   `ExtensionContext`. The context exposes the adapter registry, telemetry
   manager, instrumentation manager, and active configuration.
@@ -28,6 +31,8 @@ Edit the generated module:
   work. Use `context.instrumentation.operation(...)` to record spans, metrics,
   and correlation IDs for long-running operations. Structured logs written via
   `context.logger` automatically include the current correlation ID.
+- Optionally implement `after_service_ready` and inspect `self.manifest` to emit
+  metadata once the application service is initialised.
 
 ## 3. Enable the extension
 
@@ -49,8 +54,12 @@ python cli.py --set extensions=zscripts.extensions.demo_adapter extensions
 List loaded extensions to confirm the new module is active:
 
 ```bash
-python cli.py extensions
+python cli.py extensions --output-format json
 ```
+
+The manifest output includes the module path, version, capabilities, and any
+declared configuration keys. Plain-text output remains available via
+`python cli.py extensions` for interactive inspection.
 
 Run the CLI command registered by your extension:
 
@@ -62,4 +71,6 @@ The plugin system loads extensions before parsing subcommands, so new commands
 and overrides are available immediately.
 
 Refer to `zscripts/extensions/examples/plugin_echo.py` for a minimal reference
-implementation.
+implementation that logs its manifest once the service is ready. The
+scaffolding template (`scripts/scaffold_extension.py`) now generates the
+manifest attributes automatically.

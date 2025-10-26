@@ -11,6 +11,7 @@ from zscripts import get_default_config
 from zscripts.extensions import scaffold_extension
 from zscripts.extensions.base import ExtensionContext
 from zscripts.extensions.examples.plugin_echo import EchoExtension
+from zscripts.extensions.manifest import build_manifest
 from zscripts.extensions.registry import ExtensionLoadError, load_extensions
 from zscripts.infrastructure.adapters import AdapterRegistry
 from zscripts.observability.instrumentation import InstrumentationManager
@@ -42,6 +43,10 @@ def test_load_extensions_records_metrics() -> None:
     assert samples
     _, value = samples[0]
     assert value == 1
+    assert "echo" in context.manifests
+    manifest = context.manifests["echo"]
+    assert manifest.module == "zscripts.extensions.examples.plugin_echo"
+    assert "cli" in manifest.capabilities
 
 
 def test_load_extensions_errors_on_missing_module() -> None:
@@ -69,6 +74,13 @@ def test_toolkit_extension_context_accessor() -> None:
     subparsers = parser.add_subparsers(dest="cmd")
     extension.register_cli(subparsers, context)
     assert extension.context is context
+    context.manifests[extension.name] = build_manifest(
+        extension=extension,
+        module=extension.__class__.__module__,
+        entrypoint=f"{extension.__class__.__module__}:{extension.__class__.__name__}",
+        default_name=extension.name,
+    )
+    assert extension.manifest is not None
 
 
 def test_scaffold_extension_generates_template(tmp_path: Path) -> None:

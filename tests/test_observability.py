@@ -72,6 +72,9 @@ def test_health_server_serves_health_and_metrics() -> None:
         registry.counter("test_metric", "Example").inc(labels={})
         metrics = request.urlopen(f"http://127.0.0.1:{port}/metrics", timeout=2).read()
         assert b"test_metric" in metrics
+        assert b"zscripts_health_http_requests_total" in metrics
+        assert b"endpoint=\"healthz\"" in metrics
+        assert b"zscripts_health_http_request_duration_seconds_bucket" in metrics
     finally:
         server.stop()
 

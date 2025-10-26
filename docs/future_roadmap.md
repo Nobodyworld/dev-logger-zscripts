@@ -21,6 +21,8 @@ extensions are in place.
   embedded HTTP server.
 - **Extension registry**: publish an index of vetted extensions, including
   metadata (version, compatibility) to allow dynamic discovery.
+- **Manifest API**: promote the runtime manifest registry to a REST endpoint so
+  remote agents can query capabilities without invoking the CLI.
 
 ## Deployment
 
@@ -42,6 +44,9 @@ extensions are in place.
   stored under `docs/security/` for dynamic updates without code changes.
 - **Guardrail reporting**: extend `scripts/agent_guard.py` to emit JSON/Prometheus
   output summarising failures per guard, enabling dashboards and auto-remediation.
+- **Automated probes**: expand `scripts/ops_status.py` into a resilient service
+  that can fan-out health checks across multiple toolkit deployments and feed
+  alerting systems.
 
 Each milestone should keep observability first-class: new features must emit
 structured logs, telemetry, and actionable health signals.

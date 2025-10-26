@@ -8,6 +8,7 @@ from types import ModuleType
 from typing import cast
 
 from zscripts.extensions.base import ExtensionContext, ToolkitExtensionProtocol
+from zscripts.extensions.manifest import ExtensionManifest, build_manifest
 from zscripts.observability.logging import get_logger
 
 
@@ -40,9 +41,11 @@ def load_extensions(
             if callable(factory):
                 extension_factory = cast(Callable[[], ToolkitExtensionProtocol], factory)
                 extension = extension_factory()
+                entrypoint = f"{module_path}:get_extension"
             elif hasattr(module, "Extension"):
                 extension_cls = cast(type[ToolkitExtensionProtocol], module.Extension)
                 extension = extension_cls()
+                entrypoint = f"{module_path}:Extension"
             else:
                 raise ExtensionLoadError(
                     f"Extension module '{module_path}' must expose get_extension() or Extension class."
@@ -51,12 +54,42 @@ def load_extensions(
                 "extension.instantiate", extra={"extension": getattr(extension, "name", module_path)}
             )
             extension.on_load(context)
+            manifest = _register_manifest(
+                context=context,
+                extension=extension,
+                module=module_path,
+                entrypoint=entrypoint,
+            )
+            logger.debug(
+                "extension.manifest.registered",
+                extra={
+                    "extension": manifest.name,
+                    "module": manifest.module,
+                },
+            )
             loaded.append(extension)
     instrumentation.gauge(
         "zscripts_extensions_active",
         "Number of active toolkit extensions.",
     ).set(len(loaded), labels={"loader": "runtime"})
     return loaded
+
+
+def _register_manifest(
+    *,
+    context: ExtensionContext,
+    extension: ToolkitExtensionProtocol,
+    module: str,
+    entrypoint: str,
+) -> ExtensionManifest:
+    manifest = build_manifest(
+        extension=extension,
+        module=module,
+        entrypoint=entrypoint,
+        default_name=module.rsplit(".", maxsplit=1)[-1],
+    )
+    context.manifests[manifest.name] = manifest
+    return manifest
 
 
 __all__ = ["load_extensions", "ExtensionLoadError"]

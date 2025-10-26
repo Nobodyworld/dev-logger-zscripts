@@ -60,6 +60,13 @@ def main() -> None:
         command = step.command
         if step.name == "tests" and not coverage_path:
             command = (sys.executable, "-m", "pytest")
+        executable = command[0]
+        if shutil.which(executable) is None and not Path(executable).exists():
+            summary[step.name] = {
+                "status": "skipped",
+                "reason": f"{executable}-missing",
+            }
+            continue
         start = time.perf_counter()
         result = _run_command(command)
         duration = time.perf_counter() - start

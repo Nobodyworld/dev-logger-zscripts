@@ -7,6 +7,8 @@
   elevating overall coverage to ~90% with artifacts in `reports/`.
 - Observability stack (`zscripts/observability`) with structured logging,
   Prometheus-compatible metrics, tracing spans, and a background health server.
+- Health server metrics now track HTTP request counts, latency, and inflight
+  probes via `zscripts_health_http_requests_total` and related series.
 - CLI instrumentation emits correlation IDs and dedicated metrics
   (`zscripts_cli_invocations_total`, `zscripts_cli_duration_seconds`) for every
   command, and the telemetry server now shuts down cleanly after execution.
@@ -15,9 +17,14 @@
   enumerate loaded plugins.
 - Extension framework under `zscripts/extensions` with `ExtensionContext`,
   loader utilities, and a reference `plugin_echo` implementation.
+- Runtime manifest registry (`zscripts/extensions/manifest.py`) capturing
+  extension metadata surfaced via `python cli.py extensions --output-format json`
+  and integrated into scaffolding templates.
 - Developer tooling scripts: `scripts/dev_start.py` (quality gate with coverage
   threshold enforcement) and `scripts/scaffold_extension.py` (extension template
   generator).
+- Operational probe script `scripts/ops_status.py` for agent-friendly health
+  checks with JSON output and failure-aware exit codes.
 - Documentation suite covering the new architecture overview, extension guide,
   automation playbook, incident response runbook, and roadmap.
 - GitHub workflow (`ci.yml`) and Dependabot configuration to keep dependencies
@@ -43,11 +50,16 @@
 - `cli.py` now pre-parses global options, loads extensions before command
   parsing, and passes a `TelemetryManager` into `ToolkitService` for automatic
   span recording.
+- Developer quality gate (`scripts/dev_start.py`) gracefully skips missing
+  security scanners and records the reason instead of failing the pipeline.
 - CLI telemetry instrumentation records status and duration exactly once via a
   unified `finally` block and tags agent automation hooks around command
   dispatch.
-- `ToolkitService` wraps public methods in telemetry spans, emitting counters and
-  latency histograms for collect/parse/summarise/guardrail operations.
+- `ToolkitService` now wraps public methods in telemetry operations, emitting
+  metrics via a dedicated instrumentation manager while still producing spans
+  for collect/parse/summarise/guardrail operations.
+- The `extensions` CLI command accepts `--output-format json` to expose manifest
+  metadata (module, version, capabilities) for automation tooling.
 - Configuration loader accepts new telemetry/logging/extension keys while
   preserving strict validation semantics.
 - ToolkitService now caches sandbox runners and validates sandbox command sequences before execution.
@@ -66,6 +78,8 @@
 - Prevent empty `--command` sequences from reaching the sandbox, ensuring actionable validation errors reach users.
 - Lint violations throughout the sample assets and wrappers detected by Ruff.
 - Consolidated dependency list with pinned tooling for reproducible local runs.
+- Report severity now honors warning-only statuses and exercises fail-on
+  thresholds via focused unit tests, preventing false negatives in CI gating.
 - Config loader now warns on duplicate entries and rejects paths that escape the configured log root.
 - Consolidate/tree commands validate output destinations up front, yielding actionable errors on permission issues.
 - Configuration flags pointing to missing files or directories now raise deterministic `ConfigurationError` messages before CLI dispatch.

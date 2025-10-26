@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import argparse
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
 from zscripts.config import ToolkitConfig
 from zscripts.domain.interfaces import AdapterRegistryProtocol
+from zscripts.extensions.manifest import ExtensionManifest
 from zscripts.observability.instrumentation import InstrumentationManager
 from zscripts.observability.telemetry import TelemetryManager
 
@@ -25,6 +26,7 @@ class ExtensionContext:
     telemetry: TelemetryManager | None
     instrumentation: InstrumentationManager
     logger: logging.Logger
+    manifests: dict[str, ExtensionManifest] = field(default_factory=dict)
 
 
 class ToolkitExtensionProtocol(Protocol):
@@ -63,6 +65,14 @@ class ToolkitExtension:
         if self._context is None:
             raise RuntimeError("Extension context has not been initialised yet.")
         return self._context
+
+    @property
+    def manifest(self) -> ExtensionManifest | None:
+        """Return the manifest entry registered for this extension, if any."""
+
+        if self._context is None:
+            return None
+        return self._context.manifests.get(self.name)
 
     def on_load(self, context: ExtensionContext) -> None:  # noqa: D401 - default no-op
         self._context = context

@@ -8,9 +8,13 @@ Use this playbook to diagnose issues when zscripts is embedded in automation.
    - Expected response: `{"status": "ok", "version": "...", ...}`
    - If unavailable, restart the CLI with `--enable-telemetry` and verify the
      port is not blocked by host firewalls.
+   - For automation, run `python scripts/ops_status.py --url http://<host>:<port>`
+     to receive a JSON summary and exit code signalling degraded status.
 2. Scrape metrics: `curl http://<host>:<port>/metrics`
    - Check `zscripts_requests_total` (operation + status labels) and
      `zscripts_request_duration_seconds` for latency spikes.
+   - Inspect `zscripts_health_http_requests_total{endpoint="healthz"}` to see
+     whether probes themselves are failing.
 
 ## 2. Inspect Logs
 
@@ -22,9 +26,11 @@ Use this playbook to diagnose issues when zscripts is embedded in automation.
 
 ## 3. Validate Extensions
 
-- List loaded extensions: `python cli.py extensions`
+- List loaded extensions: `python cli.py extensions --output-format json`
   - Missing extensions typically indicate configuration drift. Verify the
     `extensions` array in the active config and ensure modules import correctly.
+  - Review manifest metadata (`capabilities`, `version`) to confirm the loaded
+    module matches expectations.
 - For extension-specific commands, wrap execution in telemetry spans:
   `context.telemetry.span("ext.<name>")` to monitor failures.
 

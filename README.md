@@ -90,10 +90,12 @@ redact_patterns = ["(?i)password=([A-Za-z0-9]+)"]
 examples_path = "./custom_examples"
 report_format = "json"
 report_redact = false
+report_fail_on = "never"
 ```
 
 Set `report_format` to `"markdown"` to change the default renderer and toggle `report_redact`
-when reports should automatically mask textual fields.
+when reports should automatically mask textual fields. Use `report_fail_on` to control
+when the `report` command exits non-zero (`"never"`, `"warnings"`, or `"errors"`).
 
 Apply the configuration when invoking the CLI and layer additional overrides
 using `--set` arguments:
@@ -129,10 +131,12 @@ python cli.py summarize --input examples/python/sample.log
 ```bash
 python cli.py report --input examples/python/sample.log --format json --output report.json
 python cli.py report --input examples/python/sample.log --format markdown
+python cli.py report --input examples/python/sample.log --fail-on errors
 ```
 
-Reports include normalized log data, summaries, explanations, and guardrail metadata. Use
-`--redact/--no-redact` to control redaction per invocation or configure defaults globally.
+Reports include normalized log data, summaries, explanations, guardrail metadata, and an
+overall severity flag. Use `--redact/--no-redact` to control redaction per invocation,
+`--format` to choose JSON or Markdown, and `--fail-on` to enforce CI-friendly exit codes.
 
 ### Inspect guardrails and available examples
 
@@ -156,11 +160,14 @@ python cli.py --enable-telemetry --telemetry-port 9100 guardrails
   200/503 semantics suitable for probes.
 - `/metrics` exposes Prometheus-formatted counters, histograms, and gauges (e.g.
   `zscripts_operations_total`, `zscripts_cli_invocations_total`,
-  `zscripts_cli_duration_seconds`, and `zscripts_extensions_active`).
+  `zscripts_cli_duration_seconds`, `zscripts_extensions_active`, and
+  `zscripts_health_http_requests_total`).
 - Use `--log-format json` and `--log-level DEBUG` to tune structured logging for
   automated ingestion.
 - Logs generated outside of adapter spans inherit the per-invocation correlation ID,
   so cross-component traces can be stitched together from log aggregation systems.
+- For automation, `python scripts/ops_status.py --url http://127.0.0.1:9464` probes
+  the health endpoint and writes a JSON summary alongside meaningful exit codes.
 
 ## CLI Reference
 
@@ -173,7 +180,7 @@ python cli.py --enable-telemetry --telemetry-port 9100 guardrails
 | `guardrails` | Display sandbox configuration and whether `--dangerous` is set. |
 | `redact` | Mask secrets using configurable regex patterns. |
 | `examples` | List bundled example log files per adapter. |
-| `extensions` | Manage extensions (default lists active modules; use `extensions scaffold <name>` to generate templates). |
+| `extensions` | Manage extensions (list active modules, `--output-format json` for manifests, `extensions scaffold <name>` to generate templates). |
 | `report` | Generate JSON or Markdown reports combining normalized data and guardrails. |
 
 ## Package Layout
@@ -204,9 +211,10 @@ python -m trace --count --coverdir trace_cov --module pytest
 
 CI runs linting, type checks, and tests automatically.
 
-`scripts/collect_quality_metrics.py` summarises coverage, complexity, and dependency metrics into `reports/metrics.json`. When
-network proxies block the `coverage` wheel, fall back to the built-in trace invocation, which emits per-module coverage
-statistics and persists the curated subset to `reports/coverage_summary.txt`.
+`scripts/collect_quality_metrics.py` summarises coverage, complexity, dependency ratios, build footprint, and a measured latency
+for `python cli.py guardrails` into `reports/metrics.json`. When network proxies block the `coverage` wheel, fall back to the
+built-in trace invocation, which emits per-module coverage statistics and persists the curated subset to
+`reports/coverage_summary.txt`.
 
 ## Further Reading
 

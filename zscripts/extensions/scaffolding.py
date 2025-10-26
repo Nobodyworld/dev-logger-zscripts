@@ -24,6 +24,9 @@ class ${class_name}(ToolkitExtension):
 
     name = \"${name}\"
     description = \"Describe what this extension does\"
+    version = \"0.1.0\"
+    capabilities = (\"cli\",)
+    config_keys: tuple[str, ...] = ()
 
     def register_cli(
         self,
@@ -51,6 +54,18 @@ class ${class_name}(ToolkitExtension):
                 extra={\"extension\": self.name, \"payload\": payload},
             )
             print(payload)
+
+    def after_service_ready(self, service: Any, context: ExtensionContext) -> None:
+        \"\"\"Observe the manifest once the service is initialised.\"\"\"
+
+        manifest = self.manifest
+        context.logger.debug(
+            \"extension.${name}.ready\",
+            extra={
+                \"extension\": self.name,
+                \"manifest\": manifest.to_dict() if manifest else None,
+            },
+        )
 
 
 def get_extension() -> ${class_name}:

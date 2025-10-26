@@ -38,6 +38,24 @@ class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescrip
 
 _CLI_LOGGER = get_logger("cli")
 
+_SEVERITY_ORDER: dict[str, int] = {"ok": 0, "warning": 1, "error": 2}
+
+
+def _should_fail(policy: str, severity: str) -> bool:
+    """Return True when ``severity`` meets or exceeds the ``policy`` threshold."""
+
+    normalized_policy = policy.lower()
+    normalized_severity = severity.lower()
+    rank = _SEVERITY_ORDER.get(normalized_severity, _SEVERITY_ORDER["error"])
+    if normalized_policy == "never":
+        return False
+    if normalized_policy == "warnings":
+        return rank >= _SEVERITY_ORDER["warning"]
+    if normalized_policy == "errors":
+        return rank >= _SEVERITY_ORDER["error"]
+    # Unknown policy values are guarded earlier, but default to failure for safety.
+    return True
+
 
 @dataclass(slots=True)
 class _CliRuntime:
@@ -122,7 +140,7 @@ def main(argv: list[str] | None = None) -> None:
         telemetry.stop()
 
 
-def _build_parser(
+def _build_parser(  # noqa: PLR0915 - parser assembly is intentionally verbose
     adapter_choices: Sequence[str],
     extensions: Sequence[object],
     extension_context: ExtensionContext,
@@ -198,14 +216,27 @@ def _build_parser(
 
     extensions_parser = subparsers.add_parser("extensions", help="Manage extensions")
     extensions_parser.add_argument("--output", help="Destination for the extension list")
+    extensions_parser.add_argument(
+        "--output-format",
+        dest="output_format",
+        choices=("table", "json"),
+        default="table",
+        help="Format for listing extension metadata.",
+    )
     extensions_parser.set_defaults(func=_handle_extensions_list)
     extensions_subparsers = extensions_parser.add_subparsers(
         dest="extensions_subcommand",
         required=False,
     )
-    extensions_subparsers.add_parser("list", help="List loaded extensions").set_defaults(
-        func=_handle_extensions_list
+    list_parser = extensions_subparsers.add_parser("list", help="List loaded extensions")
+    list_parser.add_argument(
+        "--output-format",
+        dest="output_format_override",
+        choices=("table", "json"),
+        default=None,
+        help="Override the list output format (defaults to the parent command value).",
     )
+    list_parser.set_defaults(func=_handle_extensions_list)
     scaffold_parser = extensions_subparsers.add_parser(
         "scaffold",
         help="Generate a starter extension module.",
@@ -233,6 +264,12 @@ def _build_parser(
         action=argparse.BooleanOptionalAction,
         default=None,
         help="Enable or disable redaction of textual fields (defaults to configuration).",
+    )
+    report_parser.add_argument(
+        "--fail-on",
+        dest="report_fail_on",
+        choices=("never", "warnings", "errors"),
+        help="Exit with status 1 when severity meets or exceeds this threshold.",
     )
     report_parser.set_defaults(func=_handle_report)
 
@@ -364,14 +401,56 @@ def _handle_examples(args: argparse.Namespace, service: ToolkitService) -> None:
 
 def _handle_extensions_list(args: argparse.Namespace, service: ToolkitService) -> None:
     loaded = getattr(args, "extensions_loaded", [])
+    manifests = getattr(args, "extensions_manifest", {})
+    output_format = (
+        getattr(args, "output_format_override", None)
+        or getattr(args, "output_format", "table")
+    )
     if not loaded:
-        payload = "No extensions configured."
+        payload = "[]" if output_format == "json" else "No extensions configured."
+    elif output_format == "json":
+        entries = []
+        for extension in loaded:
+            extension_name = getattr(extension, "name", extension.__class__.__name__)
+            manifest = manifests.get(extension_name)
+            if manifest is not None:
+                entries.append(manifest.to_dict())
+            else:
+                entries.append(
+                    {
+                        "name": extension_name,
+                        "module": extension.__class__.__module__,
+                        "description": getattr(extension, "description", ""),
+                        "entrypoint": f"{extension.__class__.__module__}:{extension.__class__.__name__}",
+                        "version": getattr(extension, "version", None),
+                        "capabilities": list(getattr(extension, "capabilities", ())),
+                        "config_keys": list(getattr(extension, "config_keys", ())),
+                    }
+                )
+        payload = json.dumps(entries, indent=2)
     else:
-        lines = [
-            f"{getattr(ext, 'name', ext.__class__.__name__)}: "
-            f"{getattr(ext, 'description', '').strip()}"
-            for ext in loaded
-        ]
+        lines = []
+        for extension in loaded:
+            extension_name = getattr(extension, "name", extension.__class__.__name__)
+            manifest = manifests.get(extension_name)
+            module_path = (
+                manifest.module if manifest is not None else extension.__class__.__module__
+            )
+            description = (
+                manifest.description
+                if manifest is not None and manifest.description
+                else getattr(extension, "description", "").strip()
+            )
+            version = (
+                manifest.version
+                if manifest is not None
+                else getattr(extension, "version", None)
+            )
+            suffix = f" (v{version})" if version else ""
+            lines.append(
+                f"{extension_name}{suffix} [{module_path}]: "
+                f"{description or 'No description provided.'}"
+            )
         payload = "\n".join(lines)
     _write_output(payload, getattr(args, "output", None))
 
@@ -403,6 +482,13 @@ def _handle_report(args: argparse.Namespace, service: ToolkitService) -> None:
         _fail(str(exc))
     payload = formatter(bundle)
     _write_output(payload, getattr(args, "output", None))
+    policy = getattr(args, "resolved_report_fail_on", "never")
+    if _should_fail(policy, bundle.severity):
+        _CLI_LOGGER.info(
+            "cli.report.failure_policy_triggered",
+            extra={"severity": bundle.severity, "policy": policy},
+        )
+        raise SystemExit(1)
 
 
 def _load_input(input_path: str | None) -> str:
@@ -460,6 +546,7 @@ def _prepare_and_execute(
         config.default_adapter = args.adapter
 
     args.extensions_loaded = extensions
+    args.extensions_manifest = dict(extension_context.manifests)
     service = build_toolkit_service(
         config,
         adapter_registry=registry,
@@ -478,6 +565,10 @@ def _prepare_and_execute(
         if args.report_redact is not None:
             config.report_redact = args.report_redact
         args.resolved_report_redact = config.report_redact
+    if hasattr(args, "report_fail_on"):
+        if args.report_fail_on:
+            config.report_fail_on = args.report_fail_on
+        args.resolved_report_fail_on = config.report_fail_on
 
     _execute_command(args, handler, service, runtime)
 

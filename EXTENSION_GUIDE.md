@@ -33,6 +33,10 @@ Edit the generated module:
   `context.logger` automatically include the current correlation ID.
 - Optionally implement `after_service_ready` and inspect `self.manifest` to emit
   metadata once the application service is initialised.
+- Register lifecycle hooks with `self.register_hook("service_ready", callback)`
+  to receive events emitted by the new `ExtensionHookRegistry`. Hook callbacks
+  are instrumented automatically and surfaced through diagnostics payloads so
+  operators can confirm which plugins respond to each lifecycle stage.
 
 ## 3. Enable the extension
 
@@ -70,7 +74,8 @@ python cli.py demo_adapter --message "hello"
 The plugin system loads extensions before parsing subcommands, so new commands
 and overrides are available immediately.
 
-Refer to `zscripts/extensions/examples/plugin_echo.py` for a minimal reference
-implementation that logs its manifest once the service is ready. The
-scaffolding template (`scripts/scaffold_extension.py`) now generates the
-manifest attributes automatically.
+Refer to `zscripts/extensions/examples/plugin_echo.py` for a minimal CLI
+integration and `zscripts/extensions/examples/plugin_metrics.py` for a hook-
+driven diagnostics example. The scaffolding template
+(`scripts/scaffold_extension.py`) now registers a `service_ready` hook and logs
+its manifest automatically so new plugins follow best practices out of the box.

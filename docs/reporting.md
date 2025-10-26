@@ -25,6 +25,12 @@ Key flags:
 - `--output`: Optional path for writing the rendered report. Without it the
   document is printed to STDOUT.
 
+When `--output` is provided the CLI prepares parent directories automatically
+and writes files atomically. Invalid destinations trigger descriptive errors (for
+example, "destination '<path>' is a directory" or "parent directory '<path>' is
+not writable") before any report content is emitted, ensuring previous
+artifacts remain intact.
+
 The command honours all global flags (`--config`, `--set`, `--adapter`,
 `--enable-telemetry`, etc.) and records telemetry spans/metrics under the
 `cli.report` namespace.

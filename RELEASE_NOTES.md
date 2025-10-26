@@ -1,6 +1,17 @@
 # Release Notes
 
 ## Highlights
+- Delivered a diagnostics experience that combines
+  `zscripts/observability/diagnostics.py`, the `python cli.py diagnostics`
+  command, and the `scripts/diagnostics_probe.py` automation helper to export
+  telemetry snapshots (with optional Prometheus metrics) for CI agents.
+- Wrapped extension loading with an `ExtensionManager` and hook registry so
+  plugins can register lifecycle callbacks while diagnostics report hook
+  coverage; refreshed scaffolding and shipped a `metrics_probe` reference
+  extension showcasing the pattern.
+- Hardened CLI output destination validation to require execute permissions,
+  exercised resolution/mkdir/cleanup failure scenarios via new tests, and
+  delivered coverage/performance artifacts for the helper module.
 - Added a full observability stack (structured logging, metrics, tracing, and a
   health server) surfaced through new CLI flags.
 - Hardened report severity evaluation so warning-only runs surface as warnings,
@@ -42,6 +53,10 @@
 - Automated quality gate now reports 88.5% line coverage in
   `reports/coverage.json` while documenting skipped security scans when Bandit
   is unavailable, improving CI diagnostics without blocking local workflows.
+- Stage 2 captured a helper-focused coverage snapshot in
+  `reports/coverage_stage2.txt` (100% for `zscripts/application/io_utils.py`)
+  and performance notes in `reports/performance_notes_stage2.md`, confirming no
+  measurable regression.
 
 ## Upgrade Notes
 - New configuration keys are available: `telemetry_enabled`, `telemetry_host`,

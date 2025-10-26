@@ -8,7 +8,7 @@ from types import ModuleType, SimpleNamespace
 import pytest
 
 from zscripts import get_default_config
-from zscripts.extensions import scaffold_extension
+from zscripts.extensions import ExtensionHookRegistry, scaffold_extension
 from zscripts.extensions.base import ExtensionContext
 from zscripts.extensions.examples.plugin_echo import EchoExtension
 from zscripts.extensions.manifest import build_manifest
@@ -22,19 +22,22 @@ from zscripts.observability.telemetry import TelemetryManager, TelemetrySettings
 def _make_context() -> ExtensionContext:
     telemetry = TelemetryManager(TelemetrySettings())
     instrumentation = InstrumentationManager(telemetry=telemetry, component="test")
+    hook_registry = ExtensionHookRegistry(instrumentation)
     return ExtensionContext(
         config=get_default_config(),
         adapter_registry=AdapterRegistry(),
         telemetry=telemetry,
         instrumentation=instrumentation,
         logger=get_logger("extensions.test"),
+        hook_registry=hook_registry,
     )
 
 
 def test_load_extensions_records_metrics() -> None:
     context = _make_context()
-    loaded = load_extensions(["zscripts.extensions.examples.plugin_echo"], context=context)
-    assert loaded and isinstance(loaded[0], EchoExtension)
+    manager = load_extensions(["zscripts.extensions.examples.plugin_echo"], context=context)
+    assert len(manager) == 1
+    assert isinstance(manager[0], EchoExtension)
     gauge = context.instrumentation.gauge(
         "zscripts_extensions_active",
         "Number of active toolkit extensions.",
@@ -81,6 +84,33 @@ def test_toolkit_extension_context_accessor() -> None:
         default_name=extension.name,
     )
     assert extension.manifest is not None
+
+
+def test_extension_hook_registry_records_callbacks() -> None:
+    context = _make_context()
+    extension = EchoExtension()
+    extension.on_load(context)
+
+    called: list[str] = []
+
+    def _callback(*args: object, **kwargs: object) -> None:
+        called.append("hooked")
+
+    extension.register_hook("service_ready", _callback)
+    manager = load_extensions([], context=context)
+    outcomes = manager.emit("service_ready")
+    assert outcomes == [None]
+    assert called == ["hooked"]
+
+
+def test_extension_manager_hook_summary() -> None:
+    context = _make_context()
+    extension = EchoExtension()
+    extension.on_load(context)
+    context.hook_registry.register("service_ready", lambda: None, extension=extension.name)
+    manager = load_extensions([], context=context)
+    summary = manager.hook_summary()
+    assert summary.get("service_ready") == 1
 
 
 def test_scaffold_extension_generates_template(tmp_path: Path) -> None:

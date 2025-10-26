@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 ### Added
+- Diagnostics pipeline featuring `zscripts/observability/diagnostics.py`, a
+  `python cli.py diagnostics` command, and the agent-friendly
+  `scripts/diagnostics_probe.py` helper for capturing telemetry snapshots and
+  Prometheus metrics on demand.
+- Extension hook registry and manager wrapping `load_extensions`, enabling
+  plugins to register lifecycle callbacks and exposing hook counts through
+  diagnostics payloads and documentation.
+- Reference `metrics_probe` extension plus scaffolding updates that demonstrate
+  hook registration and structured logging for future plugin authors.
+- Unit tests covering diagnostics helpers, CLI output formats, and hook
+  emission to preserve observability guarantees.
+- Stage 2 hardening artifacts for CLI output helpers, including
+  `EXEC_PLAN_STAGE2_OUTPUT_SAFETY_VALIDATION.md`,
+  `reports/coverage_stage2.txt`, and
+  `reports/performance_notes_stage2.md`.
 - Regression tests covering configuration validation edge cases, observability
   logging JSON formatting, and infrastructure adapters/sandbox wrappers,
   elevating overall coverage to ~90% with artifacts in `reports/`.
@@ -47,6 +62,9 @@
 - Tests covering output-path validation and agent metadata payloads.
 
 ### Changed
+- Output destination validation now requires execute permission for parent
+  directories and exercises resolution/mkdir/cleanup failure branches; helper
+  coverage increased to 100% with targeted unit tests.
 - `cli.py` now pre-parses global options, loads extensions before command
   parsing, and passes a `TelemetryManager` into `ToolkitService` for automatic
   span recording.

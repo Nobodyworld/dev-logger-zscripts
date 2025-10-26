@@ -8,9 +8,11 @@ and `# agent-entrypoint` / `# agent-safe-task` tags inside the codebase.
 
 ### Test Maintainer
 
-- **Responsibilities**: Execute `pytest` and trace-based coverage (`python -m trace --count --coverdir trace_cov --module pytest`).
+- **Responsibilities**: Execute `pytest`, run the coverage-enforced quality gate (`python scripts/dev_start.py`), and refresh
+  repository metrics via `python scripts/collect_quality_metrics.py --output reports/metrics.json`. When coverage wheels are
+  unavailable, fall back to `python -m trace --count --coverdir trace_cov --module pytest`.
 - **Entry Points**: CLI command dispatch in `zscripts/cli.py` (`# agent-entrypoint`) and metrics helper (`# agent-safe-task`).
-- **Guardrails**: Clean up `trace_cov/` artifacts after report generation; never bypass `_fail` error handling.
+- **Guardrails**: Clean up `trace_cov/` artifacts after fallback runs; never bypass `_fail` error handling.
 
 ### Documentation Steward
 

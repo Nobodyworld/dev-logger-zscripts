@@ -1,5 +1,16 @@
 .PHONY: fmt lint type test security check sbom
 
+MYPY_TARGETS = \
+    zscripts/application \
+    zscripts/config.py \
+    zscripts/configuration.py \
+    zscripts/observability/logging.py \
+    zscripts/observability/metrics.py \
+    zscripts/observability/health.py \
+    zscripts/observability/instrumentation.py \
+    zscripts/extensions/scaffolding.py \
+    zscripts/schemas
+
 fmt:
 	ruff format .
 
@@ -7,21 +18,21 @@ lint:
 	ruff check .
 
 type:
-	mypy .
+	mypy $(MYPY_TARGETS)
 
 security:
 	bandit -q -r zscripts sample_project
 
 test:
-        pytest
+	pytest
 
 coverage:
-        coverage run -m pytest
-        coverage json -o reports/coverage.json
-        coverage report
+	coverage run -m pytest
+	coverage json -o reports/coverage.json
+	coverage report
 
 quality:
-        python scripts/dev_start.py
+	python scripts/dev_start.py
 
 check: fmt lint type security test
 

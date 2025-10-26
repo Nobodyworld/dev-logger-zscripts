@@ -48,6 +48,52 @@ def test_cli_guardrails_outputs_settings() -> None:
     assert "dangerous_mode" in payload
 
 
+def test_cli_report_json_output() -> None:
+    result = _run_cli(
+        "report",
+        "--input",
+        str(Path("examples/python/sample.log")),
+        "--format",
+        "json",
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["normalized"]["tool"] == "pytest"
+    assert payload["redacted_text"] is None
+
+
+def test_cli_report_markdown_output() -> None:
+    result = _run_cli(
+        "report",
+        "--input",
+        str(Path("examples/python/sample.log")),
+        "--format",
+        "markdown",
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith("# pytest Report")
+
+
+def test_cli_report_respects_redact_toggle(tmp_path: Path) -> None:
+    config_path = tmp_path / "settings.toml"
+    config_path.write_text("report_redact = true\n", encoding="utf-8")
+
+    result = _run_cli(
+        "--config",
+        str(config_path),
+        "report",
+        "--input",
+        str(Path("examples/python/sample.log")),
+        "--format",
+        "json",
+        "--no-redact",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["redacted_text"] is None
+
+
 def test_cli_uses_configuration_file(tmp_path: Path) -> None:
     config_path = tmp_path / "settings.toml"
     config_path.write_text(
@@ -109,6 +155,24 @@ def test_cli_extensions_command_lists_loaded(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert "echo" in result.stdout
+
+
+def test_cli_extensions_scaffold_creates_file(tmp_path: Path) -> None:
+    target_dir = tmp_path / "extensions"
+    result = _run_cli(
+        "extensions",
+        "scaffold",
+        "demo_extension",
+        "--directory",
+        str(target_dir),
+    )
+
+    assert result.returncode == 0, result.stderr
+    module_path = target_dir / "demo_extension.py"
+    assert module_path.exists()
+    contents = module_path.read_text(encoding="utf-8")
+    assert "class DemoExtension" in contents
+    assert "context.instrumentation" in contents
 
 
 def test_cli_extension_command_executes(tmp_path: Path) -> None:

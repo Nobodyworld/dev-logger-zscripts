@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
+from typing import cast
 
 _CORRELATION_ID: ContextVar[str | None] = ContextVar("zscripts_correlation_id", default=None)
 
@@ -15,7 +16,8 @@ class _CorrelationFilter(logging.Filter):
     """Inject the current correlation ID into log records."""
 
     def filter(self, record: logging.LogRecord) -> bool:  # noqa: D401 - interface requirement
-        record.correlation_id = _CORRELATION_ID.get() or "-"
+        record_dict = cast(dict[str, object], record.__dict__)
+        record_dict["correlation_id"] = _CORRELATION_ID.get() or "-"
         return True
 
 
@@ -24,7 +26,7 @@ class _TextFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:  # noqa: D401 - override
         message = super().format(record)
-        correlation = record.correlation_id
+        correlation = cast(str, getattr(record, "correlation_id", "-"))
         if correlation and correlation != "-":
             return f"{message} [cid={correlation}]"
         return message
@@ -66,13 +68,14 @@ class _JsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": message,
         }
-        if record.correlation_id and record.correlation_id != "-":
-            payload["correlation_id"] = record.correlation_id
-        extras = {
-            key: value
-            for key, value in record.__dict__.items()
-            if key not in self._RESERVED and not key.startswith("_")
-        }
+        correlation = cast(str, getattr(record, "correlation_id", "-"))
+        if correlation and correlation != "-":
+            payload["correlation_id"] = correlation
+        extras: dict[str, object] = {}
+        for key, value in cast(Mapping[str, object], record.__dict__).items():
+            if key in self._RESERVED or key.startswith("_"):
+                continue
+            extras[key] = value
         if extras:
             payload["extra"] = extras
         return json.dumps(payload, ensure_ascii=False)
@@ -104,10 +107,10 @@ def _normalize_level(level: str | int) -> int:
     if isinstance(level, int):
         return level
     candidate = level.upper()
-    value = logging.getLevelName(candidate)
-    if isinstance(value, str):
+    level_value = cast(int | str, logging.getLevelName(candidate))
+    if isinstance(level_value, str):
         raise ValueError(f"Unknown log level: {level}")
-    return value
+    return level_value
 
 
 def get_logger(name: str) -> logging.Logger:

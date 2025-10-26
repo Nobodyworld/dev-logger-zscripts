@@ -10,6 +10,9 @@ extensions are in place.
   sessions.
 - **Adapter sandbox pooling**: add a worker pool to reuse sandbox processes and
   avoid repeated initialisation overhead when parsing large batches.
+- **Command queueing**: emit instrumentation events to a message bus (Redis,
+  NATS) so multiple CLI workers can scale horizontally while retaining
+  correlation IDs.
 
 ## Platform Integrations
 
@@ -26,6 +29,9 @@ extensions are in place.
   monitoring stacks such as Prometheus + Grafana.
 - **Release automation**: integrate semantic versioning with changelog
   generation and auto-tag releases once the quality gate passes on `main`.
+- **Autoscaling**: ship Helm charts or Terraform modules that deploy the
+  containerised toolkit behind load balancers and wire Prometheus scraping rules
+  to the readiness/liveness endpoints.
 
 ## Agent Safety
 
@@ -34,6 +40,8 @@ extensions are in place.
   commands.
 - **Redaction packs**: allow configuration to reference named redaction packs
   stored under `docs/security/` for dynamic updates without code changes.
+- **Guardrail reporting**: extend `scripts/agent_guard.py` to emit JSON/Prometheus
+  output summarising failures per guard, enabling dashboards and auto-remediation.
 
 Each milestone should keep observability first-class: new features must emit
 structured logs, telemetry, and actionable health signals.

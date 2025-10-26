@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 from zscripts import get_version
 from zscripts.observability.health import HealthTelemetryServer
+from zscripts.observability.instrumentation import InstrumentationManager
 from zscripts.observability.logging import configure_logging, get_logger
 from zscripts.observability.metrics import MetricsRegistry, default_registry
 from zscripts.observability.tracing import Span, start_span
@@ -72,6 +73,11 @@ class TelemetryManager:
     def health_server(self) -> HealthTelemetryServer:
         return self._health_server
 
+    def create_instrumentation(self, component: str) -> InstrumentationManager:
+        """Return an instrumentation manager bound to this telemetry instance."""
+
+        return InstrumentationManager(telemetry=self, component=component)
+
     def _configure_logging(self) -> None:
         if not self._logging_configured:
             configure_logging(self.settings.log_level, self.settings.log_format)
@@ -82,12 +88,31 @@ class TelemetryManager:
         host = self._health_server.host
         port = self._health_server.port
         base_url = f"http://{host}:{port}" if running else None
+        enabled = self.settings.enabled
+        readiness_status = "ok" if (not enabled or running) else "starting"
+        liveness_status = "ok" if running else ("starting" if enabled else "inactive")
+        overall_status = "ok" if readiness_status == "ok" else "degraded"
         return {
-            "status": "ok",
+            "status": overall_status,
             "version": get_version(),
             "telemetry_enabled": self.settings.enabled,
             "health_endpoint": f"{base_url}/healthz" if base_url else None,
             "metrics_endpoint": f"{base_url}/metrics" if base_url else None,
+            "liveness": {
+                "status": liveness_status,
+                "http_server": "running" if running else "stopped",
+            },
+            "readiness": {
+                "status": readiness_status,
+                "telemetry": "enabled" if enabled else "disabled",
+            },
+            "checks": {
+                "http_server": {
+                    "status": "ok" if running else "unavailable",
+                    "host": host,
+                    "port": port,
+                },
+            },
         }
 
 

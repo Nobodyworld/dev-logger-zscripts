@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import ClassVar, cast
 
 
 @dataclass
@@ -34,6 +34,7 @@ class TestCaseResult:
     status: str
     duration: float | None = None
     message: str | None = None
+    __test__: ClassVar[bool] = False
 
 
 @dataclass
@@ -45,6 +46,7 @@ class TestSummary:
     skipped: int
     duration: float | None = None
     cases: list[TestCaseResult] = field(default_factory=list)
+    __test__: ClassVar[bool] = False
 
 
 @dataclass
@@ -61,12 +63,12 @@ class NormalizedLog:
     warnings: list[LogIssue] = field(default_factory=list)
     tests: TestSummary | None = None
     artifacts: list[str] = field(default_factory=list)
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, object] = field(default_factory=dict)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         """Convert the dataclass hierarchy into a JSON-serializable dictionary."""
 
-        result = asdict(self)
+        result = cast("dict[str, object]", asdict(self))
         result["timestamp"] = self.timestamp.isoformat()
         return result
 

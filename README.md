@@ -14,6 +14,8 @@ Java, Go, Rust, .NET, Docker, and CI ecosystems.
   backed by typed dataclasses.
 - **Safety Guardrails**: Sandboxed subprocess execution, path allowlists, and
   default secret redaction.
+- **Comprehensive Reports**: Generate ready-to-share JSON or Markdown reports that combine parsing,
+  summarization, explanations, and guardrail metadata via a single command.
 - **Adapter Library**: Reusable parser modules under `adapters/` for common
   ecosystems.
 - **Observability**: Structured logging, Prometheus-style metrics, tracing spans,
@@ -69,6 +71,7 @@ testable and independent of concrete infrastructure details.
 python -m pip install -e .[dev]
 python cli.py parse --adapter python --input examples/python/sample.log
 python cli.py summarize --adapter docker --input examples/docker/sample.log
+python cli.py report --input examples/python/sample.log --format markdown
 ```
 
 See `docs/INDEX.md` for full documentation.
@@ -85,7 +88,12 @@ allowed_paths = ["examples", "~/workspace/logs"]
 default_adapter = "python"
 redact_patterns = ["(?i)password=([A-Za-z0-9]+)"]
 examples_path = "./custom_examples"
+report_format = "json"
+report_redact = false
 ```
+
+Set `report_format` to `"markdown"` to change the default renderer and toggle `report_redact`
+when reports should automatically mask textual fields.
 
 Apply the configuration when invoking the CLI and layer additional overrides
 using `--set` arguments:
@@ -116,6 +124,16 @@ python cli.py parse --input examples/python/sample.log --output normalized.json
 python cli.py summarize --input examples/python/sample.log
 ```
 
+### Generate a comprehensive report
+
+```bash
+python cli.py report --input examples/python/sample.log --format json --output report.json
+python cli.py report --input examples/python/sample.log --format markdown
+```
+
+Reports include normalized log data, summaries, explanations, and guardrail metadata. Use
+`--redact/--no-redact` to control redaction per invocation or configure defaults globally.
+
 ### Inspect guardrails and available examples
 
 ```bash
@@ -133,10 +151,12 @@ command outcome and duration, making it easy to trace automation runs end-to-end
 python cli.py --enable-telemetry --telemetry-port 9100 guardrails
 ```
 
-- `/healthz` returns a JSON payload with status and version information.
-- `/metrics` exposes Prometheus-formatted counters and histograms (e.g.
-  `zscripts_requests_total`, `zscripts_cli_invocations_total`, and
-  `zscripts_cli_duration_seconds`).
+- `/healthz` returns a JSON payload with status, version, readiness, and liveness details.
+- `/healthz/ready` and `/healthz/live` surface readiness and liveness checks with HTTP
+  200/503 semantics suitable for probes.
+- `/metrics` exposes Prometheus-formatted counters, histograms, and gauges (e.g.
+  `zscripts_operations_total`, `zscripts_cli_invocations_total`,
+  `zscripts_cli_duration_seconds`, and `zscripts_extensions_active`).
 - Use `--log-format json` and `--log-level DEBUG` to tune structured logging for
   automated ingestion.
 - Logs generated outside of adapter spans inherit the per-invocation correlation ID,
@@ -153,7 +173,8 @@ python cli.py --enable-telemetry --telemetry-port 9100 guardrails
 | `guardrails` | Display sandbox configuration and whether `--dangerous` is set. |
 | `redact` | Mask secrets using configurable regex patterns. |
 | `examples` | List bundled example log files per adapter. |
-| `extensions` | Display active extensions and their descriptions. |
+| `extensions` | Manage extensions (default lists active modules; use `extensions scaffold <name>` to generate templates). |
+| `report` | Generate JSON or Markdown reports combining normalized data and guardrails. |
 
 ## Package Layout
 
@@ -176,14 +197,16 @@ ruff check .
 mypy zscripts/configuration.py zscripts/config.py zscripts/__init__.py
 pytest
 python scripts/dev_start.py  # runs lint/type/security/tests with coverage ≥85%
-python -m trace --count --summary --coverdir=coverage_reports scripts/run_pytest_with_trace.py
+python scripts/collect_quality_metrics.py --output reports/metrics.json
 # Offline fallback when coverage plugins are unavailable
 python -m trace --count --coverdir trace_cov --module pytest
 ```
 
 CI runs linting, type checks, and tests automatically.
 
-The trace invocation emits per-module coverage statistics and the curated subset is persisted to `reports/coverage_summary.txt`.
+`scripts/collect_quality_metrics.py` summarises coverage, complexity, and dependency metrics into `reports/metrics.json`. When
+network proxies block the `coverage` wheel, fall back to the built-in trace invocation, which emits per-module coverage
+statistics and persists the curated subset to `reports/coverage_summary.txt`.
 
 ## Further Reading
 

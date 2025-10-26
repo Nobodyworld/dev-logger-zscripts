@@ -26,7 +26,11 @@ class Redactor:
         result = text
         for pattern in self.patterns:
             regex = re.compile(pattern)
-            result = regex.sub(lambda match: f"{match.group(0)[:2]}[REDACTED]", result)
+
+            def _replacement(match: re.Match[str]) -> str:
+                return f"{match.group(0)[:2]}[REDACTED]"
+
+            result = regex.sub(_replacement, result)
         return result
 
 

@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 ### Added
+- Regression tests covering configuration validation edge cases, observability
+  logging JSON formatting, and infrastructure adapters/sandbox wrappers,
+  elevating overall coverage to ~90% with artifacts in `reports/`.
 - Observability stack (`zscripts/observability`) with structured logging,
   Prometheus-compatible metrics, tracing spans, and a background health server.
 - CLI instrumentation emits correlation IDs and dedicated metrics
@@ -56,6 +59,8 @@
 - CLI help strings now derive type choices from the preset registry to avoid drift.
 - README, ARCHITECTURE, and AI interface documentation updated for agent workflows.
 - Configuration loader clones base dataclasses instead of mutating shared defaults and normalizes path overrides.
+- Hardened observability helpers and reporting formatters to satisfy strict
+  mypy gates and remove pytest collection warnings.
 
 ### Fixed
 - Prevent empty `--command` sequences from reaching the sandbox, ensuring actionable validation errors reach users.
@@ -64,3 +69,5 @@
 - Config loader now warns on duplicate entries and rejects paths that escape the configured log root.
 - Consolidate/tree commands validate output destinations up front, yielding actionable errors on permission issues.
 - Configuration flags pointing to missing files or directories now raise deterministic `ConfigurationError` messages before CLI dispatch.
+- Removed pytest collection warnings for `TestCaseResult`/`TestSummary` and
+  ensured guardrail metadata renders deterministically even with empty payloads.

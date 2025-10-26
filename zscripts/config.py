@@ -24,6 +24,8 @@ class ToolkitConfig:
         telemetry_port: Port number for the telemetry server.
         log_level: Minimum log level for structured logging.
         log_format: Output format for structured logs (``text`` or ``json``).
+        report_format: Default formatter name for the ``report`` command.
+        report_redact: Whether the ``report`` command redacts collected text by default.
         extensions: Sequence of dotted module paths for toolkit extensions.
     """
 
@@ -44,6 +46,8 @@ class ToolkitConfig:
     telemetry_port: int = 9464
     log_level: str = "INFO"
     log_format: str = "text"
+    report_format: str = "json"
+    report_redact: bool = False
     extensions: Sequence[str] = field(default_factory=tuple)
 
 
@@ -61,6 +65,8 @@ class ToolkitConfigDict(TypedDict):
     telemetry_port: int
     log_level: str
     log_format: str
+    report_format: str
+    report_redact: bool
     extensions: tuple[str, ...]
 
 
@@ -80,6 +86,8 @@ DEFAULT_CONFIG: ToolkitConfigDict = {
     "telemetry_port": 9464,
     "log_level": "INFO",
     "log_format": "text",
+    "report_format": "json",
+    "report_redact": False,
     "extensions": (),
 }
 

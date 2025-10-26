@@ -11,6 +11,7 @@ links to the core documentation required to use and extend the toolkit.
 - [Automation Playbook](../AUTOMATION.md)
 - [Normalized Log Schema](schema.md)
 - [Dependency Audit](DEPENDENCIES.md)
+- [Telemetry & Incident Response](operations.md)
 - [Incident Response Runbook](operations/INCIDENT_RESPONSE.md)
 - Adapter Quickstarts:
   - [Python](adapters/python.md)
@@ -23,6 +24,7 @@ links to the core documentation required to use and extend the toolkit.
   - [CI Pipelines](adapters/ci.md)
 - [Guardrails and Redaction](guardrails.md)
 - [Configuration & Overrides](configuration.md)
+- [Reporting Guide](reporting.md)
 - [Extension Guide](../EXTENSION_GUIDE.md)
 - [Future Roadmap](future_roadmap.md)
 - [Final Refinement Report](final_report.md)

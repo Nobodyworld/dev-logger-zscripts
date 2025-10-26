@@ -1,0 +1,45 @@
+{
+  "compile_time_seconds": 0.055,
+  "complexity": {
+    "average": 2.6988412228796843,
+    "max": 19,
+    "modules": [
+      {
+        "average": 6.46,
+        "max": 19,
+        "module": "zscripts/configuration.py"
+      },
+      {
+        "average": 4.38,
+        "max": 13,
+        "module": "zscripts/application/report_formatters.py"
+      },
+      {
+        "average": 3.0,
+        "max": 13,
+        "module": "zscripts/observability/instrumentation.py"
+      },
+      {
+        "average": 3.12,
+        "max": 12,
+        "module": "zscripts/observability/telemetry.py"
+      },
+      {
+        "average": 2.89,
+        "max": 10,
+        "module": "zscripts/application/services.py"
+      }
+    ]
+  },
+  "coverage_percent": 89.66751918158567,
+  "dependencies": {
+    "average_depth": 2.76,
+    "external_ratio": 0.61,
+    "internal_ratio": 0.39,
+    "totals": {
+      "external": 125,
+      "internal": 80
+    }
+  },
+  "package_size_bytes": 298321
+}

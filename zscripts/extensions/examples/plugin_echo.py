@@ -28,13 +28,16 @@ class EchoExtension(ToolkitExtension):
         context.logger.debug("extension.cli.registered", extra={"extension": self.name})
 
     def handle_cli(self, args: argparse.Namespace, service: Any) -> None:
-        # Import deferred to avoid circular dependency at module import time.
-        from zscripts.observability.logging import get_logger  # noqa: PLC0415
-
-        logger = get_logger("extensions.echo")
         message = getattr(args, "message", "")
-        logger.info("extension.echo", extra={"extension": self.name, "payload": message})
-        print(message)
+        with self.context.instrumentation.operation(
+            "extension.echo.cli",
+            attributes={"extension": self.name},
+        ):
+            self.context.logger.info(
+                "extension.echo",
+                extra={"extension": self.name, "payload": message},
+            )
+            print(message)
 
 
 def get_extension() -> EchoExtension:

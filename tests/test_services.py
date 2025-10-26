@@ -312,3 +312,30 @@ def test_summarize_logs_resolves_adapter_once(service_components: dict[str, obje
     assert summary == "summary"
     assert adapter.parsed == ["payload"]
     assert registry.resolutions == [adapter.identifier]
+
+
+def test_generate_report_combines_artifacts(service_components: dict[str, object]) -> None:
+    service: ToolkitService = service_components["service"]  # type: ignore[assignment]
+
+    bundle = service.generate_report(adapter_key=None, raw_text="payload", redact=False)
+
+    assert bundle.summary == "summary"
+    assert "Tool: pytest" in bundle.explanation
+    assert bundle.guardrails["dangerous_mode"] is False
+    assert bundle.collected_text == "payload"
+    assert bundle.redacted_text is None
+    assert bundle.normalized.summary == "all good"
+
+
+def test_generate_report_applies_redaction(service_components: dict[str, object]) -> None:
+    service: ToolkitService = service_components["service"]  # type: ignore[assignment]
+    redactor: RecordingRedactor = service_components["redactor"]  # type: ignore[assignment]
+
+    bundle = service.generate_report(adapter_key=None, raw_text="payload", redact=True)
+
+    assert bundle.summary.startswith("redacted:")
+    assert bundle.explanation.startswith("redacted:")
+    assert bundle.redacted_text == "redacted:payload"
+    # Summary, explanation, and source payload should each be redacted once.
+    raw_explanation = bundle.explanation.removeprefix("redacted:")
+    assert redactor.calls == ["summary", raw_explanation, "payload"]

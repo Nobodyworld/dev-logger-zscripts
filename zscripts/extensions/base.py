@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from zscripts.config import ToolkitConfig
 from zscripts.domain.interfaces import AdapterRegistryProtocol
+from zscripts.extensions.hooks import ExtensionHookRegistry, HookCallback
 from zscripts.extensions.manifest import ExtensionManifest
 from zscripts.observability.instrumentation import InstrumentationManager
 from zscripts.observability.telemetry import TelemetryManager
@@ -27,6 +28,7 @@ class ExtensionContext:
     instrumentation: InstrumentationManager
     logger: logging.Logger
     manifests: dict[str, ExtensionManifest] = field(default_factory=dict)
+    hook_registry: ExtensionHookRegistry | None = None
 
 
 class ToolkitExtensionProtocol(Protocol):
@@ -73,6 +75,19 @@ class ToolkitExtension:
         if self._context is None:
             return None
         return self._context.manifests.get(self.name)
+
+    @property
+    def hooks(self) -> ExtensionHookRegistry:
+        """Return the hook registry available to this extension."""
+
+        if self._context is None or self._context.hook_registry is None:
+            raise RuntimeError("Hook registry is not available yet.")
+        return self._context.hook_registry
+
+    def register_hook(self, hook: str, callback: HookCallback) -> None:
+        """Convenience helper to register a callback for a named hook."""
+
+        self.hooks.register(hook, callback, extension=self.name)
 
     def on_load(self, context: ExtensionContext) -> None:  # noqa: D401 - default no-op
         self._context = context

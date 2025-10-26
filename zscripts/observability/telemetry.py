@@ -78,6 +78,18 @@ class TelemetryManager:
 
         return InstrumentationManager(telemetry=self, component=component)
 
+    def snapshot(self, *, include_metrics: bool = False) -> dict[str, object]:
+        """Return a diagnostics payload describing telemetry state."""
+
+        payload = dict(self._status_payload())
+        if include_metrics:
+            metrics_text = self.metrics.collect_prometheus()
+            payload["metrics"] = {
+                "line_count": len(metrics_text.splitlines()),
+                "prometheus_text": metrics_text,
+            }
+        return payload
+
     def _configure_logging(self) -> None:
         if not self._logging_configured:
             configure_logging(self.settings.log_level, self.settings.log_format)

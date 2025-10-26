@@ -28,6 +28,13 @@ class ${class_name}(ToolkitExtension):
     capabilities = (\"cli\",)
     config_keys: tuple[str, ...] = ()
 
+    def on_load(self, context: ExtensionContext) -> None:
+        super().on_load(context)
+        self.register_hook(\"service_ready\", self._on_service_ready)
+        context.logger.debug(
+            \"extension.${name}.hook_registered\", extra={\"extension\": self.name, \"hook\": \"service_ready\"}
+        )
+
     def register_cli(
         self,
         subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
@@ -65,6 +72,12 @@ class ${class_name}(ToolkitExtension):
                 \"extension\": self.name,
                 \"manifest\": manifest.to_dict() if manifest else None,
             },
+        )
+
+    def _on_service_ready(self, **_: Any) -> None:
+        self.context.logger.info(
+            \"extension.${name}.hook\",
+            extra={\"extension\": self.name, \"hook\": \"service_ready\"},
         )
 
 

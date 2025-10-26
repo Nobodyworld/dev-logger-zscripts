@@ -165,6 +165,21 @@ def test_cli_report_fail_on_cli_override(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
 
 
+def test_cli_report_output_directory_error(tmp_path: Path) -> None:
+    result = _run_cli(
+        "report",
+        "--input",
+        str(Path("examples/python/sample.log")),
+        "--format",
+        "json",
+        "--output",
+        str(tmp_path),
+    )
+
+    assert result.returncode == 2
+    assert "is a directory" in result.stderr
+
+
 def test_cli_uses_configuration_file(tmp_path: Path) -> None:
     config_path = tmp_path / "settings.toml"
     config_path.write_text(
@@ -343,3 +358,19 @@ def test_cli_records_failure_metrics(tmp_path: Path, telemetry_harness: tuple[me
     assert "zscripts_cli_invocations_total" in metrics_text
     assert 'command="collect"' in metrics_text
     assert 'status="error"' in metrics_text
+
+
+def test_cli_diagnostics_generates_json(tmp_path: Path) -> None:
+    output_path = tmp_path / "diagnostics.json"
+    cli_module.main(["diagnostics", "--output", str(output_path)])
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["extensions"]["count"] == 0
+    assert "telemetry" in payload
+    assert payload["telemetry"]["status"] in {"ok", "degraded", "inactive"}
+
+
+def test_cli_diagnostics_text_format(capsys: pytest.CaptureFixture[str]) -> None:
+    cli_module.main(["diagnostics", "--format", "text"])
+    output = capsys.readouterr().out
+    assert "Generated:" in output
+    assert "Status:" in output

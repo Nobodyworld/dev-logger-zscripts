@@ -7,12 +7,13 @@ import json
 import sys
 import textwrap
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from zscripts import get_default_config
+from zscripts.application.io_utils import OutputPathError, atomic_write_text
 from zscripts.application.report_formatters import get_report_formatter
 from zscripts.application.services import ToolkitService
 from zscripts.config import ToolkitConfig
@@ -21,10 +22,17 @@ from zscripts.configuration import (
     load_toolkit_config,
     parse_override_pairs,
 )
-from zscripts.extensions import ExtensionContext, ExtensionLoadError, load_extensions
+from zscripts.extensions import (
+    ExtensionContext,
+    ExtensionHookRegistry,
+    ExtensionLoadError,
+    ExtensionManager,
+    load_extensions,
+)
 from zscripts.extensions.scaffolding import scaffold_extension
 from zscripts.infrastructure import build_toolkit_service
 from zscripts.infrastructure.adapters import AdapterRegistry
+from zscripts.observability.diagnostics import collect_runtime_diagnostics
 from zscripts.observability.logging import bind_correlation_id, get_logger
 from zscripts.observability.telemetry import TelemetryManager, TelemetrySettings
 
@@ -118,12 +126,14 @@ def main(argv: list[str] | None = None) -> None:
     )
     try:
         with bind_correlation_id(correlation_id):
+            hook_registry = ExtensionHookRegistry(extension_instrumentation)
             extension_context = ExtensionContext(
                 config=config,
                 adapter_registry=registry,
                 telemetry=telemetry,
                 instrumentation=extension_instrumentation,
                 logger=get_logger("extensions"),
+                hook_registry=hook_registry,
             )
             try:
                 extensions = load_extensions(config.extensions, context=extension_context)
@@ -197,6 +207,27 @@ def _build_parser(  # noqa: PLR0915 - parser assembly is intentionally verbose
     summarize_parser = subparsers.add_parser("summarize", help="Produce a compact summary")
     summarize_parser.add_argument("--input", help="Path to the log file (defaults to STDIN)")
     summarize_parser.set_defaults(func=_handle_summarize)
+
+    diagnostics_parser = subparsers.add_parser(
+        "diagnostics",
+        help="Capture a telemetry and extension diagnostics snapshot.",
+    )
+    diagnostics_parser.add_argument(
+        "--include-metrics",
+        action="store_true",
+        help="Embed Prometheus metrics text in the JSON payload.",
+    )
+    diagnostics_parser.add_argument(
+        "--format",
+        choices=("json", "text"),
+        default="json",
+        help="Output format for the diagnostics snapshot.",
+    )
+    diagnostics_parser.add_argument(
+        "--output",
+        help="Optional file to write diagnostics to (defaults to STDOUT).",
+    )
+    diagnostics_parser.set_defaults(func=_handle_diagnostics)
 
     explain_parser = subparsers.add_parser("explain", help="Produce a detailed explanation")
     explain_parser.add_argument("--input", help="Path to the log file (defaults to STDIN)")
@@ -399,6 +430,24 @@ def _handle_examples(args: argparse.Namespace, service: ToolkitService) -> None:
     print("\n".join(entries))
 
 
+def _handle_diagnostics(args: argparse.Namespace, service: ToolkitService) -> None:  # noqa: ARG001
+    namespace = vars(args)
+    runtime = cast(_CliRuntime, namespace["runtime"])
+    manager = cast(ExtensionManager | None, namespace.get("extension_manager"))
+    snapshot = collect_runtime_diagnostics(
+        telemetry=runtime.telemetry,
+        instrumentation=runtime.instrumentation,
+        extensions=manager,
+        include_metrics=bool(namespace.get("include_metrics", False)),
+    )
+    payload = snapshot.to_dict()
+    if namespace.get("format", "json") == "text":
+        rendered = _format_diagnostics_text(payload)
+    else:
+        rendered = json.dumps(payload, indent=2)
+    _write_output(rendered, namespace.get("output"))
+
+
 def _handle_extensions_list(args: argparse.Namespace, service: ToolkitService) -> None:
     loaded = getattr(args, "extensions_loaded", [])
     manifests = getattr(args, "extensions_manifest", {})
@@ -498,10 +547,64 @@ def _load_input(input_path: str | None) -> str:
 
 
 def _write_output(payload: str, output_path: str | None) -> None:
-    if output_path:
-        Path(output_path).write_text(payload, encoding="utf-8")
-    else:
+    if not output_path:
         print(payload)
+        return
+
+    destination = Path(output_path)
+    try:
+        atomic_write_text(destination, payload)
+    except OutputPathError as exc:
+        _CLI_LOGGER.error(
+            "cli.output.write_failed",
+            extra={"path": str(exc.path)},
+        )
+        _fail(str(exc))
+
+
+def _format_diagnostics_text(snapshot: dict[str, object]) -> str:
+    telemetry_obj = snapshot.get("telemetry", {})
+    extensions_obj = snapshot.get("extensions", {})
+    if isinstance(telemetry_obj, dict):
+        telemetry = telemetry_obj
+    else:
+        telemetry = {}
+    if isinstance(extensions_obj, dict):
+        extensions = extensions_obj
+    else:
+        extensions = {}
+    metrics_candidate = telemetry.get("metrics")
+    metrics_info = metrics_candidate if isinstance(metrics_candidate, Mapping) else None
+    count_value = extensions.get("count")
+    count = int(count_value) if isinstance(count_value, int) else 0
+    lines = [
+        f"Generated: {snapshot.get('generated_at', 'unknown')}",
+        f"Status: {telemetry.get('status', 'unknown')}",
+        f"Extensions: {count}",
+    ]
+    names_value = extensions.get("names")
+    if isinstance(names_value, list):
+        names = ", ".join(str(name) for name in names_value)
+        lines.append(f"Extension Names: {names}")
+    hooks_candidate = extensions.get("hooks")
+    if isinstance(hooks_candidate, Mapping):
+        hook_pairs = ", ".join(
+            f"{str(name)}={int(count)}" for name, count in sorted(hooks_candidate.items())
+        )
+        lines.append(f"Hooks: {hook_pairs}")
+    if metrics_info:
+        line_count = metrics_info.get("line_count", 0)
+        lines.append(f"Metrics Lines: {line_count}")
+    health_url = telemetry.get("health_endpoint")
+    if isinstance(health_url, str) and health_url:
+        lines.append(f"Health URL: {health_url}")
+    metrics_url = telemetry.get("metrics_endpoint")
+    if isinstance(metrics_url, str) and metrics_url:
+        lines.append(f"Metrics URL: {metrics_url}")
+    component = snapshot.get("component")
+    if isinstance(component, str) and component:
+        lines.append(f"Component: {component}")
+    return "\n".join(lines)
 
 
 def _record_cli_metrics(
@@ -545,8 +648,10 @@ def _prepare_and_execute(
     if args.adapter:
         config.default_adapter = args.adapter
 
-    args.extensions_loaded = extensions
+    args.extensions_loaded = list(extensions)
     args.extensions_manifest = dict(extension_context.manifests)
+    args.extension_manager = extensions
+    args.runtime = runtime
     service = build_toolkit_service(
         config,
         adapter_registry=registry,
@@ -554,6 +659,11 @@ def _prepare_and_execute(
     )
     for extension in extensions:
         extension.after_service_ready(service, extension_context)
+    extensions.emit(
+        "service_ready",
+        service=service,
+        context=extension_context,
+    )
 
     handler: Callable[[argparse.Namespace, ToolkitService], None] = args.func
 

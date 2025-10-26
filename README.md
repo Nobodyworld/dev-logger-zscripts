@@ -119,6 +119,14 @@ The CLI now validates that `--command` includes an executable token and surfaces
 actionable error messages (exit code 2) instead of raw tracebacks when a log
 source is missing.
 
+All commands that accept `--output` automatically create parent directories and
+perform atomic writes. When the destination cannot be written (for example,
+the directory is read-only or the path points to an existing directory) the CLI
+aborts immediately with descriptive messages such as
+`error: destination '<path>' is a directory` or
+`error: parent directory '<path>' is not writable`, ensuring partial files are
+never left behind.
+
 ### Parse and summarize existing logs
 
 ```bash
@@ -168,6 +176,10 @@ python cli.py --enable-telemetry --telemetry-port 9100 guardrails
   so cross-component traces can be stitched together from log aggregation systems.
 - For automation, `python scripts/ops_status.py --url http://127.0.0.1:9464` probes
   the health endpoint and writes a JSON summary alongside meaningful exit codes.
+- Capture end-to-end diagnostics (health, hooks, manifest metadata, metrics) with
+  `python cli.py diagnostics --include-metrics` or automate it via
+  `python scripts/diagnostics_probe.py --output reports/diagnostics.json`; the
+  helper exits non-zero when the telemetry status degrades so CI can fail fast.
 
 ## CLI Reference
 
@@ -181,6 +193,7 @@ python cli.py --enable-telemetry --telemetry-port 9100 guardrails
 | `redact` | Mask secrets using configurable regex patterns. |
 | `examples` | List bundled example log files per adapter. |
 | `extensions` | Manage extensions (list active modules, `--output-format json` for manifests, `extensions scaffold <name>` to generate templates). |
+| `diagnostics` | Emit runtime diagnostics including telemetry status, hook counts, and optional Prometheus text. |
 | `report` | Generate JSON or Markdown reports combining normalized data and guardrails. |
 
 ## Package Layout

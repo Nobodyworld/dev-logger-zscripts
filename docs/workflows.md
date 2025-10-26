@@ -55,4 +55,6 @@ pipelines, local development, and observability loops.
 
 Each workflow benefits from the improved error handling in the CLI: failures to
 provide a log source now emit clear error messages and exit with status code 2
-instead of uncaught tracebacks.
+instead of uncaught tracebacks. Destination paths are validated up front as
+well—the CLI creates missing directories, uses atomic writes, and reports
+permission errors before any partial files are left behind.

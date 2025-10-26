@@ -19,6 +19,13 @@ Once enabled, the server listens on `telemetry_host`/`telemetry_port` (defaults 
   alive, or 503 if the process is shutting down.
 - `GET /metrics` – Prometheus exposition including CLI, extension, service, and
   HTTP-probe metrics.
+- `python cli.py diagnostics` – Structured snapshot combining the health payload,
+  extension manifest data, hook registrations, and optional Prometheus text. Use
+  `--include-metrics` to embed the raw exposition in JSON output.
+- `python scripts/diagnostics_probe.py --output reports/diagnostics.json` –
+  Automation-friendly wrapper that writes the same snapshot to disk and exits
+  non-zero when telemetry reports a degraded status (configurable via
+  `--fail-on-status`).
 
 Example response for `/healthz`:
 
@@ -95,6 +102,9 @@ If a release introduces regressions:
   directly in the terminal (for example, `curl -s http://127.0.0.1:9464/healthz | jq .`).
   Alternatively run `python scripts/ops_status.py --url http://127.0.0.1:9464` to obtain a
   timestamped JSON summary suitable for automated pipelines.
+- Run `python cli.py diagnostics --format text` for a quick CLI summary or
+  `python scripts/diagnostics_probe.py --include-metrics` to capture a JSON
+  artifact for incident retrospectives.
 - `scripts/agent_guard.py` runs lint, type, and test gates with the
   same metrics instrumentation for agent-friendly workflows.
 

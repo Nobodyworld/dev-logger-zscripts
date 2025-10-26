@@ -24,6 +24,10 @@ This guide summarises how automated agents should interact with the toolkit.
   parsing or `--log-level DEBUG` to increase verbosity.
 - Each CLI run binds a correlation ID that is propagated into span logs, so log
   aggregators can group related events without additional hints.
+- Use `python cli.py diagnostics --include-metrics` (or the
+  `scripts/diagnostics_probe.py` helper) to snapshot telemetry state, active
+  extensions, and hook registrations. The probe exits non-zero when the
+  reported status falls below `ok`, making it suitable for CI smoke checks.
 
 ## Quality Gate
 
@@ -64,6 +68,10 @@ This guide summarises how automated agents should interact with the toolkit.
   agent-friendly probe that writes a JSON summary to STDOUT (and optionally a
   file) while setting exit codes based on health status. Integrate this into
   orchestration checks or post-deploy smoke tests.
+- `python scripts/diagnostics_probe.py --output reports/diagnostics.json` emits
+  the same payload as `cli diagnostics`, including hook summary and optional
+  metrics text, and can fail pipelines when telemetry reports a degraded state
+  (see `--fail-on-status`).
 - Consult `docs/operations.md` and `docs/operations/INCIDENT_RESPONSE.md` for
   runbook procedures, including suggested queries and log correlation
   strategies.

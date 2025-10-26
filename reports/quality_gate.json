@@ -7,7 +7,7 @@
         "check",
         "."
       ],
-      "duration_seconds": 0.05
+      "duration_seconds": 0.035
     },
     "type": {
       "status": "passed",
@@ -23,10 +23,11 @@
         "zscripts/extensions/scaffolding.py",
         "zscripts/schemas"
       ],
-      "duration_seconds": 3.853
+      "duration_seconds": 0.263
     },
     "security": {
-      "status": "skipped"
+      "status": "skipped",
+      "reason": "bandit-missing"
     },
     "tests": {
       "status": "passed",
@@ -36,15 +37,15 @@
         "-m",
         "pytest"
       ],
-      "duration_seconds": 8.032
+      "duration_seconds": 9.058
     },
     "coverage": {
       "status": "passed",
-      "percent": 89.66751918158567
+      "percent": 88.45625286303252
     }
   },
   "coverage": {
-    "percent": 89.66751918158567
+    "percent": 88.45625286303252
   },
   "threshold": 85.0
 }

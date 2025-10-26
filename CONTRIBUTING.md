@@ -32,15 +32,24 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
    tailor the workflow; `make quality` remains available for coverage-enforced
    pipelines and produces `reports/quality_gate.json`.
 
-3. **Pre-commit Hooks**
+3. **Ops Health Probe**
+   ```bash
+   python scripts/ops_status.py --url http://127.0.0.1:9464
+   ```
+   Use this helper after enabling telemetry (`--enable-telemetry`) to verify the
+   embedded health server responds with `status="ok"`. The script emits a JSON
+   payload and non-zero exit codes when degraded, making it suitable for
+   post-deploy smoke checks.
+
+4. **Pre-commit Hooks**
    - `pre-commit run --all-files` runs Ruff (format + lint), mypy, Bandit, and detect-secrets using `.secrets.baseline`.
    - Commit-msg hooks run `npx commitlint --edit "$1"`; ensure Node.js ≥18 is installed locally.
 
-4. **Software Bill of Materials (SBOM)**
+5. **Software Bill of Materials (SBOM)**
    - Generate CycloneDX manifests with `make sbom`; artifacts are written to `artifacts/sbom/` and uploaded by CI for Python 3.11 runs.
    - Ensure the directory stays in `.gitignore`. If the command fails, verify that `cyclonedx-bom` is installed from `requirements.txt`.
 
-5. **Secrets Baseline Maintenance**
+6. **Secrets Baseline Maintenance**
    - Update `.secrets.baseline` when adding fixtures that intentionally include secret-like strings: `detect-secrets scan > .secrets.baseline`.
    - Review the diff to avoid allow-listing real credentials. CI also runs gitleaks with `.gitleaks.toml` for defense in depth.
 

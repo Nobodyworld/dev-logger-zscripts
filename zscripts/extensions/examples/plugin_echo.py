@@ -13,6 +13,8 @@ class EchoExtension(ToolkitExtension):
 
     name = "echo"
     description = "Echo input using the ToolkitService"
+    version = "1.0.0"
+    capabilities = ("cli", "demo")
 
     def register_cli(
         self,
@@ -38,6 +40,16 @@ class EchoExtension(ToolkitExtension):
                 extra={"extension": self.name, "payload": message},
             )
             print(message)
+
+    def after_service_ready(self, service: Any, context: ExtensionContext) -> None:
+        """Log the registered manifest when the service is initialised."""
+
+        super().after_service_ready(service, context)
+        manifest = self.manifest
+        if manifest is not None:
+            context.logger.debug(
+                "extension.echo.manifest", extra={"manifest": manifest.to_dict()}
+            )
 
 
 def get_extension() -> EchoExtension:

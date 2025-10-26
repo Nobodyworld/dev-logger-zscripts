@@ -10,7 +10,7 @@ from zscripts.application.report_formatters import (
     format_report_markdown,
     get_report_formatter,
 )
-from zscripts.application.reporting import ReportBundle
+from zscripts.application.reporting import ReportBundle, evaluate_report_severity
 from zscripts.schemas import LogIssue, NormalizedLog, TestCaseResult, TestSummary
 
 
@@ -46,7 +46,53 @@ def _make_bundle() -> ReportBundle:
         collected_text="raw log contents",
         redacted_text=None,
         generated_at=timestamp,
+        severity="error",
     )
+
+
+@pytest.mark.parametrize(
+    (
+        "status",
+        "has_errors",
+        "failed_tests",
+        "has_warnings",
+        "expected",
+    ),
+    [
+        ("failed", False, 0, False, "error"),
+        ("passed", True, 0, False, "error"),
+        ("passed", False, 2, False, "error"),
+        ("passed", False, 0, True, "warning"),
+        ("warning", False, 0, False, "warning"),
+        ("passed", False, None, False, "ok"),
+        ("passed", False, 0, False, "ok"),
+    ],
+)
+def test_evaluate_report_severity(
+    status: str,
+    has_errors: bool,
+    failed_tests: int | None,
+    has_warnings: bool,
+    expected: str,
+) -> None:
+    timestamp = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    errors = [LogIssue(message="err")] if has_errors else []
+    warnings = [LogIssue(message="warn")] if has_warnings else []
+    tests = TestSummary(passed=0, failed=failed_tests, skipped=0) if failed_tests is not None else None
+
+    normalized = NormalizedLog(
+        tool="pytest",
+        ecosystem="python",
+        command="pytest -q",
+        status=status,
+        summary="",
+        timestamp=timestamp,
+        errors=errors,
+        warnings=warnings,
+        tests=tests,
+    )
+
+    assert evaluate_report_severity(normalized) == expected
 
 
 def test_format_report_json_round_trips() -> None:
@@ -58,6 +104,7 @@ def test_format_report_json_round_trips() -> None:
     assert data["summary"] == "Aggregated summary"
     assert data["normalized"]["tool"] == "pytest"
     assert data["guardrails"]["timeout_seconds"] == 60
+    assert data["severity"] == "error"
     assert data["generated_at"].endswith("+00:00")
 
 
@@ -70,6 +117,7 @@ def test_format_report_markdown_contains_sections() -> None:
     assert "## Guardrails" in document
     assert "### Errors" in document
     assert "- **Status:** passed" in document
+    assert "- **Severity:** error" in document
     assert "- timeout_seconds: 60" in document
     assert "### Cases" in document
     assert "assert 1 == 2" in document
@@ -103,6 +151,7 @@ def test_format_report_markdown_handles_empty_sections() -> None:
         collected_text="",
         redacted_text=None,
         generated_at=timestamp,
+        severity="ok",
     )
 
     document = format_report_markdown(bundle)

@@ -26,6 +26,21 @@ def _allocate_port() -> int:
         return sock.getsockname()[1]
 
 
+@pytest.mark.parametrize(
+    ("policy", "severity", "expected"),
+    [
+        ("never", "ok", False),
+        ("warnings", "warning", True),
+        ("warnings", "ok", False),
+        ("errors", "warning", False),
+        ("errors", "error", True),
+        ("errors", "critical", True),
+    ],
+)
+def test_cli_should_fail_threshold(policy: str, severity: str, expected: bool) -> None:
+    assert cli_module._should_fail(policy, severity) is expected
+
+
 def test_cli_parse_produces_json() -> None:
     result = _run_cli(
         "--adapter",
@@ -60,6 +75,7 @@ def test_cli_report_json_output() -> None:
     payload = json.loads(result.stdout)
     assert payload["normalized"]["tool"] == "pytest"
     assert payload["redacted_text"] is None
+    assert payload["severity"] == "error"
 
 
 def test_cli_report_markdown_output() -> None:
@@ -72,6 +88,7 @@ def test_cli_report_markdown_output() -> None:
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.startswith("# pytest Report")
+    assert "- **Severity:**" in result.stdout
 
 
 def test_cli_report_respects_redact_toggle(tmp_path: Path) -> None:
@@ -92,6 +109,60 @@ def test_cli_report_respects_redact_toggle(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     assert payload["redacted_text"] is None
+
+
+def test_cli_report_fail_on_errors_exits_nonzero() -> None:
+    result = _run_cli(
+        "report",
+        "--input",
+        str(Path("examples/python/sample.log")),
+        "--format",
+        "json",
+        "--fail-on",
+        "errors",
+    )
+
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert payload["severity"] == "error"
+
+
+def test_cli_report_fail_on_respects_configuration(tmp_path: Path) -> None:
+    config_path = tmp_path / "settings.toml"
+    config_path.write_text("report_fail_on = 'errors'\n", encoding="utf-8")
+
+    result = _run_cli(
+        "--config",
+        str(config_path),
+        "report",
+        "--input",
+        str(Path("examples/python/sample.log")),
+        "--format",
+        "json",
+    )
+
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert payload["severity"] == "error"
+
+
+def test_cli_report_fail_on_cli_override(tmp_path: Path) -> None:
+    config_path = tmp_path / "settings.toml"
+    config_path.write_text("report_fail_on = 'errors'\n", encoding="utf-8")
+
+    result = _run_cli(
+        "--config",
+        str(config_path),
+        "report",
+        "--input",
+        str(Path("examples/python/sample.log")),
+        "--format",
+        "json",
+        "--fail-on",
+        "never",
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_cli_uses_configuration_file(tmp_path: Path) -> None:
@@ -154,7 +225,30 @@ def test_cli_extensions_command_lists_loaded(tmp_path: Path) -> None:
     result = _run_cli("--config", str(config_path), "extensions")
 
     assert result.returncode == 0, result.stderr
-    assert "echo" in result.stdout
+    assert "echo (v1.0.0) [zscripts.extensions.examples.plugin_echo]" in result.stdout
+
+
+def test_cli_extensions_list_json_format(tmp_path: Path) -> None:
+    config_path = tmp_path / "settings.toml"
+    config_path.write_text(
+        "extensions = ['zscripts.extensions.examples.plugin_echo']",
+        encoding="utf-8",
+    )
+
+    result = _run_cli(
+        "--config",
+        str(config_path),
+        "extensions",
+        "--output-format",
+        "json",
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert isinstance(payload, list)
+    assert payload and payload[0]["name"] == "echo"
+    assert payload[0]["module"] == "zscripts.extensions.examples.plugin_echo"
+    assert payload[0]["capabilities"] == ["cli", "demo"]
 
 
 def test_cli_extensions_scaffold_creates_file(tmp_path: Path) -> None:
@@ -173,6 +267,8 @@ def test_cli_extensions_scaffold_creates_file(tmp_path: Path) -> None:
     contents = module_path.read_text(encoding="utf-8")
     assert "class DemoExtension" in contents
     assert "context.instrumentation" in contents
+    assert "version = \"0.1.0\"" in contents
+    assert "def after_service_ready" in contents
 
 
 def test_cli_extension_command_executes(tmp_path: Path) -> None:

@@ -33,6 +33,7 @@ def test_load_toolkit_config_from_toml(tmp_path: Path) -> None:
                 "log_format = 'json'",
                 "report_format = 'markdown'",
                 "report_redact = true",
+                "report_fail_on = 'warnings'",
                 "extensions = ['pkg.module', 'another.ext']",
             ]
         ),
@@ -57,6 +58,7 @@ def test_load_toolkit_config_from_toml(tmp_path: Path) -> None:
     assert config.log_format == "json"
     assert config.report_format == "markdown"
     assert config.report_redact is True
+    assert config.report_fail_on == "warnings"
     assert config.extensions == ("pkg.module", "another.ext")
 
 
@@ -92,6 +94,7 @@ def test_cli_overrides_take_precedence(tmp_path: Path) -> None:
             "extensions=foo.bar, baz.qux",
             "report_format=markdown",
             "report_redact=true",
+            "report_fail_on=errors",
         ]
     )
 
@@ -103,6 +106,7 @@ def test_cli_overrides_take_precedence(tmp_path: Path) -> None:
     assert config.extensions == ("foo.bar", "baz.qux")
     assert config.report_format == "markdown"
     assert config.report_redact is True
+    assert config.report_fail_on == "errors"
 
 
 def test_allowed_paths_string_is_split_on_delimiters(tmp_path: Path) -> None:
@@ -145,6 +149,14 @@ def test_invalid_log_format_raises(tmp_path: Path) -> None:
 def test_invalid_report_format_raises(tmp_path: Path) -> None:
     config_file = tmp_path / "settings.toml"
     config_file.write_text("report_format = 'pdf'", encoding="utf-8")
+
+    with pytest.raises(ConfigurationError):
+        load_toolkit_config(path=config_file, overrides={}, base=get_default_config())
+
+
+def test_invalid_report_fail_on_raises(tmp_path: Path) -> None:
+    config_file = tmp_path / "settings.toml"
+    config_file.write_text("report_fail_on = 'fatal'", encoding="utf-8")
 
     with pytest.raises(ConfigurationError):
         load_toolkit_config(path=config_file, overrides={}, base=get_default_config())

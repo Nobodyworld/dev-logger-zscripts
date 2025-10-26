@@ -5,16 +5,28 @@ from __future__ import annotations
 import argparse
 import ast
 import compileall
+import contextlib
+import importlib
+import io
 import json
 import statistics
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PACKAGE = PACKAGE_ROOT / "zscripts"
 DEFAULT_COVERAGE = PACKAGE_ROOT / "reports" / "coverage.json"
+
+
+def _load_cli() -> Callable[[list[str] | None], None] | None:
+    try:
+        cli_module = importlib.import_module("zscripts.cli")
+    except ModuleNotFoundError:
+        return None
+    main = getattr(cli_module, "main", None)
+    return main if callable(main) else None
 
 
 @dataclass(frozen=True)
@@ -208,6 +220,24 @@ def _load_coverage(path: Path) -> float | None:
     return None
 
 
+# agent-safe-task: agents may extend CLI probes or replace the target command.
+def _measure_cli_latency() -> float | None:
+    main = _load_cli()
+    if main is None:
+        return None
+    buffer = io.StringIO()
+    start = time.perf_counter()
+    try:
+        with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+            main(["guardrails"])
+    except SystemExit as exc:
+        if exc.code not in (0, None):
+            return None
+    except Exception:
+        return None
+    return round(time.perf_counter() - start, 3)
+
+
 def _summarise_complexity(results: list[ComplexityResult]) -> dict[str, object]:
     if not results:
         return {"average": 0.0, "max": 0.0, "modules": []}
@@ -251,12 +281,14 @@ def collect_metrics(package: Path, coverage_path: Path) -> dict[str, object]:
     coverage = _load_coverage(coverage_path)
     compile_time = _measure_compile_time(package)
     size_bytes = _measure_package_size(package)
+    cli_latency = _measure_cli_latency()
     return {
         "coverage_percent": coverage,
         "complexity": _summarise_complexity(complexity),
         "dependencies": _summarise_dependencies(dependencies),
         "compile_time_seconds": round(compile_time, 3),
         "package_size_bytes": size_bytes,
+        "cli_guardrails_latency_seconds": cli_latency,
     }
 
 

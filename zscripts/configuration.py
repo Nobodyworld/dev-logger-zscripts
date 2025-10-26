@@ -104,6 +104,7 @@ _KNOWN_KEYS: Final[tuple[str, ...]] = (
     "extensions",
     "report_format",
     "report_redact",
+    "report_fail_on",
 )
 
 
@@ -153,6 +154,8 @@ def _apply_config_values(  # noqa: PLR0912 - configuration fan-out requires expl
             config.report_redact = _coerce_bool(raw, source, field="report_redact")
         elif key == "extensions":
             config.extensions = _coerce_string_sequence(raw, source, field="extensions")
+        elif key == "report_fail_on":
+            config.report_fail_on = _coerce_report_fail_on(raw, source)
     return config
 
 
@@ -231,6 +234,17 @@ def _coerce_report_format(value: object, source: str) -> str:
     if candidate not in {"json", "markdown"}:
         raise ConfigurationError(
             f"report_format in {source} must be 'json' or 'markdown'."
+        )
+    return candidate
+
+
+def _coerce_report_fail_on(value: object, source: str) -> str:
+    candidate = _coerce_string(value, source, field="report_fail_on").lower()
+    allowed = {"never", "warnings", "errors"}
+    if candidate not in allowed:
+        options = ", ".join(sorted(allowed))
+        raise ConfigurationError(
+            f"report_fail_on in {source} must be one of: {options}."
         )
     return candidate
 

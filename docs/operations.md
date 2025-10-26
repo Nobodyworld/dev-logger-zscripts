@@ -17,8 +17,8 @@ Once enabled, the server listens on `telemetry_host`/`telemetry_port` (defaults 
   the telemetry server has not fully started.
 - `GET /healthz/live` – Liveness heartbeat. Returns HTTP 200 when the telemetry thread is
   alive, or 503 if the process is shutting down.
-- `GET /metrics` – Prometheus exposition including CLI, extension, and instrumentation
-  metrics.
+- `GET /metrics` – Prometheus exposition including CLI, extension, service, and
+  HTTP-probe metrics.
 
 Example response for `/healthz`:
 
@@ -45,6 +45,10 @@ The Prometheus output includes the following core series:
   labelled by command name and status.
 - `zscripts_extensions_active` – Gauge representing the number of loaded extensions.
 - `zscripts_operations_inflight` – Gauge showing in-flight instrumented operations.
+- `zscripts_health_http_requests_total` /
+  `zscripts_health_http_request_duration_seconds` – Traffic volume and latency
+  for `/healthz` probes, labelled by endpoint. High error rates here indicate
+  external monitors are failing.
 
 Alert on sustained increases in `status="error"` labels or large inflight counts. Pair
 metrics with structured logs filtered by correlation IDs.
@@ -63,7 +67,9 @@ request across services:
 ## Incident Response Workflow
 
 1. **Verify process health** – Request `/healthz/ready` and `/healthz/live`. If either
-   returns HTTP 503, restart the toolkit process or re-enable telemetry.
+   returns HTTP 503, restart the toolkit process or re-enable telemetry. The
+   helper `python scripts/ops_status.py --url http://127.0.0.1:9464` performs this
+   check and exits non-zero when the status is degraded.
 2. **Check metrics for anomalies** – Scrape `/metrics` and inspect `status="error"`
    labels on `zscripts_operations_total` or `zscripts_cli_invocations_total`.
 3. **Review structured logs** – Use the correlation ID from the failing command to locate
@@ -87,6 +93,8 @@ If a release introduces regressions:
 
 - Issue an HTTP GET against `http://<host>:<port>/healthz` to surface the active health snapshot
   directly in the terminal (for example, `curl -s http://127.0.0.1:9464/healthz | jq .`).
+  Alternatively run `python scripts/ops_status.py --url http://127.0.0.1:9464` to obtain a
+  timestamped JSON summary suitable for automated pipelines.
 - `scripts/agent_guard.py` runs lint, type, and test gates with the
   same metrics instrumentation for agent-friendly workflows.
 

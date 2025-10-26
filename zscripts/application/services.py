@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from contextlib import AbstractContextManager, nullcontext
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 
-from zscripts.application.reporting import ReportBundle
+from zscripts.application.reporting import ReportBundle, evaluate_report_severity
 from zscripts.domain.interfaces import (
     AdapterRegistryProtocol,
     ExampleRepositoryProtocol,
@@ -17,6 +17,7 @@ from zscripts.domain.interfaces import (
     SchemaValidatorProtocol,
 )
 from zscripts.domain.models import SandboxOptions, SandboxResult
+from zscripts.observability.instrumentation import InstrumentationManager
 from zscripts.observability.telemetry import TelemetryManager
 from zscripts.schemas import NormalizedLog
 
@@ -35,6 +36,7 @@ class ToolkitService:
         sandbox_options: SandboxOptions,
         default_adapter: str,
         telemetry: TelemetryManager | None = None,
+        instrumentation: InstrumentationManager | None = None,
     ) -> None:
         self._registry = adapter_registry
         self._sandbox_factory = sandbox_factory
@@ -45,6 +47,9 @@ class ToolkitService:
         self._default_adapter = default_adapter
         self._sandbox_runner: SandboxRunnerProtocol | None = None
         self._telemetry = telemetry
+        self._instrumentation = instrumentation
+        if self._instrumentation is None and telemetry is not None:
+            self._instrumentation = telemetry.create_instrumentation(component="service")
 
     def collect_logs(
         self,
@@ -138,6 +143,7 @@ class ToolkitService:
             summary = adapter.summarize(normalized)
             explanation = self._build_explanation(normalized)
         guardrails = self.guardrails_snapshot()
+        severity = evaluate_report_severity(normalized)
         redacted_text = None
         if redact:
             summary = self._redactor.redact(summary)
@@ -150,6 +156,7 @@ class ToolkitService:
             guardrails=guardrails,
             collected_text=raw_text,
             redacted_text=redacted_text,
+            severity=severity,
         )
 
     def guardrails_snapshot(self) -> dict[str, object]:
@@ -276,12 +283,23 @@ class ToolkitService:
             )
         return sanitized
 
+    @contextmanager
     def _instrument(
         self, operation: str, attributes: Mapping[str, str] | None
-    ) -> AbstractContextManager[object]:
-        if self._telemetry is None:
-            return nullcontext()
-        return self._telemetry.span(operation, attributes=attributes)
+    ) -> Iterator[None]:
+        payload = {str(key): str(value) for key, value in (attributes or {}).items()}
+        if self._instrumentation is not None:
+            with self._instrumentation.operation(
+                operation,
+                attributes=payload,
+            ):
+                yield
+            return
+        if self._telemetry is not None:
+            with self._telemetry.span(operation, attributes=payload):
+                yield
+            return
+        yield
 
     @staticmethod
     def _build_explanation(normalized: NormalizedLog) -> str:

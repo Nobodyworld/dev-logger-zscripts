@@ -1,13 +1,19 @@
 {
-  "compile_time_seconds": 0.055,
+  "cli_guardrails_latency_seconds": 0.005,
+  "compile_time_seconds": 0.034,
   "complexity": {
-    "average": 2.6988412228796843,
-    "max": 19,
+    "average": 2.7555841982525697,
+    "max": 20,
     "modules": [
       {
-        "average": 6.46,
-        "max": 19,
+        "average": 6.21,
+        "max": 20,
         "module": "zscripts/configuration.py"
+      },
+      {
+        "average": 3.65,
+        "max": 14,
+        "module": "zscripts/cli.py"
       },
       {
         "average": 4.38,
@@ -23,23 +29,18 @@
         "average": 3.12,
         "max": 12,
         "module": "zscripts/observability/telemetry.py"
-      },
-      {
-        "average": 2.89,
-        "max": 10,
-        "module": "zscripts/application/services.py"
       }
     ]
   },
-  "coverage_percent": 89.66751918158567,
+  "coverage_percent": 88.45625286303252,
   "dependencies": {
-    "average_depth": 2.76,
-    "external_ratio": 0.61,
-    "internal_ratio": 0.39,
+    "average_depth": 2.77,
+    "external_ratio": 0.611,
+    "internal_ratio": 0.389,
     "totals": {
-      "external": 125,
-      "internal": 80
+      "external": 132,
+      "internal": 84
     }
   },
-  "package_size_bytes": 298321
+  "package_size_bytes": 328363
 }

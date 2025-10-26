@@ -79,6 +79,7 @@ def format_report_markdown(bundle: ReportBundle) -> str:
         f"- **Ecosystem:** {normalized.ecosystem}",
         f"- **Command:** `{normalized.command}`",
         f"- **Status:** {normalized.status}",
+        f"- **Severity:** {bundle.severity}",
         f"- **Generated:** {bundle.generated_at.isoformat()}",
     ]
 

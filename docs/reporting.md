@@ -10,6 +10,7 @@ Markdown for human-readable runbooks.
 ```bash
 python cli.py report --input examples/python/sample.log --format json --output report.json
 python cli.py report --input examples/python/sample.log --format markdown
+python cli.py report --input examples/python/sample.log --fail-on errors
 ```
 
 Key flags:
@@ -19,6 +20,8 @@ Key flags:
 - `--redact/--no-redact`: Toggle whether textual fields (summary, explanation,
   and collected payload) are passed through the redactor. Defaults to the
   `report_redact` configuration value.
+- `--fail-on`: Exit with status 1 when the computed severity meets/exceeds the
+  requested threshold. Choices: `never` (default), `warnings`, `errors`.
 - `--output`: Optional path for writing the rendered report. Without it the
   document is printed to STDOUT.
 
@@ -40,12 +43,17 @@ structure with ISO-8601 timestamps. Example (truncated for brevity):
   "explanation": "Tool: pytest\nEcosystem: python\n...",
   "guardrails": {"allowed_paths": ["examples"], "timeout_seconds": 120},
   "redacted_text": null,
-  "generated_at": "2024-01-01T00:00:00+00:00"
+  "generated_at": "2024-01-01T00:00:00+00:00",
+  "severity": "error"
 }
 ```
 
 Use this output in downstream automation or ingest it into observability
 pipelines.
+
+Severity is derived from the normalized log: errors, failed statuses, or test
+failures yield `error`; warnings without errors yield `warning`; otherwise
+`ok`.
 
 ### Markdown
 
@@ -61,10 +69,12 @@ Add the following keys to your configuration to set defaults:
 ```toml
 report_format = "markdown"  # switch default renderer
 report_redact = true        # redact textual fields automatically
+report_fail_on = "warnings" # fail when warnings or errors are present
 ```
 
 Runtime overrides always win: pass `--format json` or `--no-redact` to change
 the behavior for a single invocation without editing configuration files.
+Use `--fail-on` to override the failure policy without touching configuration.
 
 ## Telemetry and metrics
 

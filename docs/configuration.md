@@ -41,6 +41,8 @@ The configuration file accepts the keys below. All keys are optional.
   or `markdown`).
 - `report_redact` (boolean): When `true`, redacts textual fields in generated
   reports by default.
+- `report_fail_on` (string): Severity threshold that forces the `report`
+  command to exit non-zero. Accepts `never`, `warnings`, or `errors`.
 - `extensions` (array or string): Dotted module paths for extensions to load.
   Strings accept separators in the same fashion as `allowed_paths`.
 
@@ -63,6 +65,7 @@ log_level = "INFO"
 log_format = "json"
 report_format = "json"
 report_redact = false
+report_fail_on = "never"
 extensions = ["zscripts.extensions.examples.plugin_echo"]
 ```
 
@@ -81,6 +84,7 @@ extensions = ["zscripts.extensions.examples.plugin_echo"]
   "log_format": "json",
   "report_format": "json",
   "report_redact": false,
+  "report_fail_on": "never",
   "extensions": ["zscripts.extensions.examples.plugin_echo"]
 }
 ```
@@ -103,6 +107,8 @@ Repeat `--set` for each key you want to change.
 - `--log-level`, `--log-format`: adjust logging without editing configuration.
 - `--redact/--no-redact`: override the reporting redaction toggle for a single
   invocation.
+- `--fail-on`: override the failure policy for the `report` command (`never`,
+  `warnings`, `errors`).
 - `--adapter`: override the default adapter for the command being executed.
 - `--dangerous`: temporarily disable guardrails.
 

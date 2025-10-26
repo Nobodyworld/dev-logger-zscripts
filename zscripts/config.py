@@ -26,6 +26,7 @@ class ToolkitConfig:
         log_format: Output format for structured logs (``text`` or ``json``).
         report_format: Default formatter name for the ``report`` command.
         report_redact: Whether the ``report`` command redacts collected text by default.
+        report_fail_on: Threshold controlling when the ``report`` command exits non-zero.
         extensions: Sequence of dotted module paths for toolkit extensions.
     """
 
@@ -48,6 +49,7 @@ class ToolkitConfig:
     log_format: str = "text"
     report_format: str = "json"
     report_redact: bool = False
+    report_fail_on: str = "never"
     extensions: Sequence[str] = field(default_factory=tuple)
 
 
@@ -67,6 +69,7 @@ class ToolkitConfigDict(TypedDict):
     log_format: str
     report_format: str
     report_redact: bool
+    report_fail_on: str
     extensions: tuple[str, ...]
 
 
@@ -88,6 +91,7 @@ DEFAULT_CONFIG: ToolkitConfigDict = {
     "log_format": "text",
     "report_format": "json",
     "report_redact": False,
+    "report_fail_on": "never",
     "extensions": (),
 }
 

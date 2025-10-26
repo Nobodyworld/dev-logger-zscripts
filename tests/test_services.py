@@ -16,6 +16,7 @@ from zscripts.domain.interfaces import (
     SchemaValidatorProtocol,
 )
 from zscripts.domain.models import SandboxOptions, SandboxResult
+from zscripts.observability.telemetry import TelemetryManager, TelemetrySettings
 from zscripts.schemas import LogIssue, NormalizedLog, TestSummary
 
 
@@ -27,6 +28,7 @@ class FakeAdapter(LogAdapterProtocol):
         self.collected: list[Path] = []
         self.parsed: list[str] = []
         self.summarized: list[NormalizedLog] = []
+        self.next_normalized: NormalizedLog | None = None
 
     def collect(self, source: Path, sandbox: SandboxOptions | None = None) -> str:
         self.collected.append(source)
@@ -34,6 +36,10 @@ class FakeAdapter(LogAdapterProtocol):
 
     def parse(self, raw: str) -> NormalizedLog:
         self.parsed.append(raw)
+        if self.next_normalized is not None:
+            result = self.next_normalized
+            self.next_normalized = None
+            return result
         return NormalizedLog(
             tool="pytest",
             ecosystem="python",
@@ -339,3 +345,88 @@ def test_generate_report_applies_redaction(service_components: dict[str, object]
     # Summary, explanation, and source payload should each be redacted once.
     raw_explanation = bundle.explanation.removeprefix("redacted:")
     assert redactor.calls == ["summary", raw_explanation, "payload"]
+
+
+def test_generate_report_marks_error_severity(service_components: dict[str, object]) -> None:
+    service: ToolkitService = service_components["service"]  # type: ignore[assignment]
+    adapter: FakeAdapter = service_components["adapter"]  # type: ignore[assignment]
+
+    adapter.next_normalized = NormalizedLog(
+        tool="pytest",
+        ecosystem="python",
+        command="pytest",
+        status="failed",
+        summary="boom",
+        timestamp=datetime.utcnow(),
+        errors=[LogIssue(message="kaboom")],
+    )
+
+    bundle = service.generate_report(adapter_key=None, raw_text="payload", redact=False)
+
+    assert bundle.severity == "error"
+
+
+def test_generate_report_marks_warning_severity(service_components: dict[str, object]) -> None:
+    service: ToolkitService = service_components["service"]  # type: ignore[assignment]
+    adapter: FakeAdapter = service_components["adapter"]  # type: ignore[assignment]
+
+    adapter.next_normalized = NormalizedLog(
+        tool="pytest",
+        ecosystem="python",
+        command="pytest",
+        status="passed",
+        summary="warn",
+        timestamp=datetime.utcnow(),
+        warnings=[LogIssue(message="heads up")],
+    )
+
+    bundle = service.generate_report(adapter_key=None, raw_text="payload", redact=False)
+
+    assert bundle.severity == "warning"
+
+
+def test_generate_report_marks_ok_when_no_issues(service_components: dict[str, object]) -> None:
+    service: ToolkitService = service_components["service"]  # type: ignore[assignment]
+    adapter: FakeAdapter = service_components["adapter"]  # type: ignore[assignment]
+
+    adapter.next_normalized = NormalizedLog(
+        tool="pytest",
+        ecosystem="python",
+        command="pytest",
+        status="passed",
+        summary="clean",
+        timestamp=datetime.utcnow(),
+    )
+
+    bundle = service.generate_report(adapter_key=None, raw_text="payload", redact=False)
+
+    assert bundle.severity == "ok"
+
+
+def test_service_operations_emit_metrics_when_telemetry_enabled() -> None:
+    telemetry = TelemetryManager(TelemetrySettings())
+    adapter = FakeAdapter()
+    registry = SingleAdapterRegistry(adapter)
+    validator = RecordingValidator()
+    redactor = RecordingRedactor()
+    examples = StaticExamples([Path("examples/python/sample.log")])
+    sandbox_runner = StubSandboxRunner()
+    factory = RecordingSandboxFactory(sandbox_runner)
+
+    service = ToolkitService(
+        adapter_registry=registry,
+        sandbox_factory=factory,
+        schema_validator=validator,
+        example_repository=examples,
+        redactor=redactor,
+        sandbox_options=SandboxOptions(),
+        default_adapter=adapter.identifier,
+        telemetry=telemetry,
+    )
+
+    service.parse_logs(adapter_key=None, raw_text="payload")
+
+    metrics = telemetry.metrics.collect_prometheus()
+    assert "zscripts_operations_total" in metrics
+    assert "component=\"service\"" in metrics
+    assert "operation=\"parse_logs\"" in metrics

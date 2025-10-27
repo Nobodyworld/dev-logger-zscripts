@@ -1,0 +1,3258 @@
+C:\Users\Nobod\Documents\GitHub\zscripts\sample_project
+├── backend
+│   ├── models.py
+│   │   │   │   """Django-style models for the sample project."""
+│   │   from __future__ import annotations
+│   │   
+│   │   from datetime import datetime
+│   │   from uuid import uuid4
+│   │   
+│   │   
+│   │   class BaseModel:
+│   │       """Base model with common fields."""
+│   │   
+│   │       def __init__(self):
+│   │           self.id = str(uuid4())
+│   │           self.created_at = datetime.now()
+│   │           self.updated_at = datetime.now()
+│   │   
+│   │   
+│   │   class User(BaseModel):
+│   │       """User model representing system users."""
+│   │   
+│   │       def __init__(self, username: str, email: str, is_active: bool = True, role: str = "user"):
+│   │           super().__init__()
+│   │           self.username = username
+│   │           self.email = email
+│   │           self.is_active = is_active
+│   │           self.role = role
+│   │           self.updated_at = self.created_at
+│   │   
+│   │   
+│   │   class Project(BaseModel):
+│   │       """Project model for organizing tasks."""
+│   │   
+│   │       def __init__(self, name: str, description: str | None = None, owner_id: str = "", status: str = "active", tags: list[str] | None = None):
+│   │           super().__init__()
+│   │           self.name = name
+│   │           self.description = description
+│   │           self.owner_id = owner_id
+│   │           self.status = status
+│   │           self.tags = tags or []
+│   │   
+│   │       def add_tag(self, tag: str) -> None:
+│   │           """Add a tag to the project."""
+│   │           if tag not in self.tags:
+│   │               self.tags.append(tag)
+│   │               self.updated_at = datetime.now()
+│   │   
+│   │   
+│   │   class Task(BaseModel):
+│   │       """Task model with project relationships."""
+│   │   
+│   │       def __init__(self, title: str, description: str | None = None, project_id: str = "", assignee_id: str | None = None, status: str = "todo", priority: str = "medium", due_date: datetime | None = None):
+│   │           super().__init__()
+│   │           self.title = title
+│   │           self.description = description
+│   │           self.project_id = project_id
+│   │           self.assignee_id = assignee_id
+│   │           self.status = status
+│   │           self.priority = priority
+│   │           self.due_date = due_date
+│   │   
+│   │       def mark_complete(self) -> None:
+│   │           """Mark the task as completed."""
+│   │           self.status = "done"
+│   │           self.updated_at = datetime.now()
+│   │   
+│   │       def assign_to(self, user_id: str) -> None:
+│   │           """Assign task to a user."""
+│   │           self.assignee_id = user_id
+│   │           self.updated_at = datetime.now()
+│   ├── service.py
+│   │   │   │   """Service layer for task and project management."""
+│   │   from __future__ import annotations
+│   │   
+│   │   from .models import Task, Project, User
+│   │   
+│   │   
+│   │   class TaskService:
+│   │       """Service for managing tasks and projects."""
+│   │   
+│   │       def __init__(self):
+│   │           self.tasks: dict[str, Task] = {}
+│   │           self.projects: dict[str, Project] = {}
+│   │           self.users: dict[str, User] = {}
+│   │   
+│   │       def create_task(
+│   │           self,
+│   │           title: str,
+│   │           description: str | None = None,
+│   │           project_id: str = "",
+│   │           priority: str = "medium",
+│   │       ) -> Task:
+│   │           """Create a new task."""
+│   │           task = Task(
+│   │               title=title,
+│   │               description=description or "",
+│   │               project_id=project_id,
+│   │               priority=priority,
+│   │           )
+│   │           self.tasks[task.id] = task
+│   │           return task
+│   │   
+│   │       def get_task(self, task_id: str) -> Task | None:
+│   │           """Get a task by ID."""
+│   │           return self.tasks.get(task_id)
+│   │   
+│   │       def list_tasks(self) -> list[Task]:
+│   │           """List all tasks."""
+│   │           return list(self.tasks.values())
+│   │   
+│   │       def assign_task(self, task_id: str, user_id: str) -> bool:
+│   │           """Assign a task to a user."""
+│   │           task = self.get_task(task_id)
+│   │           if task:
+│   │               task.assignee_id = user_id
+│   │               return True
+│   │           return False
+│   │   
+│   │       def mark_task_complete(self, task_id: str) -> Task | None:
+│   │           """Mark a task as complete."""
+│   │           task = self.get_task(task_id)
+│   │           if task:
+│   │               task.mark_complete()
+│   │           return task
+│   │   
+│   │       def create_project(self, name: str, description: str | None = None) -> Project:
+│   │           """Create a new project."""
+│   │           project = Project(name=name, description=description or "")
+│   │           self.projects[project.id] = project
+│   │           return project
+│   │   
+│   │       def get_project(self, project_id: str) -> Project | None:
+│   │           """Get a project by ID."""
+│   │           return self.projects.get(project_id)
+│   │   
+│   │       def list_projects(self) -> list[Project]:
+│   │           """List all projects."""
+│   │           return list(self.projects.values())
+│   │   
+│   │       def add_user(self, username: str, email: str) -> User:
+│   │           """Add a new user."""
+│   │           user = User(username=username, email=email)
+│   │           self.users[user.id] = user
+│   │           return user
+│   │   
+│   │       def get_user(self, user_id: str) -> User | None:
+│   │           """Get a user by ID."""
+│   │           return self.users.get(user_id)
+│   └── views.py
+│   │   │   │   """Django-style views for the sample project API."""
+│   │   from __future__ import annotations
+│   │   
+│   │   from typing import Any
+│   │   from .models import Task, Project
+│   │   from .service import TaskService
+│   │   
+│   │   
+│   │   class TaskView:
+│   │       """REST-style view for task operations."""
+│   │   
+│   │       def __init__(self, service: TaskService):
+│   │           self.service = service
+│   │   
+│   │       def get_tasks(self, project_id: str | None = None) -> list[dict[str, Any]]:
+│   │           """Get all tasks, optionally filtered by project."""
+│   │           tasks = self.service.list_tasks()
+│   │           if project_id:
+│   │               tasks = [t for t in tasks if t.project_id == project_id]
+│   │   
+│   │           return [
+│   │               {
+│   │                   "id": task.id,
+│   │                   "title": task.title,
+│   │                   "description": task.description,
+│   │                   "status": task.status,
+│   │                   "priority": task.priority,
+│   │                   "assignee_id": task.assignee_id,
+│   │                   "project_id": task.project_id,
+│   │                   "created_at": task.created_at.isoformat(),
+│   │                   "updated_at": task.updated_at.isoformat(),
+│   │               }
+│   │               for task in tasks
+│   │           ]
+│   │   
+│   │       def create_task(self, data: dict[str, Any]) -> dict[str, Any]:
+│   │           """Create a new task from request data."""
+│   │           task = self.service.create_task(
+│   │               title=data["title"],
+│   │               description=data.get("description"),
+│   │               project_id=data.get("project_id", ""),
+│   │               priority=data.get("priority", "medium"),
+│   │           )
+│   │   
+│   │           if assignee_id := data.get("assignee_id"):
+│   │               self.service.assign_task(task.id, assignee_id)
+│   │   
+│   │           return {
+│   │               "id": task.id,
+│   │               "title": task.title,
+│   │               "status": task.status,
+│   │               "created_at": task.created_at.isoformat(),
+│   │           }
+│   │   
+│   │       def update_task_status(self, task_id: str, status: str) -> dict[str, Any]:
+│   │           """Update a task's status."""
+│   │           if status == "done":
+│   │               task = self.service.mark_task_complete(task_id)
+│   │           else:
+│   │               task = self.service.get_task(task_id)
+│   │               if task:
+│   │                   task.status = status
+│   │                   task.updated_at = task.created_at  # Simplified
+│   │   
+│   │           return {"id": task.id, "status": task.status} if task else {}
+│   │   
+│   │   
+│   │   class ProjectView:
+│   │       """View for project operations."""
+│   │   
+│   │       def __init__(self, service: TaskService):
+│   │           self.service = service
+│   │   
+│   │       def get_projects(self) -> list[dict[str, Any]]:
+│   │           """Get all projects."""
+│   │           projects = self.service.list_projects()
+│   │           return [
+│   │               {
+│   │                   "id": project.id,
+│   │                   "name": project.name,
+│   │                   "description": project.description,
+│   │                   "status": project.status,
+│   │                   "tags": project.tags,
+│   │                   "created_at": project.created_at.isoformat(),
+│   │               }
+│   │               for project in projects
+│   │           ]
+│   │   
+│   │       def create_project(self, data: dict[str, Any]) -> dict[str, Any]:
+│   │           """Create a new project."""
+│   │           project = self.service.create_project(
+│   │               name=data["name"],
+│   │               description=data.get("description"),
+│   │           )
+│   │   
+│   │           return {
+│   │               "id": project.id,
+│   │               "name": project.name,
+│   │               "status": project.status,
+│   │           }
+├── frontend
+│   ├── App.css
+│   │   │   │   /* Modern CSS for the Task Management System */
+│   │   .app {
+│   │     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+│   │     max-width: 1200px;
+│   │     margin: 0 auto;
+│   │     padding: 20px;
+│   │     background-color: #f8fafc;
+│   │     min-height: 100vh;
+│   │   }
+│   │   
+│   │   .header {
+│   │     text-align: center;
+│   │     margin-bottom: 40px;
+│   │     padding: 20px;
+│   │     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+│   │     color: white;
+│   │     border-radius: 12px;
+│   │     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+│   │   }
+│   │   
+│   │   .header h1 {
+│   │     margin: 0 0 10px 0;
+│   │     font-size: 2.5rem;
+│   │     font-weight: 700;
+│   │   }
+│   │   
+│   │   .header p {
+│   │     margin: 0;
+│   │     font-size: 1.1rem;
+│   │     opacity: 0.9;
+│   │   }
+│   │   
+│   │   .content {
+│   │     display: grid;
+│   │     gap: 30px;
+│   │   }
+│   │   
+│   │   .projects-section h2,
+│   │   .tasks-section h2 {
+│   │     color: #1f2937;
+│   │     margin-bottom: 20px;
+│   │     font-size: 1.8rem;
+│   │     font-weight: 600;
+│   │   }
+│   │   
+│   │   .projects-grid {
+│   │     display: grid;
+│   │     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+│   │     gap: 20px;
+│   │   }
+│   │   
+│   │   .project-card {
+│   │     background: white;
+│   │     padding: 24px;
+│   │     border-radius: 12px;
+│   │     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+│   │     border: 1px solid #e5e7eb;
+│   │     transition: transform 0.2s, box-shadow 0.2s;
+│   │   }
+│   │   
+│   │   .project-card:hover {
+│   │     transform: translateY(-2px);
+│   │     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+│   │   }
+│   │   
+│   │   .project-card h3 {
+│   │     margin: 0 0 12px 0;
+│   │     color: #1f2937;
+│   │     font-size: 1.3rem;
+│   │     font-weight: 600;
+│   │   }
+│   │   
+│   │   .project-card p {
+│   │     color: #6b7280;
+│   │     margin: 0 0 16px 0;
+│   │     line-height: 1.5;
+│   │   }
+│   │   
+│   │   .project-tags {
+│   │     display: flex;
+│   │     flex-wrap: wrap;
+│   │     gap: 8px;
+│   │     margin-bottom: 12px;
+│   │   }
+│   │   
+│   │   .tag {
+│   │     background: #e0e7ff;
+│   │     color: #3730a3;
+│   │     padding: 4px 8px;
+│   │     border-radius: 6px;
+│   │     font-size: 0.8rem;
+│   │     font-weight: 500;
+│   │   }
+│   │   
+│   │   .status {
+│   │     display: inline-block;
+│   │     padding: 4px 12px;
+│   │     border-radius: 20px;
+│   │     font-size: 0.8rem;
+│   │     font-weight: 600;
+│   │     text-transform: uppercase;
+│   │     letter-spacing: 0.5px;
+│   │   }
+│   │   
+│   │   .status-active {
+│   │     background: #d1fae5;
+│   │     color: #065f46;
+│   │   }
+│   │   
+│   │   .status-completed {
+│   │     background: #dbeafe;
+│   │     color: #1e40af;
+│   │   }
+│   │   
+│   │   .status-archived {
+│   │     background: #f3f4f6;
+│   │     color: #6b7280;
+│   │   }
+│   │   
+│   │   .tasks-section {
+│   │     background: white;
+│   │     padding: 24px;
+│   │     border-radius: 12px;
+│   │     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+│   │     border: 1px solid #e5e7eb;
+│   │   }
+│   │   
+│   │   .tasks-header {
+│   │     display: flex;
+│   │     justify-content: space-between;
+│   │     align-items: flex-start;
+│   │     margin-bottom: 24px;
+│   │     gap: 20px;
+│   │   }
+│   │   
+│   │   .tasks-header h2 {
+│   │     margin: 0;
+│   │     flex-shrink: 0;
+│   │   }
+│   │   
+│   │   .task-form {
+│   │     display: flex;
+│   │     flex-direction: column;
+│   │     gap: 12px;
+│   │     min-width: 300px;
+│   │   }
+│   │   
+│   │   .task-form input,
+│   │   .task-form textarea,
+│   │   .task-form button {
+│   │     padding: 12px;
+│   │     border: 1px solid #d1d5db;
+│   │     border-radius: 8px;
+│   │     font-size: 1rem;
+│   │   }
+│   │   
+│   │   .task-form input:focus,
+│   │   .task-form textarea:focus {
+│   │     outline: none;
+│   │     border-color: #667eea;
+│   │     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+│   │   }
+│   │   
+│   │   .task-form button {
+│   │     background: #667eea;
+│   │     color: white;
+│   │     border: none;
+│   │     cursor: pointer;
+│   │     font-weight: 600;
+│   │     transition: background-color 0.2s;
+│   │   }
+│   │   
+│   │   .task-form button:hover {
+│   │     background: #5a67d8;
+│   │   }
+│   │   
+│   │   .task-form textarea {
+│   │     resize: vertical;
+│   │     min-height: 60px;
+│   │   }
+│   │   
+│   │   .tasks-grid {
+│   │     display: grid;
+│   │     grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+│   │     gap: 20px;
+│   │   }
+│   │   
+│   │   .task-card {
+│   │     background: #f9fafb;
+│   │     padding: 20px;
+│   │     border-radius: 12px;
+│   │     border: 1px solid #e5e7eb;
+│   │     transition: transform 0.2s, box-shadow 0.2s;
+│   │   }
+│   │   
+│   │   .task-card:hover {
+│   │     transform: translateY(-1px);
+│   │     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+│   │   }
+│   │   
+│   │   .task-header {
+│   │     display: flex;
+│   │     justify-content: space-between;
+│   │     align-items: flex-start;
+│   │     margin-bottom: 12px;
+│   │     gap: 12px;
+│   │   }
+│   │   
+│   │   .task-header h3 {
+│   │     margin: 0;
+│   │     color: #1f2937;
+│   │     font-size: 1.1rem;
+│   │     font-weight: 600;
+│   │     flex: 1;
+│   │   }
+│   │   
+│   │   .priority-badge {
+│   │     padding: 4px 8px;
+│   │     border-radius: 12px;
+│   │     font-size: 0.75rem;
+│   │     font-weight: 600;
+│   │     color: white;
+│   │     text-transform: uppercase;
+│   │     letter-spacing: 0.5px;
+│   │     flex-shrink: 0;
+│   │   }
+│   │   
+│   │   .task-description {
+│   │     color: #6b7280;
+│   │     margin: 0 0 16px 0;
+│   │     line-height: 1.5;
+│   │     font-size: 0.9rem;
+│   │   }
+│   │   
+│   │   .task-footer {
+│   │     display: flex;
+│   │     justify-content: space-between;
+│   │     align-items: center;
+│   │     gap: 12px;
+│   │   }
+│   │   
+│   │   .task-footer select {
+│   │     padding: 6px 12px;
+│   │     border: 1px solid #d1d5db;
+│   │     border-radius: 6px;
+│   │     font-size: 0.85rem;
+│   │     font-weight: 500;
+│   │     cursor: pointer;
+│   │     min-width: 120px;
+│   │   }
+│   │   
+│   │   .task-footer select:focus {
+│   │     outline: none;
+│   │     border-color: #667eea;
+│   │   }
+│   │   
+│   │   .task-date {
+│   │     color: #9ca3af;
+│   │     font-size: 0.8rem;
+│   │     font-weight: 500;
+│   │   }
+│   │   
+│   │   .loading {
+│   │     display: flex;
+│   │     justify-content: center;
+│   │     align-items: center;
+│   │     height: 200px;
+│   │     font-size: 1.2rem;
+│   │     color: #6b7280;
+│   │   }
+│   │   
+│   │   /* Responsive design */
+│   │   @media (max-width: 768px) {
+│   │     .app {
+│   │       padding: 10px;
+│   │     }
+│   │   
+│   │     .header h1 {
+│   │       font-size: 2rem;
+│   │     }
+│   │   
+│   │     .tasks-header {
+│   │       flex-direction: column;
+│   │       align-items: stretch;
+│   │     }
+│   │   
+│   │     .task-form {
+│   │       min-width: auto;
+│   │     }
+│   │   
+│   │     .tasks-grid {
+│   │       grid-template-columns: 1fr;
+│   │     }
+│   │   
+│   │     .projects-grid {
+│   │       grid-template-columns: 1fr;
+│   │     }
+│   │   }
+│   └── App.jsx
+│   │   │   │   // Comprehensive React task management application demonstrating modern patterns
+│   │   import React, { useState, useEffect } from 'react';
+│   │   import './App.css';
+│   │   
+│   │   /**
+│   │    * @typedef {Object} Task
+│   │    * @property {string} id
+│   │    * @property {string} title
+│   │    * @property {string} description
+│   │    * @property {'todo' | 'in_progress' | 'done'} status
+│   │    * @property {'low' | 'medium' | 'high'} priority
+│   │    * @property {string} [assignee_id]
+│   │    * @property {string} project_id
+│   │    * @property {string} created_at
+│   │    * @property {string} updated_at
+│   │    */
+│   │   
+│   │   /**
+│   │    * @typedef {Object} Project
+│   │    * @property {string} id
+│   │    * @property {string} name
+│   │    * @property {string} description
+│   │    * @property {'active' | 'completed' | 'archived'} status
+│   │    * @property {string[]} tags
+│   │    * @property {string} created_at
+│   │    */
+│   │   
+│   │   function App() {
+│   │     const [tasks, setTasks] = useState([]);
+│   │     const [projects, setProjects] = useState([]);
+│   │     const [selectedProject, setSelectedProject] = useState('');
+│   │     const [newTaskTitle, setNewTaskTitle] = useState('');
+│   │     const [newTaskDescription, setNewTaskDescription] = useState('');
+│   │     const [loading, setLoading] = useState(true);
+│   │   
+│   │     useEffect(() => {
+│   │       loadData();
+│   │     }, []);
+│   │   
+│   │     const loadData = async () => {
+│   │       try {
+│   │         // Mock API calls - in real app these would fetch from backend
+│   │         const mockTasks = [
+│   │           {
+│   │             id: '1',
+│   │             title: 'Implement user authentication',
+│   │             description: 'Add login/logout functionality with JWT tokens',
+│   │             status: 'in_progress',
+│   │             priority: 'high',
+│   │             project_id: '1',
+│   │             created_at: '2024-01-15T10:00:00Z',
+│   │             updated_at: '2024-01-16T14:30:00Z',
+│   │           },
+│   │           {
+│   │             id: '2',
+│   │             title: 'Design database schema',
+│   │             description: 'Create ER diagram and define table relationships',
+│   │             status: 'done',
+│   │             priority: 'medium',
+│   │             project_id: '1',
+│   │             created_at: '2024-01-10T09:00:00Z',
+│   │             updated_at: '2024-01-12T16:45:00Z',
+│   │           },
+│   │         ];
+│   │   
+│   │         const mockProjects = [
+│   │           {
+│   │             id: '1',
+│   │             name: 'Task Management System',
+│   │             description: 'A comprehensive task and project management application',
+│   │             status: 'active',
+│   │             tags: ['react', 'typescript', 'api'],
+│   │             created_at: '2024-01-01T00:00:00Z',
+│   │           },
+│   │         ];
+│   │   
+│   │         setTasks(mockTasks);
+│   │         setProjects(mockProjects);
+│   │       } catch (error) {
+│   │         console.error('Failed to load data:', error);
+│   │       } finally {
+│   │         setLoading(false);
+│   │       }
+│   │     };
+│   │   
+│   │     const createTask = async () => {
+│   │       if (!newTaskTitle.trim()) return;
+│   │   
+│   │       const newTask = {
+│   │         id: Date.now().toString(),
+│   │         title: newTaskTitle,
+│   │         description: newTaskDescription,
+│   │         status: 'todo',
+│   │         priority: 'medium',
+│   │         project_id: selectedProject || '1',
+│   │         created_at: new Date().toISOString(),
+│   │         updated_at: new Date().toISOString(),
+│   │       };
+│   │   
+│   │       setTasks(prev => [...prev, newTask]);
+│   │       setNewTaskTitle('');
+│   │       setNewTaskDescription('');
+│   │     };
+│   │   
+│   │     const updateTaskStatus = async (taskId, status) => {
+│   │       setTasks(prev =>
+│   │         prev.map(task =>
+│   │           task.id === taskId
+│   │             ? { ...task, status, updated_at: new Date().toISOString() }
+│   │             : task
+│   │         )
+│   │       );
+│   │     };
+│   │   
+│   │     const getStatusColor = (status) => {
+│   │       switch (status) {
+│   │         case 'done': return '#10b981';
+│   │         case 'in_progress': return '#f59e0b';
+│   │         default: return '#6b7280';
+│   │       }
+│   │     };
+│   │   
+│   │     const getPriorityColor = (priority) => {
+│   │       switch (priority) {
+│   │         case 'high': return '#ef4444';
+│   │         case 'medium': return '#f59e0b';
+│   │         default: return '#10b981';
+│   │       }
+│   │     };
+│   │   
+│   │     if (loading) {
+│   │       return <div className="loading">Loading...</div>;
+│   │     }
+│   │   
+│   │     return (
+│   │       <div className="app">
+│   │         <header className="header">
+│   │           <h1>Task Management System</h1>
+│   │           <p>Organize your projects and tasks efficiently</p>
+│   │         </header>
+│   │   
+│   │         <div className="content">
+│   │           <div className="projects-section">
+│   │             <h2>Projects</h2>
+│   │             <div className="projects-grid">
+│   │               {projects.map(project => (
+│   │                 <div key={project.id} className="project-card">
+│   │                   <h3>{project.name}</h3>
+│   │                   <p>{project.description}</p>
+│   │                   <div className="project-tags">
+│   │                     {project.tags.map(tag => (
+│   │                       <span key={tag} className="tag">{tag}</span>
+│   │                     ))}
+│   │                   </div>
+│   │                   <span className={`status status-${project.status}`}>
+│   │                     {project.status}
+│   │                   </span>
+│   │                 </div>
+│   │               ))}
+│   │             </div>
+│   │           </div>
+│   │   
+│   │           <div className="tasks-section">
+│   │             <div className="tasks-header">
+│   │               <h2>Tasks</h2>
+│   │               <div className="task-form">
+│   │                 <input
+│   │                   type="text"
+│   │                   placeholder="Task title"
+│   │                   value={newTaskTitle}
+│   │                   onChange={(e) => setNewTaskTitle(e.target.value)}
+│   │                   onKeyPress={(e) => e.key === 'Enter' && createTask()}
+│   │                 />
+│   │                 <textarea
+│   │                   placeholder="Task description (optional)"
+│   │                   value={newTaskDescription}
+│   │                   onChange={(e) => setNewTaskDescription(e.target.value)}
+│   │                   rows={2}
+│   │                 />
+│   │                 <button onClick={createTask}>Add Task</button>
+│   │               </div>
+│   │             </div>
+│   │   
+│   │             <div className="tasks-grid">
+│   │               {tasks.map(task => (
+│   │                 <div key={task.id} className="task-card">
+│   │                   <div className="task-header">
+│   │                     <h3>{task.title}</h3>
+│   │                     <span
+│   │                       className="priority-badge"
+│   │                       style={{ backgroundColor: getPriorityColor(task.priority) }}
+│   │                     >
+│   │                       {task.priority}
+│   │                     </span>
+│   │                   </div>
+│   │                   {task.description && (
+│   │                     <p className="task-description">{task.description}</p>
+│   │                   )}
+│   │                   <div className="task-footer">
+│   │                     <select
+│   │                       value={task.status}
+│   │                       onChange={(e) => updateTaskStatus(task.id, e.target.value)}
+│   │                       style={{ backgroundColor: getStatusColor(task.status) }}
+│   │                     >
+│   │                       <option value="todo">To Do</option>
+│   │                       <option value="in_progress">In Progress</option>
+│   │                       <option value="done">Done</option>
+│   │                     </select>
+│   │                     <span className="task-date">
+│   │                       {new Date(task.created_at).toLocaleDateString()}
+│   │                     </span>
+│   │                   </div>
+│   │                 </div>
+│   │               ))}
+│   │             </div>
+│   │           </div>
+│   │         </div>
+│   │       </div>
+│   │     );
+│   │   }
+│   │   
+│   │   export default App;
+├── infra
+│   ├── docker-compose.yml
+│   │   │   │   version: '3.8'
+│   │   
+│   │   services:
+│   │     # PostgreSQL database
+│   │     db:
+│   │       image: postgres:15-alpine
+│   │       environment:
+│   │         POSTGRES_DB: taskmanager
+│   │         POSTGRES_USER: taskuser
+│   │         POSTGRES_PASSWORD: taskpass123
+│   │       volumes:
+│   │         - postgres_data:/var/lib/postgresql/data
+│   │       ports:
+│   │         - "5432:5432"
+│   │       healthcheck:
+│   │         test: ["CMD-SHELL", "pg_isready -U taskuser -d taskmanager"]
+│   │         interval: 10s
+│   │         timeout: 5s
+│   │         retries: 5
+│   │   
+│   │     # Redis cache
+│   │     redis:
+│   │       image: redis:7-alpine
+│   │       ports:
+│   │         - "6379:6379"
+│   │       volumes:
+│   │         - redis_data:/data
+│   │       healthcheck:
+│   │         test: ["CMD", "redis-cli", "ping"]
+│   │         interval: 10s
+│   │         timeout: 3s
+│   │         retries: 3
+│   │   
+│   │     # Backend API
+│   │     backend:
+│   │       build:
+│   │         context: ..
+│   │         dockerfile: infra/Dockerfile.backend
+│   │       environment:
+│   │         - DATABASE_URL=postgresql://taskuser:taskpass123@db:5432/taskmanager
+│   │         - REDIS_URL=redis://redis:6379
+│   │         - SECRET_KEY=development-secret-key-change-in-production
+│   │         - DEBUG=true
+│   │       ports:
+│   │         - "8000:8000"
+│   │       depends_on:
+│   │         db:
+│   │           condition: service_healthy
+│   │         redis:
+│   │           condition: service_healthy
+│   │       volumes:
+│   │         - ./backend:/app
+│   │       healthcheck:
+│   │         test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+│   │         interval: 30s
+│   │         timeout: 10s
+│   │         retries: 3
+│   │       command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+│   │   
+│   │     # Frontend React app
+│   │     frontend:
+│   │       build:
+│   │         context: ..
+│   │         dockerfile: infra/Dockerfile.frontend
+│   │       ports:
+│   │         - "3000:80"
+│   │       depends_on:
+│   │         - backend
+│   │       environment:
+│   │         - REACT_APP_API_URL=http://localhost:8000
+│   │       volumes:
+│   │         - ./frontend:/app
+│   │         - /app/node_modules
+│   │   
+│   │     # pgAdmin for database management
+│   │     pgadmin:
+│   │       image: dpage/pgadmin4:latest
+│   │       environment:
+│   │         PGADMIN_DEFAULT_EMAIL: admin@taskmanager.com
+│   │         PGADMIN_DEFAULT_PASSWORD: admin123
+│   │       ports:
+│   │         - "5050:80"
+│   │       depends_on:
+│   │         - db
+│   │       volumes:
+│   │         - pgadmin_data:/var/lib/pgadmin
+│   │   
+│   │     # Redis Commander for Redis management
+│   │     redis-commander:
+│   │       image: rediscommander/redis-commander:latest
+│   │       environment:
+│   │         - REDIS_HOSTS=local:redis:6379
+│   │       ports:
+│   │         - "8081:8081"
+│   │       depends_on:
+│   │         - redis
+│   │   
+│   │   volumes:
+│   │     postgres_data:
+│   │     redis_data:
+│   │     pgadmin_data:
+│   │   
+│   │   networks:
+│   │     default:
+│   │       driver: bridge
+│   ├── Dockerfile.backend
+│   │   │   │   # Multi-stage Docker build for the Task Management System Backend
+│   │   # Stage 1: Build stage
+│   │   FROM python:3.11-slim as builder
+│   │   
+│   │   # Set environment variables
+│   │   ENV PYTHONDONTWRITEBYTECODE=1 \
+│   │       PYTHONUNBUFFERED=1 \
+│   │       PIP_NO_CACHE_DIR=1 \
+│   │       PIP_DISABLE_PIP_VERSION_CHECK=1
+│   │   
+│   │   # Install system dependencies
+│   │   RUN apt-get update && apt-get install -y \
+│   │       build-essential \
+│   │       && rm -rf /var/lib/apt/lists/*
+│   │   
+│   │   # Create virtual environment
+│   │   RUN python -m venv /opt/venv
+│   │   ENV PATH="/opt/venv/bin:$PATH"
+│   │   
+│   │   # Install Python dependencies
+│   │   COPY sample_project/backend/requirements.txt .
+│   │   RUN pip install --upgrade pip && \
+│   │       pip install -r requirements.txt
+│   │   
+│   │   # Stage 2: Runtime stage
+│   │   FROM python:3.11-slim as runtime
+│   │   
+│   │   # Install runtime dependencies
+│   │   RUN apt-get update && apt-get install -y \
+│   │       curl \
+│   │       && rm -rf /var/lib/apt/lists/*
+│   │   
+│   │   # Create non-root user
+│   │   RUN groupadd -r appuser && useradd -r -g appuser appuser
+│   │   
+│   │   # Copy virtual environment from builder stage
+│   │   COPY --from=builder /opt/venv /opt/venv
+│   │   ENV PATH="/opt/venv/bin:$PATH"
+│   │   
+│   │   # Set working directory
+│   │   WORKDIR /app
+│   │   
+│   │   # Copy application code
+│   │   COPY sample_project/backend/ ./
+│   │   
+│   │   # Change ownership to non-root user
+│   │   RUN chown -R appuser:appuser /app
+│   │   USER appuser
+│   │   
+│   │   # Health check
+│   │   HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+│   │       CMD curl -f http://localhost:8000/health || exit 1
+│   │   
+│   │   # Expose port
+│   │   EXPOSE 8000
+│   │   
+│   │   # Start the application
+│   │   CMD ["python", "main.py"]
+│   ├── Dockerfile.frontend
+│   │   │   │   # Multi-stage Docker build for the Task Management System Frontend
+│   │   # Stage 1: Build stage
+│   │   FROM node:18-alpine as builder
+│   │   
+│   │   # Set working directory
+│   │   WORKDIR /app
+│   │   
+│   │   # Copy package files
+│   │   COPY sample_project/frontend/package*.json ./
+│   │   
+│   │   # Install dependencies
+│   │   RUN npm ci --only=production
+│   │   
+│   │   # Copy source code
+│   │   COPY sample_project/frontend/ ./
+│   │   
+│   │   # Build the application
+│   │   RUN npm run build
+│   │   
+│   │   # Stage 2: Runtime stage (Nginx)
+│   │   FROM nginx:alpine
+│   │   
+│   │   # Copy built application from builder stage
+│   │   COPY --from=builder /app/build /usr/share/nginx/html
+│   │   
+│   │   # Copy custom nginx configuration
+│   │   COPY sample_project/infra/nginx.conf /etc/nginx/conf.d/default.conf
+│   │   
+│   │   # Create non-root user
+│   │   RUN addgroup -g 1001 -S nodejs && \
+│   │       adduser -S nextjs -u 1001
+│   │   
+│   │   # Change ownership
+│   │   RUN chown -R nextjs:nodejs /usr/share/nginx/html
+│   │   RUN chown -R nextjs:nodejs /var/cache/nginx
+│   │   RUN chown -R nextjs:nodejs /var/log/nginx
+│   │   RUN chown -R nextjs:nodejs /etc/nginx/conf.d
+│   │   RUN touch /var/run/nginx.pid
+│   │   RUN chown -R nextjs:nodejs /var/run/nginx.pid
+│   │   
+│   │   USER nextjs
+│   │   
+│   │   # Health check
+│   │   HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+│   │       CMD curl -f http://localhost/health || exit 1
+│   │   
+│   │   # Expose port
+│   │   EXPOSE 80
+│   │   
+│   │   # Start nginx
+│   │   CMD ["nginx", "-g", "daemon off;"]
+│   ├── nginx.conf
+│   │   │   │   server {
+│   │       listen 80;
+│   │       server_name localhost;
+│   │       root /usr/share/nginx/html;
+│   │       index index.html;
+│   │   
+│   │       # Security headers
+│   │       add_header X-Frame-Options "SAMEORIGIN" always;
+│   │       add_header X-XSS-Protection "1; mode=block" always;
+│   │       add_header X-Content-Type-Options "nosniff" always;
+│   │       add_header Referrer-Policy "no-referrer-when-downgrade" always;
+│   │       add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
+│   │   
+│   │       # Gzip compression
+│   │       gzip on;
+│   │       gzip_vary on;
+│   │       gzip_min_length 1024;
+│   │       gzip_proxied expired no-cache no-store private must-revalidate auth;
+│   │       gzip_types
+│   │           text/plain
+│   │           text/css
+│   │           text/xml
+│   │           text/javascript
+│   │           application/javascript
+│   │           application/xml+rss
+│   │           application/json;
+│   │   
+│   │       # Handle client-side routing
+│   │       location / {
+│   │           try_files $uri $uri/ /index.html;
+│   │       }
+│   │   
+│   │       # Cache static assets
+│   │       location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+│   │           expires 1y;
+│   │           add_header Cache-Control "public, immutable";
+│   │       }
+│   │   
+│   │       # Health check endpoint
+│   │       location /health {
+│   │           access_log off;
+│   │           return 200 "healthy\n";
+│   │           add_header Content-Type text/plain;
+│   │       }
+│   │   
+│   │       # API proxy (if needed for development)
+│   │       location /api/ {
+│   │           proxy_pass http://backend:8000/;
+│   │           proxy_http_version 1.1;
+│   │           proxy_set_header Upgrade $http_upgrade;
+│   │           proxy_set_header Connection 'upgrade';
+│   │           proxy_set_header Host $host;
+│   │           proxy_set_header X-Real-IP $remote_addr;
+│   │           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+│   │           proxy_set_header X-Forwarded-Proto $scheme;
+│   │           proxy_cache_bypass $http_upgrade;
+│   │       }
+│   │   }
+│   └── pipeline.yaml
+│   │   │   │   name: Task Management System CI/CD Pipeline
+│   │   
+│   │   on:
+│   │     push:
+│   │       branches: [main, develop]
+│   │     pull_request:
+│   │       branches: [main]
+│   │     workflow_dispatch:
+│   │       inputs:
+│   │         environment:
+│   │           description: 'Deployment environment'
+│   │           required: true
+│   │           default: 'staging'
+│   │           type: choice
+│   │           options:
+│   │             - staging
+│   │             - production
+│   │   
+│   │   env:
+│   │     NODE_VERSION: '18'
+│   │     PYTHON_VERSION: '3.11'
+│   │     DOCKER_REGISTRY: 'ghcr.io'
+│   │     IMAGE_NAME: ${{ github.repository }}
+│   │   
+│   │   jobs:
+│   │     # Security and quality checks
+│   │     security-scan:
+│   │       name: Security Scan
+│   │       runs-on: ubuntu-latest
+│   │       steps:
+│   │         - name: Checkout code
+│   │           uses: actions/checkout@v4
+│   │   
+│   │         - name: Run Trivy vulnerability scanner
+│   │           uses: aquasecurity/trivy-action@master
+│   │           with:
+│   │             scan-type: 'fs'
+│   │             scan-ref: '.'
+│   │             format: 'sarif'
+│   │             output: 'trivy-results.sarif'
+│   │   
+│   │         - name: Upload Trivy scan results
+│   │           uses: github/codeql-action/upload-sarif@v3
+│   │           if: always()
+│   │           with:
+│   │             sarif_file: 'trivy-results.sarif'
+│   │   
+│   │     # Code quality and testing
+│   │     quality-check:
+│   │       name: Code Quality
+│   │       runs-on: ubuntu-latest
+│   │       strategy:
+│   │         matrix:
+│   │           include:
+│   │             - component: backend
+│   │               language: python
+│   │             - component: frontend
+│   │               language: javascript
+│   │       steps:
+│   │         - name: Checkout code
+│   │           uses: actions/checkout@v4
+│   │   
+│   │         - name: Setup Python
+│   │           if: matrix.language == 'python'
+│   │           uses: actions/setup-python@v4
+│   │           with:
+│   │             python-version: ${{ env.PYTHON_VERSION }}
+│   │   
+│   │         - name: Setup Node.js
+│   │           if: matrix.language == 'javascript'
+│   │           uses: actions/setup-node@v4
+│   │           with:
+│   │             node-version: ${{ env.NODE_VERSION }}
+│   │             cache: 'npm'
+│   │             cache-dependency-path: 'sample_project/${{ matrix.component }}/package-lock.json'
+│   │   
+│   │         - name: Install Python dependencies
+│   │           if: matrix.language == 'python'
+│   │           run: |
+│   │             cd sample_project/${{ matrix.component }}
+│   │             pip install -r requirements.txt
+│   │   
+│   │         - name: Install Node.js dependencies
+│   │           if: matrix.language == 'javascript'
+│   │           run: |
+│   │             cd sample_project/${{ matrix.component }}
+│   │             npm ci
+│   │   
+│   │         - name: Run linting
+│   │           if: matrix.language == 'python'
+│   │           run: |
+│   │             cd sample_project/${{ matrix.component }}
+│   │             pip install flake8 black isort
+│   │             flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+│   │             black --check .
+│   │             isort --check-only .
+│   │   
+│   │         - name: Run linting
+│   │           if: matrix.language == 'javascript'
+│   │           run: |
+│   │             cd sample_project/${{ matrix.component }}
+│   │             npm run lint
+│   │   
+│   │         - name: Run tests
+│   │           if: matrix.language == 'python'
+│   │           run: |
+│   │             cd sample_project/${{ matrix.component }}
+│   │             pip install pytest pytest-cov
+│   │             pytest --cov=. --cov-report=xml
+│   │   
+│   │         - name: Run tests
+│   │           if: matrix.language == 'javascript'
+│   │           run: |
+│   │             cd sample_project/${{ matrix.component }}
+│   │             npm test -- --coverage --watchAll=false
+│   │   
+│   │         - name: Upload coverage reports
+│   │           uses: codecov/codecov-action@v3
+│   │           with:
+│   │             file: ./coverage.xml
+│   │             flags: ${{ matrix.component }}
+│   │             name: ${{ matrix.component }}-coverage
+│   │   
+│   │     # Build and package
+│   │     build:
+│   │       name: Build Application
+│   │       runs-on: ubuntu-latest
+│   │       needs: [security-scan, quality-check]
+│   │       steps:
+│   │         - name: Checkout code
+│   │           uses: actions/checkout@v4
+│   │   
+│   │         - name: Setup Docker Buildx
+│   │           uses: docker/setup-buildx-action@v3
+│   │   
+│   │         - name: Log in to Container Registry
+│   │           uses: docker/login-action@v3
+│   │           with:
+│   │             registry: ${{ env.DOCKER_REGISTRY }}
+│   │             username: ${{ github.actor }}
+│   │             password: ${{ secrets.GITHUB_TOKEN }}
+│   │   
+│   │         - name: Extract metadata
+│   │           id: meta
+│   │           uses: docker/metadata-action@v5
+│   │           with:
+│   │             images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}
+│   │             tags: |
+│   │               type=ref,event=branch
+│   │               type=ref,event=pr
+│   │               type=sha,prefix={{branch}}-
+│   │               type=raw,value=latest,enable={{is_default_branch}}
+│   │   
+│   │         - name: Build and push Docker image
+│   │           uses: docker/build-push-action@v5
+│   │           with:
+│   │             context: .
+│   │             push: true
+│   │             tags: ${{ steps.meta.outputs.tags }}
+│   │             labels: ${{ steps.meta.outputs.labels }}
+│   │             cache-from: type=gha
+│   │             cache-to: type=gha,mode=max
+│   │   
+│   │     # Deploy to staging
+│   │     deploy-staging:
+│   │       name: Deploy to Staging
+│   │       runs-on: ubuntu-latest
+│   │       needs: build
+│   │       if: github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
+│   │       environment: staging
+│   │       steps:
+│   │         - name: Checkout code
+│   │           uses: actions/checkout@v4
+│   │   
+│   │         - name: Deploy to staging environment
+│   │           run: |
+│   │             echo "Deploying to staging environment..."
+│   │             # Add your staging deployment commands here
+│   │             # For example: kubectl apply -f k8s/staging/ or serverless deploy --stage staging
+│   │   
+│   │         - name: Run smoke tests
+│   │           run: |
+│   │             echo "Running smoke tests against staging..."
+│   │             # Add smoke test commands here
+│   │             # curl -f https://staging-api.example.com/health || exit 1
+│   │   
+│   │         - name: Notify deployment
+│   │           if: always()
+│   │           run: |
+│   │             echo "Staging deployment completed with status: ${{ job.status }}"
+│   │   
+│   │     # Deploy to production
+│   │     deploy-production:
+│   │       name: Deploy to Production
+│   │       runs-on: ubuntu-latest
+│   │       needs: [build, deploy-staging]
+│   │       if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+│   │       environment: production
+│   │       steps:
+│   │         - name: Checkout code
+│   │           uses: actions/checkout@v4
+│   │   
+│   │         - name: Deploy to production environment
+│   │           run: |
+│   │             echo "Deploying to production environment..."
+│   │             # Add your production deployment commands here
+│   │             # kubectl apply -f k8s/production/ or serverless deploy --stage prod
+│   │   
+│   │         - name: Run production smoke tests
+│   │           run: |
+│   │             echo "Running smoke tests against production..."
+│   │             # curl -f https://api.example.com/health || exit 1
+│   │   
+│   │         - name: Create release
+│   │           if: success()
+│   │           run: |
+│   │             echo "Creating GitHub release..."
+│   │             # gh release create ${{ github.sha }} --generate-notes
+│   │   
+│   │         - name: Notify production deployment
+│   │           if: always()
+│   │           run: |
+│   │             echo "Production deployment completed with status: ${{ job.status }}"
+│   │   
+│   │     # Documentation deployment
+│   │     docs:
+│   │       name: Deploy Documentation
+│   │       runs-on: ubuntu-latest
+│   │       if: github.ref == 'refs/heads/main'
+│   │       steps:
+│   │         - name: Checkout code
+│   │           uses: actions/checkout@v4
+│   │   
+│   │         - name: Setup Python
+│   │           uses: actions/setup-python@v4
+│   │           with:
+│   │             python-version: ${{ env.PYTHON_VERSION }}
+│   │   
+│   │         - name: Generate documentation with zscripts
+│   │           run: |
+│   │             python -m zscripts collect --types all --output-dir docs/
+│   │             python -m zscripts consolidate --types python --output docs/api-docs.md
+│   │   
+│   │         - name: Deploy to GitHub Pages
+│   │           uses: peaceiris/actions-gh-pages@v3
+│   │           with:
+│   │             github_token: ${{ secrets.GITHUB_TOKEN }}
+│   │             publish_dir: ./docs
+├── scripts
+│   ├── build.sh
+│   │   │   │   #!/usr/bin/env bash
+│   │   set -euo pipefail
+│   │   
+│   │   # Task Management System Build Script
+│   │   # This script builds both backend and frontend components
+│   │   
+│   │   # Colors for output
+│   │   RED='\033[0;31m'
+│   │   GREEN='\033[0;32m'
+│   │   YELLOW='\033[1;33m'
+│   │   BLUE='\033[0;34m'
+│   │   NC='\033[0m' # No Color
+│   │   
+│   │   # Configuration
+│   │   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+│   │   PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+│   │   BACKEND_DIR="$PROJECT_ROOT/backend"
+│   │   FRONTEND_DIR="$PROJECT_ROOT/frontend"
+│   │   BUILD_DIR="$PROJECT_ROOT/build"
+│   │   DIST_DIR="$PROJECT_ROOT/dist"
+│   │   
+│   │   # Logging functions
+│   │   log_info() {
+│   │       echo -e "${BLUE}[INFO]${NC} $1"
+│   │   }
+│   │   
+│   │   log_success() {
+│   │       echo -e "${GREEN}[SUCCESS]${NC} $1"
+│   │   }
+│   │   
+│   │   log_warning() {
+│   │       echo -e "${YELLOW}[WARNING]${NC} $1"
+│   │   }
+│   │   
+│   │   log_error() {
+│   │       echo -e "${RED}[ERROR]${NC} $1"
+│   │   }
+│   │   
+│   │   # Cleanup function
+│   │   cleanup() {
+│   │       log_info "Cleaning up build artifacts..."
+│   │       rm -rf "$BUILD_DIR" "$DIST_DIR"
+│   │   }
+│   │   
+│   │   # Trap to cleanup on exit
+│   │   trap cleanup EXIT
+│   │   
+│   │   # Check if required tools are installed
+│   │   check_dependencies() {
+│   │       log_info "Checking dependencies..."
+│   │   
+│   │       local missing_deps=()
+│   │   
+│   │       if ! command -v python3 &> /dev/null; then
+│   │           missing_deps+=("python3")
+│   │       fi
+│   │   
+│   │       if ! command -v node &> /dev/null; then
+│   │           missing_deps+=("node")
+│   │       fi
+│   │   
+│   │       if ! command -v npm &> /dev/null; then
+│   │           missing_deps+=("npm")
+│   │       fi
+│   │   
+│   │       if [ ${#missing_deps[@]} -ne 0 ]; then
+│   │           log_error "Missing required dependencies: ${missing_deps[*]}"
+│   │           log_info "Please install the missing dependencies and try again."
+│   │           exit 1
+│   │       fi
+│   │   
+│   │       log_success "All dependencies are available."
+│   │   }
+│   │   
+│   │   # Build backend
+│   │   build_backend() {
+│   │       log_info "Building backend..."
+│   │   
+│   │       cd "$BACKEND_DIR"
+│   │   
+│   │       # Create virtual environment if it doesn't exist
+│   │       if [ ! -d "venv" ]; then
+│   │           log_info "Creating Python virtual environment..."
+│   │           python3 -m venv venv
+│   │       fi
+│   │   
+│   │       # Activate virtual environment
+│   │       source venv/bin/activate
+│   │   
+│   │       # Install/update dependencies
+│   │       log_info "Installing Python dependencies..."
+│   │       pip install --upgrade pip
+│   │       pip install -r requirements.txt
+│   │   
+│   │       # Run tests
+│   │       log_info "Running backend tests..."
+│   │       if command -v pytest &> /dev/null; then
+│   │           pytest --tb=short --disable-warnings
+│   │           log_success "Backend tests passed."
+│   │       else
+│   │           log_warning "pytest not found, skipping tests."
+│   │       fi
+│   │   
+│   │       # Build package (if applicable)
+│   │       if [ -f "setup.py" ] || [ -f "pyproject.toml" ]; then
+│   │           log_info "Building Python package..."
+│   │           python -m build --wheel --sdist
+│   │       fi
+│   │   
+│   │       # Deactivate virtual environment
+│   │       deactivate
+│   │   
+│   │       log_success "Backend build completed."
+│   │   }
+│   │   
+│   │   # Build frontend
+│   │   build_frontend() {
+│   │       log_info "Building frontend..."
+│   │   
+│   │       cd "$FRONTEND_DIR"
+│   │   
+│   │       # Install dependencies
+│   │       log_info "Installing Node.js dependencies..."
+│   │       npm ci
+│   │   
+│   │       # Run linting
+│   │       log_info "Running ESLint..."
+│   │       if npm run lint &> /dev/null; then
+│   │           log_success "ESLint passed."
+│   │       else
+│   │           log_warning "ESLint failed or not configured."
+│   │       fi
+│   │   
+│   │       # Run tests
+│   │       log_info "Running frontend tests..."
+│   │       if npm test -- --watchAll=false --passWithNoTests &> /dev/null; then
+│   │           log_success "Frontend tests passed."
+│   │       else
+│   │           log_warning "Frontend tests failed or not configured."
+│   │       fi
+│   │   
+│   │       # Build production bundle
+│   │       log_info "Building production bundle..."
+│   │       npm run build
+│   │   
+│   │       log_success "Frontend build completed."
+│   │   }
+│   │   
+│   │   # Package application
+│   │   package_app() {
+│   │       log_info "Packaging application..."
+│   │   
+│   │       # Create distribution directory
+│   │       mkdir -p "$DIST_DIR"
+│   │   
+│   │       # Copy backend files
+│   │       log_info "Copying backend files..."
+│   │       cp -r "$BACKEND_DIR" "$DIST_DIR/"
+│   │   
+│   │       # Copy frontend build
+│   │       log_info "Copying frontend build..."
+│   │       cp -r "$FRONTEND_DIR/build" "$DIST_DIR/frontend"
+│   │   
+│   │       # Copy infrastructure files
+│   │       log_info "Copying infrastructure files..."
+│   │       cp -r "$PROJECT_ROOT/infra" "$DIST_DIR/"
+│   │   
+│   │       # Create deployment archive
+│   │       log_info "Creating deployment archive..."
+│   │       cd "$PROJECT_ROOT"
+│   │       tar -czf "taskmanager-$(date +%Y%m%d-%H%M%S).tar.gz" -C "$DIST_DIR" .
+│   │   
+│   │       log_success "Application packaged successfully."
+│   │   }
+│   │   
+│   │   # Generate build report
+│   │   generate_report() {
+│   │       log_info "Generating build report..."
+│   │   
+│   │       local report_file="$BUILD_DIR/build-report.txt"
+│   │   
+│   │       mkdir -p "$BUILD_DIR"
+│   │   
+│   │       {
+│   │           echo "Task Management System Build Report"
+│   │           echo "==================================="
+│   │           echo "Build Date: $(date)"
+│   │           echo "Build Host: $(hostname)"
+│   │           echo ""
+│   │           echo "Backend Information:"
+│   │           echo "- Python Version: $(python3 --version 2>&1)"
+│   │           echo "- Virtual Environment: $BACKEND_DIR/venv"
+│   │           echo ""
+│   │           echo "Frontend Information:"
+│   │           echo "- Node Version: $(node --version)"
+│   │           echo "- NPM Version: $(npm --version)"
+│   │           echo ""
+│   │           echo "Build Artifacts:"
+│   │           echo "- Backend: $DIST_DIR/backend"
+│   │           echo "- Frontend: $DIST_DIR/frontend"
+│   │           echo "- Infrastructure: $DIST_DIR/infra"
+│   │           echo ""
+│   │           echo "Next Steps:"
+│   │           echo "1. Review the build artifacts in $DIST_DIR"
+│   │           echo "2. Test the application locally using docker-compose"
+│   │           echo "3. Deploy to staging environment"
+│   │       } > "$report_file"
+│   │   
+│   │       log_success "Build report generated: $report_file"
+│   │   }
+│   │   
+│   │   # Main build process
+│   │   main() {
+│   │       log_info "Starting Task Management System build..."
+│   │       log_info "Project root: $PROJECT_ROOT"
+│   │   
+│   │       check_dependencies
+│   │       build_backend
+│   │       build_frontend
+│   │       package_app
+│   │       generate_report
+│   │   
+│   │       log_success "Build completed successfully!"
+│   │       log_info "Build artifacts are available in: $DIST_DIR"
+│   │       log_info "Build report: $BUILD_DIR/build-report.txt"
+│   │   }
+│   │   
+│   │   # Run main function
+│   │   main "$@"
+│   ├── deploy.sh
+│   │   │   │   #!/usr/bin/env bash
+│   │   set -euo pipefail
+│   │   
+│   │   # Task Management System Deployment Script
+│   │   # Supports deployment to staging and production environments
+│   │   
+│   │   # Colors for output
+│   │   RED='\033[0;31m'
+│   │   GREEN='\033[0;32m'
+│   │   YELLOW='\033[1;33m'
+│   │   BLUE='\033[0;34m'
+│   │   NC='\033[0m' # No Color
+│   │   
+│   │   # Configuration
+│   │   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+│   │   PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+│   │   BACKUP_DIR="$PROJECT_ROOT/backups"
+│   │   TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+│   │   
+│   │   # Environment variables with defaults
+│   │   ENVIRONMENT="${ENVIRONMENT:-staging}"
+│   │   DOCKER_REGISTRY="${DOCKER_REGISTRY:-ghcr.io}"
+│   │   IMAGE_TAG="${IMAGE_TAG:-latest}"
+│   │   ROLLBACK_ENABLED="${ROLLBACK_ENABLED:-true}"
+│   │   
+│   │   # Logging functions
+│   │   log_info() {
+│   │       echo -e "${BLUE}[INFO]${NC} $(date '+%Y-%m-%d %H:%M:%S') - $1"
+│   │   }
+│   │   
+│   │   log_success() {
+│   │       echo -e "${GREEN}[SUCCESS]${NC} $(date '+%Y-%m-%d %H:%M:%S') - $1"
+│   │   }
+│   │   
+│   │   log_warning() {
+│   │       echo -e "${YELLOW}[WARNING]${NC} $(date '+%Y-%m-%d %H:%M:%S') - $1"
+│   │   }
+│   │   
+│   │   log_error() {
+│   │       echo -e "${RED}[ERROR]${NC} $(date '+%Y-%m-%d %H:%M:%S') - $1"
+│   │   }
+│   │   
+│   │   # Validate environment
+│   │   validate_environment() {
+│   │       case "$ENVIRONMENT" in
+│   │           staging|production)
+│   │               log_info "Deploying to $ENVIRONMENT environment"
+│   │               ;;
+│   │           *)
+│   │               log_error "Invalid environment: $ENVIRONMENT. Must be 'staging' or 'production'"
+│   │               exit 1
+│   │               ;;
+│   │       esac
+│   │   }
+│   │   
+│   │   # Create backup
+│   │   create_backup() {
+│   │       log_info "Creating backup before deployment..."
+│   │   
+│   │       mkdir -p "$BACKUP_DIR"
+│   │   
+│   │       # Backup database if running
+│   │       if docker ps | grep -q "taskmanager-db"; then
+│   │           log_info "Backing up database..."
+│   │           docker exec taskmanager-db pg_dump -U taskuser taskmanager > "$BACKUP_DIR/db-backup-$TIMESTAMP.sql"
+│   │       fi
+│   │   
+│   │       # Backup current deployment
+│   │       if [ -d "$PROJECT_ROOT/current" ]; then
+│   │           cp -r "$PROJECT_ROOT/current" "$BACKUP_DIR/backup-$TIMESTAMP"
+│   │       fi
+│   │   
+│   │       log_success "Backup created: $BACKUP_DIR/backup-$TIMESTAMP"
+│   │   }
+│   │   
+│   │   # Pull latest images
+│   │   pull_images() {
+│   │       log_info "Pulling latest Docker images..."
+│   │   
+│   │       docker pull $DOCKER_REGISTRY/$GITHUB_REPOSITORY/backend:$IMAGE_TAG
+│   │       docker pull $DOCKER_REGISTRY/$GITHUB_REPOSITORY/frontend:$IMAGE_TAG
+│   │   
+│   │       log_success "Images pulled successfully"
+│   │   }
+│   │   
+│   │   # Deploy services
+│   │   deploy_services() {
+│   │       log_info "Deploying services to $ENVIRONMENT..."
+│   │   
+│   │       # Set environment-specific variables
+│   │       case "$ENVIRONMENT" in
+│   │           staging)
+│   │               COMPOSE_FILE="infra/docker-compose.yml"
+│   │               PROJECT_NAME="taskmanager-staging"
+│   │               ;;
+│   │           production)
+│   │               COMPOSE_FILE="infra/docker-compose.prod.yml"
+│   │               PROJECT_NAME="taskmanager-prod"
+│   │               ;;
+│   │       esac
+│   │   
+│   │       # Stop existing services gracefully
+│   │       log_info "Stopping existing services..."
+│   │       docker-compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" down --timeout 30
+│   │   
+│   │       # Start new services
+│   │       log_info "Starting new services..."
+│   │       docker-compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up -d
+│   │   
+│   │       # Wait for services to be healthy
+│   │       log_info "Waiting for services to be healthy..."
+│   │       local max_attempts=30
+│   │       local attempt=1
+│   │   
+│   │       while [ $attempt -le $max_attempts ]; do
+│   │           if docker-compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" ps | grep -q "healthy\|running"; then
+│   │               log_success "Services are healthy"
+│   │               break
+│   │           fi
+│   │   
+│   │           log_info "Waiting for services to be healthy... (attempt $attempt/$max_attempts)"
+│   │           sleep 10
+│   │           ((attempt++))
+│   │       done
+│   │   
+│   │       if [ $attempt -gt $max_attempts ]; then
+│   │           log_error "Services failed to become healthy within timeout"
+│   │           return 1
+│   │       fi
+│   │   }
+│   │   
+│   │   # Run database migrations
+│   │   run_migrations() {
+│   │       log_info "Running database migrations..."
+│   │   
+│   │       case "$ENVIRONMENT" in
+│   │           staging)
+│   │               PROJECT_NAME="taskmanager-staging"
+│   │               ;;
+│   │           production)
+│   │               PROJECT_NAME="taskmanager-prod"
+│   │               ;;
+│   │       esac
+│   │   
+│   │       # Run migrations in backend container
+│   │       docker-compose -f "infra/docker-compose.yml" -p "$PROJECT_NAME" exec -T backend python manage.py migrate
+│   │   
+│   │       log_success "Database migrations completed"
+│   │   }
+│   │   
+│   │   # Run smoke tests
+│   │   run_smoke_tests() {
+│   │       log_info "Running smoke tests..."
+│   │   
+│   │       # Test backend health endpoint
+│   │       if curl -f -s "http://localhost:8000/health" > /dev/null; then
+│   │           log_success "Backend health check passed"
+│   │       else
+│   │           log_error "Backend health check failed"
+│   │           return 1
+│   │       fi
+│   │   
+│   │       # Test frontend
+│   │       if curl -f -s -I "http://localhost:3000" | grep -q "200 OK"; then
+│   │           log_success "Frontend health check passed"
+│   │       else
+│   │           log_error "Frontend health check failed"
+│   │           return 1
+│   │       fi
+│   │   }
+│   │   
+│   │   # Rollback deployment
+│   │   rollback() {
+│   │       log_error "Deployment failed. Initiating rollback..."
+│   │   
+│   │       if [ "$ROLLBACK_ENABLED" = "true" ]; then
+│   │           log_info "Rolling back to previous version..."
+│   │   
+│   │           # Find latest backup
+│   │           local latest_backup=$(ls -t "$BACKUP_DIR" | grep "backup-" | head -1)
+│   │   
+│   │           if [ -n "$latest_backup" ]; then
+│   │               log_info "Restoring from backup: $latest_backup"
+│   │   
+│   │               # Restore database
+│   │               if [ -f "$BACKUP_DIR/db-backup-$TIMESTAMP.sql" ]; then
+│   │                   docker exec -i taskmanager-db psql -U taskuser taskmanager < "$BACKUP_DIR/db-backup-$TIMESTAMP.sql"
+│   │               fi
+│   │   
+│   │               # Restore services
+│   │               case "$ENVIRONMENT" in
+│   │                   staging)
+│   │                       PROJECT_NAME="taskmanager-staging"
+│   │                       ;;
+│   │                   production)
+│   │                       PROJECT_NAME="taskmanager-prod"
+│   │                       ;;
+│   │               esac
+│   │   
+│   │               docker-compose -f "infra/docker-compose.yml" -p "$PROJECT_NAME" up -d
+│   │               log_success "Rollback completed"
+│   │           else
+│   │               log_error "No backup found for rollback"
+│   │           fi
+│   │       else
+│   │           log_warning "Rollback disabled"
+│   │       fi
+│   │   }
+│   │   
+│   │   # Send notifications
+│   │   send_notification() {
+│   │       local status="$1"
+│   │       local message="$2"
+│   │   
+│   │       log_info "Sending deployment notification..."
+│   │   
+│   │       # Here you could integrate with Slack, email, etc.
+│   │       # For now, just log the notification
+│   │       echo "Deployment $status: $message"
+│   │   
+│   │       if [ "$status" = "success" ]; then
+│   │           log_success "Deployment completed successfully!"
+│   │       else
+│   │           log_error "Deployment failed!"
+│   │       fi
+│   │   }
+│   │   
+│   │   # Main deployment process
+│   │   main() {
+│   │       log_info "Starting deployment to $ENVIRONMENT environment..."
+│   │       log_info "Image tag: $IMAGE_TAG"
+│   │   
+│   │       # Validate environment
+│   │       validate_environment
+│   │   
+│   │       # Create backup
+│   │       create_backup
+│   │   
+│   │       # Pull images
+│   │       pull_images
+│   │   
+│   │       # Deploy services
+│   │       if deploy_services; then
+│   │           # Run migrations
+│   │           run_migrations
+│   │   
+│   │           # Run smoke tests
+│   │           if run_smoke_tests; then
+│   │               send_notification "success" "Deployment to $ENVIRONMENT completed successfully"
+│   │           else
+│   │               rollback
+│   │               send_notification "failure" "Smoke tests failed after deployment to $ENVIRONMENT"
+│   │               exit 1
+│   │           fi
+│   │       else
+│   │           rollback
+│   │           send_notification "failure" "Service deployment failed for $ENVIRONMENT"
+│   │           exit 1
+│   │       fi
+│   │   }
+│   │   
+│   │   # Parse command line arguments
+│   │   while [[ $# -gt 0 ]]; do
+│   │       case $1 in
+│   │           --environment|-e)
+│   │               ENVIRONMENT="$2"
+│   │               shift 2
+│   │               ;;
+│   │           --image-tag|-t)
+│   │               IMAGE_TAG="$2"
+│   │               shift 2
+│   │               ;;
+│   │           --no-rollback)
+│   │               ROLLBACK_ENABLED="false"
+│   │               shift
+│   │               ;;
+│   │           --help|-h)
+│   │               echo "Usage: $0 [OPTIONS]"
+│   │               echo ""
+│   │               echo "Options:"
+│   │               echo "  -e, --environment ENV    Deployment environment (staging|production)"
+│   │               echo "  -t, --image-tag TAG      Docker image tag to deploy"
+│   │               echo "  --no-rollback           Disable automatic rollback on failure"
+│   │               echo "  -h, --help              Show this help message"
+│   │               exit 0
+│   │               ;;
+│   │           *)
+│   │               log_error "Unknown option: $1"
+│   │               exit 1
+│   │               ;;
+│   │       esac
+│   │   done
+│   │   
+│   │   # Run main deployment
+│   │   main "$@"
+│   └── manage_db.py
+│   │   │   │   #!/usr/bin/env python3
+│   │   """
+│   │   Database management script for Task Management System.
+│   │   Handles migrations, seeding, and database operations.
+│   │   """
+│   │   
+│   │   import argparse
+│   │   import sys
+│   │   from pathlib import Path
+│   │   
+│   │   # Add backend directory to path
+│   │   backend_dir = Path(__file__).parent.parent / "backend"
+│   │   sys.path.insert(0, str(backend_dir))
+│   │   
+│   │   try:
+│   │       from models import Task, Project, User
+│   │       from service import TaskService
+│   │   except ImportError as e:
+│   │       print(f"Error importing backend modules: {e}")
+│   │       print("Make sure you're running this from the scripts directory")
+│   │       sys.exit(1)
+│   │   
+│   │   
+│   │   class DatabaseManager:
+│   │       """Manages database operations for the Task Management System."""
+│   │   
+│   │       def __init__(self, service: TaskService):
+│   │           self.service = service
+│   │   
+│   │       def create_tables(self) -> None:
+│   │           """Create database tables (simplified for in-memory storage)."""
+│   │           print("Creating database tables...")
+│   │           # In a real implementation, this would create actual database tables
+│   │           print("Tables created successfully.")
+│   │   
+│   │       def drop_tables(self) -> None:
+│   │           """Drop database tables."""
+│   │           print("Dropping database tables...")
+│   │           # Reset in-memory storage
+│   │           self.service.tasks.clear()
+│   │           self.service.projects.clear()
+│   │           self.service.users.clear()
+│   │           print("Tables dropped successfully.")
+│   │   
+│   │       def migrate(self, direction: str = "up") -> None:
+│   │           """Run database migrations."""
+│   │           if direction == "up":
+│   │               print("Running migrations up...")
+│   │               # In a real implementation, this would run actual migrations
+│   │               print("Migrations completed successfully.")
+│   │           elif direction == "down":
+│   │               print("Running migrations down...")
+│   │               print("Migrations rolled back successfully.")
+│   │           else:
+│   │               raise ValueError(f"Invalid migration direction: {direction}")
+│   │   
+│   │       def seed(self) -> None:
+│   │           """Seed database with sample data."""
+│   │           print("Seeding database with sample data...")
+│   │   
+│   │           # Create sample users
+│   │           user1 = self.service.add_user("Alice Johnson", "alice@example.com")
+│   │           user2 = self.service.add_user("Bob Smith", "bob@example.com")
+│   │           user3 = self.service.add_user("Carol Williams", "carol@example.com")
+│   │   
+│   │           # Create sample projects
+│   │           project1 = self.service.create_project(
+│   │               "Task Management System",
+│   │               "A comprehensive task and project management application"
+│   │           )
+│   │           project2 = self.service.create_project(
+│   │               "API Development",
+│   │               "RESTful API development for backend services"
+│   │           )
+│   │   
+│   │           # Create sample tasks
+│   │           task1 = self.service.create_task(
+│   │               "Implement user authentication",
+│   │               "Add login/logout functionality with JWT tokens",
+│   │               project1.id,
+│   │               "high"
+│   │           )
+│   │           self.service.assign_task(task1.id, user1.id)
+│   │   
+│   │           task2 = self.service.create_task(
+│   │               "Design database schema",
+│   │               "Create ER diagram and define table relationships",
+│   │               project1.id,
+│   │               "medium"
+│   │           )
+│   │           self.service.assign_task(task2.id, user2.id)
+│   │   
+│   │           task3 = self.service.create_task(
+│   │               "Create API endpoints",
+│   │               "Implement CRUD operations for tasks and projects",
+│   │               project2.id,
+│   │               "high"
+│   │           )
+│   │           self.service.assign_task(task3.id, user3.id)
+│   │   
+│   │           task4 = self.service.create_task(
+│   │               "Add input validation",
+│   │               "Implement comprehensive input validation and error handling",
+│   │               project2.id,
+│   │               "medium"
+│   │           )
+│   │   
+│   │           # Mark some tasks as complete
+│   │           self.service.mark_task_complete(task2.id)
+│   │   
+│   │           print(f"Created {len(self.service.users)} users")
+│   │           print(f"Created {len(self.service.projects)} projects")
+│   │           print(f"Created {len(self.service.tasks)} tasks")
+│   │           print("Database seeded successfully.")
+│   │   
+│   │       def reset(self) -> None:
+│   │           """Reset database to clean state."""
+│   │           print("Resetting database...")
+│   │           self.drop_tables()
+│   │           self.create_tables()
+│   │           print("Database reset successfully.")
+│   │   
+│   │       def status(self) -> None:
+│   │           """Show database status and statistics."""
+│   │           print("Database Status")
+│   │           print("=" * 50)
+│   │           print(f"Users: {len(self.service.users)}")
+│   │           print(f"Projects: {len(self.service.projects)}")
+│   │           print(f"Tasks: {len(self.service.tasks)}")
+│   │   
+│   │           # Show task status breakdown
+│   │           total_tasks = len(self.service.tasks)
+│   │           if total_tasks > 0:
+│   │               todo_count = sum(1 for t in self.service.tasks.values() if t.status == "todo")
+│   │               in_progress_count = sum(1 for t in self.service.tasks.values() if t.status == "in_progress")
+│   │               done_count = sum(1 for t in self.service.tasks.values() if t.status == "done")
+│   │   
+│   │               print("\nTask Status Breakdown:")
+│   │               print(f"  To Do: {todo_count} ({todo_count/total_tasks*100:.1f}%)")
+│   │               print(f"  In Progress: {in_progress_count} ({in_progress_count/total_tasks*100:.1f}%)")
+│   │               print(f"  Done: {done_count} ({done_count/total_tasks*100:.1f}%)")
+│   │   
+│   │           # Show recent tasks
+│   │           if self.service.tasks:
+│   │               print("\nRecent Tasks:")
+│   │               recent_tasks = sorted(
+│   │                   self.service.tasks.values(),
+│   │                   key=lambda t: t.created_at,
+│   │                   reverse=True
+│   │               )[:5]
+│   │   
+│   │               for task in recent_tasks:
+│   │                   assignee = self.service.users.get(task.assignee_id).username if task.assignee_id and task.assignee_id in self.service.users else "Unassigned"
+│   │                   print(f"  - {task.title} ({task.status}) - {assignee}")
+│   │   
+│   │   
+│   │   def main():
+│   │       """Main entry point for database management script."""
+│   │       parser = argparse.ArgumentParser(
+│   │           description="Database management for Task Management System"
+│   │       )
+│   │       parser.add_argument(
+│   │           "command",
+│   │           choices=["create", "drop", "migrate", "seed", "reset", "status"],
+│   │           help="Database command to execute"
+│   │       )
+│   │       parser.add_argument(
+│   │           "--direction",
+│   │           choices=["up", "down"],
+│   │           default="up",
+│   │           help="Migration direction (default: up)"
+│   │       )
+│   │   
+│   │       args = parser.parse_args()
+│   │   
+│   │       # Initialize service
+│   │       service = TaskService()
+│   │       manager = DatabaseManager(service)
+│   │   
+│   │       try:
+│   │           if args.command == "create":
+│   │               manager.create_tables()
+│   │           elif args.command == "drop":
+│   │               manager.drop_tables()
+│   │           elif args.command == "migrate":
+│   │               manager.migrate(args.direction)
+│   │           elif args.command == "seed":
+│   │               manager.seed()
+│   │           elif args.command == "reset":
+│   │               manager.reset()
+│   │           elif args.command == "status":
+│   │               manager.status()
+│   │   
+│   │           print(f"Command '{args.command}' executed successfully.")
+│   │   
+│   │       except Exception as e:
+│   │           print(f"Error executing command '{args.command}': {e}")
+│   │           sys.exit(1)
+│   │   
+│   │   
+│   │   if __name__ == "__main__":
+│   │       main()
+└── zscripts_logs
+    ├── logs_apps_all
+    │   ├── backend.txt
+    │   │       │   │   # backend
+    │   │   
+    │   │   # backend\models.py
+    │   │   """Django-style models for the sample project."""
+    │   │   from __future__ import annotations
+    │   │   
+    │   │   from dataclasses import dataclass, field
+    │   │   from datetime import datetime
+    │   │   from uuid import uuid4
+    │   │   
+    │   │   
+    │   │   @dataclass
+    │   │   class BaseModel:
+    │   │       """Base model with common fields."""
+    │   │   
+    │   │       id: str = field(default_factory=lambda: str(uuid4()))
+    │   │       created_at: datetime = field(default_factory=datetime.now)
+    │   │       updated_at: datetime = field(default_factory=datetime.now)
+    │   │   
+    │   │   
+    │   │   @dataclass
+    │   │   class User(BaseModel):
+    │   │       """User model representing system users."""
+    │   │   
+    │   │       username: str
+    │   │       email: str
+    │   │       is_active: bool = True
+    │   │       role: str = "user"
+    │   │   
+    │   │       def __post_init__(self):
+    │   │           self.updated_at = self.created_at
+    │   │   
+    │   │   
+    │   │   @dataclass
+    │   │   class Project(BaseModel):
+    │   │       """Project model for organizing tasks."""
+    │   │   
+    │   │       name: str
+    │   │       description: str | None = None
+    │   │       owner_id: str = ""
+    │   │       status: str = "active"
+    │   │       tags: list[str] = field(default_factory=list)
+    │   │   
+    │   │       def add_tag(self, tag: str) -> None:
+    │   │           """Add a tag to the project."""
+    │   │           if tag not in self.tags:
+    │   │               self.tags.append(tag)
+    │   │               self.updated_at = datetime.now()
+    │   │   
+    │   │   
+    │   │   @dataclass
+    │   │   class Task(BaseModel):
+    │   │       """Task model with project relationships."""
+    │   │   
+    │   │       title: str
+    │   │       description: str | None = None
+    │   │       project_id: str = ""
+    │   │       assignee_id: str | None = None
+    │   │       status: str = "todo"
+    │   │       priority: str = "medium"
+    │   │       due_date: datetime | None = None
+    │   │   
+    │   │       def mark_complete(self) -> None:
+    │   │           """Mark the task as completed."""
+    │   │           self.status = "done"
+    │   │           self.updated_at = datetime.now()
+    │   │   
+    │   │       def assign_to(self, user_id: str) -> None:
+    │   │           """Assign task to a user."""
+    │   │           self.assignee_id = user_id
+    │   │           self.updated_at = datetime.now()
+    │   │    
+    │   │    
+    │   │   # backend\service.py
+    │   │   """Service layer for task and project management."""
+    │   │   from __future__ import annotations
+    │   │   
+    │   │   from .models import Task, Project, User
+    │   │   
+    │   │   
+    │   │   class TaskService:
+    │   │       """Service for managing tasks and projects."""
+    │   │   
+    │   │       def __init__(self):
+    │   │           self.tasks: dict[str, Task] = {}
+    │   │           self.projects: dict[str, Project] = {}
+    │   │           self.users: dict[str, User] = {}
+    │   │   
+    │   │       def create_task(
+    │   │           self,
+    │   │           title: str,
+    │   │           description: str | None = None,
+    │   │           project_id: str = "",
+    │   │           priority: str = "medium",
+    │   │       ) -> Task:
+    │   │           """Create a new task."""
+    │   │           task = Task(
+    │   │               title=title,
+    │   │               description=description or "",
+    │   │               project_id=project_id,
+    │   │               priority=priority,
+    │   │           )
+    │   │           self.tasks[task.id] = task
+    │   │           return task
+    │   │   
+    │   │       def get_task(self, task_id: str) -> Task | None:
+    │   │           """Get a task by ID."""
+    │   │           return self.tasks.get(task_id)
+    │   │   
+    │   │       def list_tasks(self) -> list[Task]:
+    │   │           """List all tasks."""
+    │   │           return list(self.tasks.values())
+    │   │   
+    │   │       def assign_task(self, task_id: str, user_id: str) -> bool:
+    │   │           """Assign a task to a user."""
+    │   │           task = self.get_task(task_id)
+    │   │           if task:
+    │   │               task.assignee_id = user_id
+    │   │               return True
+    │   │           return False
+    │   │   
+    │   │       def mark_task_complete(self, task_id: str) -> Task | None:
+    │   │           """Mark a task as complete."""
+    │   │           task = self.get_task(task_id)
+    │   │           if task:
+    │   │               task.mark_complete()
+    │   │           return task
+    │   │   
+    │   │       def create_project(self, name: str, description: str | None = None) -> Project:
+    │   │           """Create a new project."""
+    │   │           project = Project(name=name, description=description or "")
+    │   │           self.projects[project.id] = project
+    │   │           return project
+    │   │   
+    │   │       def get_project(self, project_id: str) -> Project | None:
+    │   │           """Get a project by ID."""
+    │   │           return self.projects.get(project_id)
+    │   │   
+    │   │       def list_projects(self) -> list[Project]:
+    │   │           """List all projects."""
+    │   │           return list(self.projects.values())
+    │   │   
+    │   │       def add_user(self, username: str, email: str) -> User:
+    │   │           """Add a new user."""
+    │   │           user = User(username=username, email=email)
+    │   │           self.users[user.id] = user
+    │   │           return user
+    │   │   
+    │   │       def get_user(self, user_id: str) -> User | None:
+    │   │           """Get a user by ID."""
+    │   │           return self.users.get(user_id)
+    │   │   
+    │   │   # backend\views.py
+    │   │   """Django-style views for the sample project API."""
+    │   │   from __future__ import annotations
+    │   │   
+    │   │   from typing import Any
+    │   │   from .models import Task, Project
+    │   │   from .service import TaskService
+    │   │   
+    │   │   
+    │   │   class TaskView:
+    │   │       """REST-style view for task operations."""
+    │   │   
+    │   │       def __init__(self, service: TaskService):
+    │   │           self.service = service
+    │   │   
+    │   │       def get_tasks(self, project_id: str | None = None) -> list[dict[str, Any]]:
+    │   │           """Get all tasks, optionally filtered by project."""
+    │   │           tasks = self.service.list_tasks()
+    │   │           if project_id:
+    │   │               tasks = [t for t in tasks if t.project_id == project_id]
+    │   │   
+    │   │           return [
+    │   │               {
+    │   │                   "id": task.id,
+    │   │                   "title": task.title,
+    │   │                   "description": task.description,
+    │   │                   "status": task.status,
+    │   │                   "priority": task.priority,
+    │   │                   "assignee_id": task.assignee_id,
+    │   │                   "project_id": task.project_id,
+    │   │                   "created_at": task.created_at.isoformat(),
+    │   │                   "updated_at": task.updated_at.isoformat(),
+    │   │               }
+    │   │               for task in tasks
+    │   │           ]
+    │   │   
+    │   │       def create_task(self, data: dict[str, Any]) -> dict[str, Any]:
+    │   │           """Create a new task from request data."""
+    │   │           task = self.service.create_task(
+    │   │               title=data["title"],
+    │   │               description=data.get("description"),
+    │   │               project_id=data.get("project_id", ""),
+    │   │               priority=data.get("priority", "medium"),
+    │   │           )
+    │   │   
+    │   │           if assignee_id := data.get("assignee_id"):
+    │   │               self.service.assign_task(task.id, assignee_id)
+    │   │   
+    │   │           return {
+    │   │               "id": task.id,
+    │   │               "title": task.title,
+    │   │               "status": task.status,
+    │   │               "created_at": task.created_at.isoformat(),
+    │   │           }
+    │   │   
+    │   │       def update_task_status(self, task_id: str, status: str) -> dict[str, Any]:
+    │   │           """Update a task's status."""
+    │   │           if status == "done":
+    │   │               task = self.service.mark_task_complete(task_id)
+    │   │           else:
+    │   │               task = self.service.get_task(task_id)
+    │   │               if task:
+    │   │                   task.status = status
+    │   │                   task.updated_at = task.created_at  # Simplified
+    │   │   
+    │   │           return {"id": task.id, "status": task.status} if task else {}
+    │   │   
+    │   │   
+    │   │   class ProjectView:
+    │   │       """View for project operations."""
+    │   │   
+    │   │       def __init__(self, service: TaskService):
+    │   │           self.service = service
+    │   │   
+    │   │       def get_projects(self) -> list[dict[str, Any]]:
+    │   │           """Get all projects."""
+    │   │           projects = self.service.list_projects()
+    │   │           return [
+    │   │               {
+    │   │                   "id": project.id,
+    │   │                   "name": project.name,
+    │   │                   "description": project.description,
+    │   │                   "status": project.status,
+    │   │                   "tags": project.tags,
+    │   │                   "created_at": project.created_at.isoformat(),
+    │   │               }
+    │   │               for project in projects
+    │   │           ]
+    │   │   
+    │   │       def create_project(self, data: dict[str, Any]) -> dict[str, Any]:
+    │   │           """Create a new project."""
+    │   │           project = self.service.create_project(
+    │   │               name=data["name"],
+    │   │               description=data.get("description"),
+    │   │           )
+    │   │   
+    │   │           return {
+    │   │               "id": project.id,
+    │   │               "name": project.name,
+    │   │               "status": project.status,
+    │   │           }
+    │   │    
+    │   │    
+    │   ├── frontend.txt
+    │   │       │   │   # frontend
+    │   │   
+    │   │   # frontend\App.css
+    │   │   /* Modern CSS for the Task Management System */
+    │   │   .app {
+    │   │     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    │   │     max-width: 1200px;
+    │   │     margin: 0 auto;
+    │   │     padding: 20px;
+    │   │     background-color: #f8fafc;
+    │   │     min-height: 100vh;
+    │   │   }
+    │   │   
+    │   │   .header {
+    │   │     text-align: center;
+    │   │     margin-bottom: 40px;
+    │   │     padding: 20px;
+    │   │     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    │   │     color: white;
+    │   │     border-radius: 12px;
+    │   │     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    │   │   }
+    │   │   
+    │   │   .header h1 {
+    │   │     margin: 0 0 10px 0;
+    │   │     font-size: 2.5rem;
+    │   │     font-weight: 700;
+    │   │   }
+    │   │   
+    │   │   .header p {
+    │   │     margin: 0;
+    │   │     font-size: 1.1rem;
+    │   │     opacity: 0.9;
+    │   │   }
+    │   │   
+    │   │   .content {
+    │   │     display: grid;
+    │   │     gap: 30px;
+    │   │   }
+    │   │   
+    │   │   .projects-section h2,
+    │   │   .tasks-section h2 {
+    │   │     color: #1f2937;
+    │   │     margin-bottom: 20px;
+    │   │     font-size: 1.8rem;
+    │   │     font-weight: 600;
+    │   │   }
+    │   │   
+    │   │   .projects-grid {
+    │   │     display: grid;
+    │   │     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    │   │     gap: 20px;
+    │   │   }
+    │   │   
+    │   │   .project-card {
+    │   │     background: white;
+    │   │     padding: 24px;
+    │   │     border-radius: 12px;
+    │   │     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    │   │     border: 1px solid #e5e7eb;
+    │   │     transition: transform 0.2s, box-shadow 0.2s;
+    │   │   }
+    │   │   
+    │   │   .project-card:hover {
+    │   │     transform: translateY(-2px);
+    │   │     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    │   │   }
+    │   │   
+    │   │   .project-card h3 {
+    │   │     margin: 0 0 12px 0;
+    │   │     color: #1f2937;
+    │   │     font-size: 1.3rem;
+    │   │     font-weight: 600;
+    │   │   }
+    │   │   
+    │   │   .project-card p {
+    │   │     color: #6b7280;
+    │   │     margin: 0 0 16px 0;
+    │   │     line-height: 1.5;
+    │   │   }
+    │   │   
+    │   │   .project-tags {
+    │   │     display: flex;
+    │   │     flex-wrap: wrap;
+    │   │     gap: 8px;
+    │   │     margin-bottom: 12px;
+    │   │   }
+    │   │   
+    │   │   .tag {
+    │   │     background: #e0e7ff;
+    │   │     color: #3730a3;
+    │   │     padding: 4px 8px;
+    │   │     border-radius: 6px;
+    │   │     font-size: 0.8rem;
+    │   │     font-weight: 500;
+    │   │   }
+    │   │   
+    │   │   .status {
+    │   │     display: inline-block;
+    │   │     padding: 4px 12px;
+    │   │     border-radius: 20px;
+    │   │     font-size: 0.8rem;
+    │   │     font-weight: 600;
+    │   │     text-transform: uppercase;
+    │   │     letter-spacing: 0.5px;
+    │   │   }
+    │   │   
+    │   │   .status-active {
+    │   │     background: #d1fae5;
+    │   │     color: #065f46;
+    │   │   }
+    │   │   
+    │   │   .status-completed {
+    │   │     background: #dbeafe;
+    │   │     color: #1e40af;
+    │   │   }
+    │   │   
+    │   │   .status-archived {
+    │   │     background: #f3f4f6;
+    │   │     color: #6b7280;
+    │   │   }
+    │   │   
+    │   │   .tasks-section {
+    │   │     background: white;
+    │   │     padding: 24px;
+    │   │     border-radius: 12px;
+    │   │     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    │   │     border: 1px solid #e5e7eb;
+    │   │   }
+    │   │   
+    │   │   .tasks-header {
+    │   │     display: flex;
+    │   │     justify-content: space-between;
+    │   │     align-items: flex-start;
+    │   │     margin-bottom: 24px;
+    │   │     gap: 20px;
+    │   │   }
+    │   │   
+    │   │   .tasks-header h2 {
+    │   │     margin: 0;
+    │   │     flex-shrink: 0;
+    │   │   }
+    │   │   
+    │   │   .task-form {
+    │   │     display: flex;
+    │   │     flex-direction: column;
+    │   │     gap: 12px;
+    │   │     min-width: 300px;
+    │   │   }
+    │   │   
+    │   │   .task-form input,
+    │   │   .task-form textarea,
+    │   │   .task-form button {
+    │   │     padding: 12px;
+    │   │     border: 1px solid #d1d5db;
+    │   │     border-radius: 8px;
+    │   │     font-size: 1rem;
+    │   │   }
+    │   │   
+    │   │   .task-form input:focus,
+    │   │   .task-form textarea:focus {
+    │   │     outline: none;
+    │   │     border-color: #667eea;
+    │   │     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    │   │   }
+    │   │   
+    │   │   .task-form button {
+    │   │     background: #667eea;
+    │   │     color: white;
+    │   │     border: none;
+    │   │     cursor: pointer;
+    │   │     font-weight: 600;
+    │   │     transition: background-color 0.2s;
+    │   │   }
+    │   │   
+    │   │   .task-form button:hover {
+    │   │     background: #5a67d8;
+    │   │   }
+    │   │   
+    │   │   .task-form textarea {
+    │   │     resize: vertical;
+    │   │     min-height: 60px;
+    │   │   }
+    │   │   
+    │   │   .tasks-grid {
+    │   │     display: grid;
+    │   │     grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    │   │     gap: 20px;
+    │   │   }
+    │   │   
+    │   │   .task-card {
+    │   │     background: #f9fafb;
+    │   │     padding: 20px;
+    │   │     border-radius: 12px;
+    │   │     border: 1px solid #e5e7eb;
+    │   │     transition: transform 0.2s, box-shadow 0.2s;
+    │   │   }
+    │   │   
+    │   │   .task-card:hover {
+    │   │     transform: translateY(-1px);
+    │   │     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    │   │   }
+    │   │   
+    │   │   .task-header {
+    │   │     display: flex;
+    │   │     justify-content: space-between;
+    │   │     align-items: flex-start;
+    │   │     margin-bottom: 12px;
+    │   │     gap: 12px;
+    │   │   }
+    │   │   
+    │   │   .task-header h3 {
+    │   │     margin: 0;
+    │   │     color: #1f2937;
+    │   │     font-size: 1.1rem;
+    │   │     font-weight: 600;
+    │   │     flex: 1;
+    │   │   }
+    │   │   
+    │   │   .priority-badge {
+    │   │     padding: 4px 8px;
+    │   │     border-radius: 12px;
+    │   │     font-size: 0.75rem;
+    │   │     font-weight: 600;
+    │   │     color: white;
+    │   │     text-transform: uppercase;
+    │   │     letter-spacing: 0.5px;
+    │   │     flex-shrink: 0;
+    │   │   }
+    │   │   
+    │   │   .task-description {
+    │   │     color: #6b7280;
+    │   │     margin: 0 0 16px 0;
+    │   │     line-height: 1.5;
+    │   │     font-size: 0.9rem;
+    │   │   }
+    │   │   
+    │   │   .task-footer {
+    │   │     display: flex;
+    │   │     justify-content: space-between;
+    │   │     align-items: center;
+    │   │     gap: 12px;
+    │   │   }
+    │   │   
+    │   │   .task-footer select {
+    │   │     padding: 6px 12px;
+    │   │     border: 1px solid #d1d5db;
+    │   │     border-radius: 6px;
+    │   │     font-size: 0.85rem;
+    │   │     font-weight: 500;
+    │   │     cursor: pointer;
+    │   │     min-width: 120px;
+    │   │   }
+    │   │   
+    │   │   .task-footer select:focus {
+    │   │     outline: none;
+    │   │     border-color: #667eea;
+    │   │   }
+    │   │   
+    │   │   .task-date {
+    │   │     color: #9ca3af;
+    │   │     font-size: 0.8rem;
+    │   │     font-weight: 500;
+    │   │   }
+    │   │   
+    │   │   .loading {
+    │   │     display: flex;
+    │   │     justify-content: center;
+    │   │     align-items: center;
+    │   │     height: 200px;
+    │   │     font-size: 1.2rem;
+    │   │     color: #6b7280;
+    │   │   }
+    │   │   
+    │   │   /* Responsive design */
+    │   │   @media (max-width: 768px) {
+    │   │     .app {
+    │   │       padding: 10px;
+    │   │     }
+    │   │   
+    │   │     .header h1 {
+    │   │       font-size: 2rem;
+    │   │     }
+    │   │   
+    │   │     .tasks-header {
+    │   │       flex-direction: column;
+    │   │       align-items: stretch;
+    │   │     }
+    │   │   
+    │   │     .task-form {
+    │   │       min-width: auto;
+    │   │     }
+    │   │   
+    │   │     .tasks-grid {
+    │   │       grid-template-columns: 1fr;
+    │   │     }
+    │   │   
+    │   │     .projects-grid {
+    │   │       grid-template-columns: 1fr;
+    │   │     }
+    │   │   }
+    │   └── scripts.txt
+    │   │       │   │   # scripts
+    │   │   
+    │   │   # scripts\manage_db.py
+    │   │   #!/usr/bin/env python3
+    │   │   """
+    │   │   Database management script for Task Management System.
+    │   │   Handles migrations, seeding, and database operations.
+    │   │   """
+    │   │   
+    │   │   import argparse
+    │   │   import sys
+    │   │   from pathlib import Path
+    │   │   
+    │   │   # Add backend directory to path
+    │   │   backend_dir = Path(__file__).parent.parent / "backend"
+    │   │   sys.path.insert(0, str(backend_dir))
+    │   │   
+    │   │   try:
+    │   │       from models import Task, Project, User
+    │   │       from service import TaskService
+    │   │   except ImportError as e:
+    │   │       print(f"Error importing backend modules: {e}")
+    │   │       print("Make sure you're running this from the scripts directory")
+    │   │       sys.exit(1)
+    │   │   
+    │   │   
+    │   │   class DatabaseManager:
+    │   │       """Manages database operations for the Task Management System."""
+    │   │   
+    │   │       def __init__(self, service: TaskService):
+    │   │           self.service = service
+    │   │   
+    │   │       def create_tables(self) -> None:
+    │   │           """Create database tables (simplified for in-memory storage)."""
+    │   │           print("Creating database tables...")
+    │   │           # In a real implementation, this would create actual database tables
+    │   │           print("Tables created successfully.")
+    │   │   
+    │   │       def drop_tables(self) -> None:
+    │   │           """Drop database tables."""
+    │   │           print("Dropping database tables...")
+    │   │           # Reset in-memory storage
+    │   │           self.service.tasks.clear()
+    │   │           self.service.projects.clear()
+    │   │           self.service.users.clear()
+    │   │           print("Tables dropped successfully.")
+    │   │   
+    │   │       def migrate(self, direction: str = "up") -> None:
+    │   │           """Run database migrations."""
+    │   │           if direction == "up":
+    │   │               print("Running migrations up...")
+    │   │               # In a real implementation, this would run actual migrations
+    │   │               print("Migrations completed successfully.")
+    │   │           elif direction == "down":
+    │   │               print("Running migrations down...")
+    │   │               print("Migrations rolled back successfully.")
+    │   │           else:
+    │   │               raise ValueError(f"Invalid migration direction: {direction}")
+    │   │   
+    │   │       def seed(self) -> None:
+    │   │           """Seed database with sample data."""
+    │   │           print("Seeding database with sample data...")
+    │   │   
+    │   │           # Create sample users
+    │   │           user1 = self.service.add_user("alice@example.com", "Alice Johnson")
+    │   │           user2 = self.service.add_user("bob@example.com", "Bob Smith")
+    │   │           user3 = self.service.add_user("carol@example.com", "Carol Williams")
+    │   │   
+    │   │           # Create sample projects
+    │   │           project1 = self.service.create_project(
+    │   │               "Task Management System",
+    │   │               "A comprehensive task and project management application"
+    │   │           )
+    │   │           project2 = self.service.create_project(
+    │   │               "API Development",
+    │   │               "RESTful API development for backend services"
+    │   │           )
+    │   │   
+    │   │           # Create sample tasks
+    │   │           task1 = self.service.create_task(
+    │   │               "Implement user authentication",
+    │   │               "Add login/logout functionality with JWT tokens",
+    │   │               project1.id,
+    │   │               "high"
+    │   │           )
+    │   │           self.service.assign_task(task1.id, user1.id)
+    │   │   
+    │   │           task2 = self.service.create_task(
+    │   │               "Design database schema",
+    │   │               "Create ER diagram and define table relationships",
+    │   │               project1.id,
+    │   │               "medium"
+    │   │           )
+    │   │           self.service.assign_task(task2.id, user2.id)
+    │   │   
+    │   │           task3 = self.service.create_task(
+    │   │               "Create API endpoints",
+    │   │               "Implement CRUD operations for tasks and projects",
+    │   │               project2.id,
+    │   │               "high"
+    │   │           )
+    │   │           self.service.assign_task(task3.id, user3.id)
+    │   │   
+    │   │           task4 = self.service.create_task(
+    │   │               "Add input validation",
+    │   │               "Implement comprehensive input validation and error handling",
+    │   │               project2.id,
+    │   │               "medium"
+    │   │           )
+    │   │   
+    │   │           # Mark some tasks as complete
+    │   │           self.service.mark_task_complete(task2.id)
+    │   │   
+    │   │           print(f"Created {len(self.service.users)} users")
+    │   │           print(f"Created {len(self.service.projects)} projects")
+    │   │           print(f"Created {len(self.service.tasks)} tasks")
+    │   │           print("Database seeded successfully.")
+    │   │   
+    │   │       def reset(self) -> None:
+    │   │           """Reset database to clean state."""
+    │   │           print("Resetting database...")
+    │   │           self.drop_tables()
+    │   │           self.create_tables()
+    │   │           print("Database reset successfully.")
+    │   │   
+    │   │       def status(self) -> None:
+    │   │           """Show database status and statistics."""
+    │   │           print("Database Status")
+    │   │           print("=" * 50)
+    │   │           print(f"Users: {len(self.service.users)}")
+    │   │           print(f"Projects: {len(self.service.projects)}")
+    │   │           print(f"Tasks: {len(self.service.tasks)}")
+    │   │   
+    │   │           # Show task status breakdown
+    │   │           total_tasks = len(self.service.tasks)
+    │   │           if total_tasks > 0:
+    │   │               todo_count = sum(1 for t in self.service.tasks.values() if t.status == "todo")
+    │   │               in_progress_count = sum(1 for t in self.service.tasks.values() if t.status == "in_progress")
+    │   │               done_count = sum(1 for t in self.service.tasks.values() if t.status == "done")
+    │   │   
+    │   │               print("\nTask Status Breakdown:")
+    │   │               print(f"  To Do: {todo_count} ({todo_count/total_tasks*100:.1f}%)")
+    │   │               print(f"  In Progress: {in_progress_count} ({in_progress_count/total_tasks*100:.1f}%)")
+    │   │               print(f"  Done: {done_count} ({done_count/total_tasks*100:.1f}%)")
+    │   │   
+    │   │           # Show recent tasks
+    │   │           if self.service.tasks:
+    │   │               print("\nRecent Tasks:")
+    │   │               recent_tasks = sorted(
+    │   │                   self.service.tasks.values(),
+    │   │                   key=lambda t: t.created_at,
+    │   │                   reverse=True
+    │   │               )[:5]
+    │   │   
+    │   │               for task in recent_tasks:
+    │   │                   assignee = self.service.users.get(task.assignee_id, {}).username if task.assignee_id else "Unassigned"
+    │   │                   print(f"  - {task.title} ({task.status}) - {assignee}")
+    │   │   
+    │   │   
+    │   │   def main():
+    │   │       """Main entry point for database management script."""
+    │   │       parser = argparse.ArgumentParser(
+    │   │           description="Database management for Task Management System"
+    │   │       )
+    │   │       parser.add_argument(
+    │   │           "command",
+    │   │           choices=["create", "drop", "migrate", "seed", "reset", "status"],
+    │   │           help="Database command to execute"
+    │   │       )
+    │   │       parser.add_argument(
+    │   │           "--direction",
+    │   │           choices=["up", "down"],
+    │   │           default="up",
+    │   │           help="Migration direction (default: up)"
+    │   │       )
+    │   │   
+    │   │       args = parser.parse_args()
+    │   │   
+    │   │       # Initialize service
+    │   │       service = TaskService()
+    │   │       manager = DatabaseManager(service)
+    │   │   
+    │   │       try:
+    │   │           if args.command == "create":
+    │   │               manager.create_tables()
+    │   │           elif args.command == "drop":
+    │   │               manager.drop_tables()
+    │   │           elif args.command == "migrate":
+    │   │               manager.migrate(args.direction)
+    │   │           elif args.command == "seed":
+    │   │               manager.seed()
+    │   │           elif args.command == "reset":
+    │   │               manager.reset()
+    │   │           elif args.command == "status":
+    │   │               manager.status()
+    │   │   
+    │   │           print(f"Command '{args.command}' executed successfully.")
+    │   │   
+    │   │       except Exception as e:
+    │   │           print(f"Error executing command '{args.command}': {e}")
+    │   │           sys.exit(1)
+    │   │   
+    │   │   
+    │   │   if __name__ == "__main__":
+    │   │       main()
+    │   │    
+    │   │    
+    ├── logs_apps_html
+    ├── logs_apps_js
+    └── logs_apps_pyth
+        ├── backend.txt
+        │           │   # backend
+        │   
+        │   # backend\models.py
+        │   """Django-style models for the sample project."""
+        │   from __future__ import annotations
+        │   
+        │   from datetime import datetime
+        │   from uuid import uuid4
+        │   
+        │   
+        │   class BaseModel:
+        │       """Base model with common fields."""
+        │   
+        │       def __init__(self):
+        │           self.id = str(uuid4())
+        │           self.created_at = datetime.now()
+        │           self.updated_at = datetime.now()
+        │   
+        │   
+        │   class User(BaseModel):
+        │       """User model representing system users."""
+        │   
+        │       def __init__(self, username: str, email: str, is_active: bool = True, role: str = "user"):
+        │           super().__init__()
+        │           self.username = username
+        │           self.email = email
+        │           self.is_active = is_active
+        │           self.role = role
+        │           self.updated_at = self.created_at
+        │   
+        │   
+        │   class Project(BaseModel):
+        │       """Project model for organizing tasks."""
+        │   
+        │       def __init__(self, name: str, description: str | None = None, owner_id: str = "", status: str = "active", tags: list[str] | None = None):
+        │           super().__init__()
+        │           self.name = name
+        │           self.description = description
+        │           self.owner_id = owner_id
+        │           self.status = status
+        │           self.tags = tags or []
+        │   
+        │       def add_tag(self, tag: str) -> None:
+        │           """Add a tag to the project."""
+        │           if tag not in self.tags:
+        │               self.tags.append(tag)
+        │               self.updated_at = datetime.now()
+        │   
+        │   
+        │   class Task(BaseModel):
+        │       """Task model with project relationships."""
+        │   
+        │       def __init__(self, title: str, description: str | None = None, project_id: str = "", assignee_id: str | None = None, status: str = "todo", priority: str = "medium", due_date: datetime | None = None):
+        │           super().__init__()
+        │           self.title = title
+        │           self.description = description
+        │           self.project_id = project_id
+        │           self.assignee_id = assignee_id
+        │           self.status = status
+        │           self.priority = priority
+        │           self.due_date = due_date
+        │   
+        │       def mark_complete(self) -> None:
+        │           """Mark the task as completed."""
+        │           self.status = "done"
+        │           self.updated_at = datetime.now()
+        │   
+        │       def assign_to(self, user_id: str) -> None:
+        │           """Assign task to a user."""
+        │           self.assignee_id = user_id
+        │           self.updated_at = datetime.now()
+        │   # backend\service.py
+        │   """Service layer for task and project management."""
+        │   from __future__ import annotations
+        │   
+        │   from .models import Task, Project, User
+        │   
+        │   
+        │   class TaskService:
+        │       """Service for managing tasks and projects."""
+        │   
+        │       def __init__(self):
+        │           self.tasks: dict[str, Task] = {}
+        │           self.projects: dict[str, Project] = {}
+        │           self.users: dict[str, User] = {}
+        │   
+        │       def create_task(
+        │           self,
+        │           title: str,
+        │           description: str | None = None,
+        │           project_id: str = "",
+        │           priority: str = "medium",
+        │       ) -> Task:
+        │           """Create a new task."""
+        │           task = Task(
+        │               title=title,
+        │               description=description or "",
+        │               project_id=project_id,
+        │               priority=priority,
+        │           )
+        │           self.tasks[task.id] = task
+        │           return task
+        │   
+        │       def get_task(self, task_id: str) -> Task | None:
+        │           """Get a task by ID."""
+        │           return self.tasks.get(task_id)
+        │   
+        │       def list_tasks(self) -> list[Task]:
+        │           """List all tasks."""
+        │           return list(self.tasks.values())
+        │   
+        │       def assign_task(self, task_id: str, user_id: str) -> bool:
+        │           """Assign a task to a user."""
+        │           task = self.get_task(task_id)
+        │           if task:
+        │               task.assignee_id = user_id
+        │               return True
+        │           return False
+        │   
+        │       def mark_task_complete(self, task_id: str) -> Task | None:
+        │           """Mark a task as complete."""
+        │           task = self.get_task(task_id)
+        │           if task:
+        │               task.mark_complete()
+        │           return task
+        │   
+        │       def create_project(self, name: str, description: str | None = None) -> Project:
+        │           """Create a new project."""
+        │           project = Project(name=name, description=description or "")
+        │           self.projects[project.id] = project
+        │           return project
+        │   
+        │       def get_project(self, project_id: str) -> Project | None:
+        │           """Get a project by ID."""
+        │           return self.projects.get(project_id)
+        │   
+        │       def list_projects(self) -> list[Project]:
+        │           """List all projects."""
+        │           return list(self.projects.values())
+        │   
+        │       def add_user(self, username: str, email: str) -> User:
+        │           """Add a new user."""
+        │           user = User(username=username, email=email)
+        │           self.users[user.id] = user
+        │           return user
+        │   
+        │       def get_user(self, user_id: str) -> User | None:
+        │           """Get a user by ID."""
+        │           return self.users.get(user_id)
+        │   
+        │   # backend\views.py
+        │   """Django-style views for the sample project API."""
+        │   from __future__ import annotations
+        │   
+        │   from typing import Any
+        │   from .models import Task, Project
+        │   from .service import TaskService
+        │   
+        │   
+        │   class TaskView:
+        │       """REST-style view for task operations."""
+        │   
+        │       def __init__(self, service: TaskService):
+        │           self.service = service
+        │   
+        │       def get_tasks(self, project_id: str | None = None) -> list[dict[str, Any]]:
+        │           """Get all tasks, optionally filtered by project."""
+        │           tasks = self.service.list_tasks()
+        │           if project_id:
+        │               tasks = [t for t in tasks if t.project_id == project_id]
+        │   
+        │           return [
+        │               {
+        │                   "id": task.id,
+        │                   "title": task.title,
+        │                   "description": task.description,
+        │                   "status": task.status,
+        │                   "priority": task.priority,
+        │                   "assignee_id": task.assignee_id,
+        │                   "project_id": task.project_id,
+        │                   "created_at": task.created_at.isoformat(),
+        │                   "updated_at": task.updated_at.isoformat(),
+        │               }
+        │               for task in tasks
+        │           ]
+        │   
+        │       def create_task(self, data: dict[str, Any]) -> dict[str, Any]:
+        │           """Create a new task from request data."""
+        │           task = self.service.create_task(
+        │               title=data["title"],
+        │               description=data.get("description"),
+        │               project_id=data.get("project_id", ""),
+        │               priority=data.get("priority", "medium"),
+        │           )
+        │   
+        │           if assignee_id := data.get("assignee_id"):
+        │               self.service.assign_task(task.id, assignee_id)
+        │   
+        │           return {
+        │               "id": task.id,
+        │               "title": task.title,
+        │               "status": task.status,
+        │               "created_at": task.created_at.isoformat(),
+        │           }
+        │   
+        │       def update_task_status(self, task_id: str, status: str) -> dict[str, Any]:
+        │           """Update a task's status."""
+        │           if status == "done":
+        │               task = self.service.mark_task_complete(task_id)
+        │           else:
+        │               task = self.service.get_task(task_id)
+        │               if task:
+        │                   task.status = status
+        │                   task.updated_at = task.created_at  # Simplified
+        │   
+        │           return {"id": task.id, "status": task.status} if task else {}
+        │   
+        │   
+        │   class ProjectView:
+        │       """View for project operations."""
+        │   
+        │       def __init__(self, service: TaskService):
+        │           self.service = service
+        │   
+        │       def get_projects(self) -> list[dict[str, Any]]:
+        │           """Get all projects."""
+        │           projects = self.service.list_projects()
+        │           return [
+        │               {
+        │                   "id": project.id,
+        │                   "name": project.name,
+        │                   "description": project.description,
+        │                   "status": project.status,
+        │                   "tags": project.tags,
+        │                   "created_at": project.created_at.isoformat(),
+        │               }
+        │               for project in projects
+        │           ]
+        │   
+        │       def create_project(self, data: dict[str, Any]) -> dict[str, Any]:
+        │           """Create a new project."""
+        │           project = self.service.create_project(
+        │               name=data["name"],
+        │               description=data.get("description"),
+        │           )
+        │   
+        │           return {
+        │               "id": project.id,
+        │               "name": project.name,
+        │               "status": project.status,
+        │           }
+        └── scripts.txt
+        │           │   # scripts
+        │   
+        │   # scripts\manage_db.py
+        │   #!/usr/bin/env python3
+        │   """
+        │   Database management script for Task Management System.
+        │   Handles migrations, seeding, and database operations.
+        │   """
+        │   
+        │   import argparse
+        │   import sys
+        │   from pathlib import Path
+        │   
+        │   # Add backend directory to path
+        │   backend_dir = Path(__file__).parent.parent / "backend"
+        │   sys.path.insert(0, str(backend_dir))
+        │   
+        │   try:
+        │       from models import Task, Project, User
+        │       from service import TaskService
+        │   except ImportError as e:
+        │       print(f"Error importing backend modules: {e}")
+        │       print("Make sure you're running this from the scripts directory")
+        │       sys.exit(1)
+        │   
+        │   
+        │   class DatabaseManager:
+        │       """Manages database operations for the Task Management System."""
+        │   
+        │       def __init__(self, service: TaskService):
+        │           self.service = service
+        │   
+        │       def create_tables(self) -> None:
+        │           """Create database tables (simplified for in-memory storage)."""
+        │           print("Creating database tables...")
+        │           # In a real implementation, this would create actual database tables
+        │           print("Tables created successfully.")
+        │   
+        │       def drop_tables(self) -> None:
+        │           """Drop database tables."""
+        │           print("Dropping database tables...")
+        │           # Reset in-memory storage
+        │           self.service.tasks.clear()
+        │           self.service.projects.clear()
+        │           self.service.users.clear()
+        │           print("Tables dropped successfully.")
+        │   
+        │       def migrate(self, direction: str = "up") -> None:
+        │           """Run database migrations."""
+        │           if direction == "up":
+        │               print("Running migrations up...")
+        │               # In a real implementation, this would run actual migrations
+        │               print("Migrations completed successfully.")
+        │           elif direction == "down":
+        │               print("Running migrations down...")
+        │               print("Migrations rolled back successfully.")
+        │           else:
+        │               raise ValueError(f"Invalid migration direction: {direction}")
+        │   
+        │       def seed(self) -> None:
+        │           """Seed database with sample data."""
+        │           print("Seeding database with sample data...")
+        │   
+        │           # Create sample users
+        │           user1 = self.service.add_user("Alice Johnson", "alice@example.com")
+        │           user2 = self.service.add_user("Bob Smith", "bob@example.com")
+        │           user3 = self.service.add_user("Carol Williams", "carol@example.com")
+        │   
+        │           # Create sample projects
+        │           project1 = self.service.create_project(
+        │               "Task Management System",
+        │               "A comprehensive task and project management application"
+        │           )
+        │           project2 = self.service.create_project(
+        │               "API Development",
+        │               "RESTful API development for backend services"
+        │           )
+        │   
+        │           # Create sample tasks
+        │           task1 = self.service.create_task(
+        │               "Implement user authentication",
+        │               "Add login/logout functionality with JWT tokens",
+        │               project1.id,
+        │               "high"
+        │           )
+        │           self.service.assign_task(task1.id, user1.id)
+        │   
+        │           task2 = self.service.create_task(
+        │               "Design database schema",
+        │               "Create ER diagram and define table relationships",
+        │               project1.id,
+        │               "medium"
+        │           )
+        │           self.service.assign_task(task2.id, user2.id)
+        │   
+        │           task3 = self.service.create_task(
+        │               "Create API endpoints",
+        │               "Implement CRUD operations for tasks and projects",
+        │               project2.id,
+        │               "high"
+        │           )
+        │           self.service.assign_task(task3.id, user3.id)
+        │   
+        │           task4 = self.service.create_task(
+        │               "Add input validation",
+        │               "Implement comprehensive input validation and error handling",
+        │               project2.id,
+        │               "medium"
+        │           )
+        │   
+        │           # Mark some tasks as complete
+        │           self.service.mark_task_complete(task2.id)
+        │   
+        │           print(f"Created {len(self.service.users)} users")
+        │           print(f"Created {len(self.service.projects)} projects")
+        │           print(f"Created {len(self.service.tasks)} tasks")
+        │           print("Database seeded successfully.")
+        │   
+        │       def reset(self) -> None:
+        │           """Reset database to clean state."""
+        │           print("Resetting database...")
+        │           self.drop_tables()
+        │           self.create_tables()
+        │           print("Database reset successfully.")
+        │   
+        │       def status(self) -> None:
+        │           """Show database status and statistics."""
+        │           print("Database Status")
+        │           print("=" * 50)
+        │           print(f"Users: {len(self.service.users)}")
+        │           print(f"Projects: {len(self.service.projects)}")
+        │           print(f"Tasks: {len(self.service.tasks)}")
+        │   
+        │           # Show task status breakdown
+        │           total_tasks = len(self.service.tasks)
+        │           if total_tasks > 0:
+        │               todo_count = sum(1 for t in self.service.tasks.values() if t.status == "todo")
+        │               in_progress_count = sum(1 for t in self.service.tasks.values() if t.status == "in_progress")
+        │               done_count = sum(1 for t in self.service.tasks.values() if t.status == "done")
+        │   
+        │               print("\nTask Status Breakdown:")
+        │               print(f"  To Do: {todo_count} ({todo_count/total_tasks*100:.1f}%)")
+        │               print(f"  In Progress: {in_progress_count} ({in_progress_count/total_tasks*100:.1f}%)")
+        │               print(f"  Done: {done_count} ({done_count/total_tasks*100:.1f}%)")
+        │   
+        │           # Show recent tasks
+        │           if self.service.tasks:
+        │               print("\nRecent Tasks:")
+        │               recent_tasks = sorted(
+        │                   self.service.tasks.values(),
+        │                   key=lambda t: t.created_at,
+        │                   reverse=True
+        │               )[:5]
+        │   
+        │               for task in recent_tasks:
+        │                   assignee = self.service.users.get(task.assignee_id).username if task.assignee_id and task.assignee_id in self.service.users else "Unassigned"
+        │                   print(f"  - {task.title} ({task.status}) - {assignee}")
+        │   
+        │   
+        │   def main():
+        │       """Main entry point for database management script."""
+        │       parser = argparse.ArgumentParser(
+        │           description="Database management for Task Management System"
+        │       )
+        │       parser.add_argument(
+        │           "command",
+        │           choices=["create", "drop", "migrate", "seed", "reset", "status"],
+        │           help="Database command to execute"
+        │       )
+        │       parser.add_argument(
+        │           "--direction",
+        │           choices=["up", "down"],
+        │           default="up",
+        │           help="Migration direction (default: up)"
+        │       )
+        │   
+        │       args = parser.parse_args()
+        │   
+        │       # Initialize service
+        │       service = TaskService()
+        │       manager = DatabaseManager(service)
+        │   
+        │       try:
+        │           if args.command == "create":
+        │               manager.create_tables()
+        │           elif args.command == "drop":
+        │               manager.drop_tables()
+        │           elif args.command == "migrate":
+        │               manager.migrate(args.direction)
+        │           elif args.command == "seed":
+        │               manager.seed()
+        │           elif args.command == "reset":
+        │               manager.reset()
+        │           elif args.command == "status":
+        │               manager.status()
+        │   
+        │           print(f"Command '{args.command}' executed successfully.")
+        │   
+        │       except Exception as e:
+        │           print(f"Error executing command '{args.command}': {e}")
+        │           sys.exit(1)
+        │   
+        │   
+        │   if __name__ == "__main__":
+        │       main()

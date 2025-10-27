@@ -1,0 +1,454 @@
+# sample_project
+
+# sample_project\backend\models.py
+"""Django-style models for the sample project."""
+from __future__ import annotations
+
+from datetime import datetime
+from uuid import uuid4
+
+
+class BaseModel:
+    """Base model with common fields."""
+
+    def __init__(self):
+        self.id = str(uuid4())
+        self.created_at = datetime.now()
+        self.updated_at = datetime.now()
+
+
+class User(BaseModel):
+    """User model representing system users."""
+
+    def __init__(self, username: str, email: str, is_active: bool = True, role: str = "user"):
+        super().__init__()
+        self.username = username
+        self.email = email
+        self.is_active = is_active
+        self.role = role
+        self.updated_at = self.created_at
+
+
+class Project(BaseModel):
+    """Project model for organizing tasks."""
+
+    def __init__(self, name: str, description: str | None = None, owner_id: str = "", status: str = "active", tags: list[str] | None = None):
+        super().__init__()
+        self.name = name
+        self.description = description
+        self.owner_id = owner_id
+        self.status = status
+        self.tags = tags or []
+
+    def add_tag(self, tag: str) -> None:
+        """Add a tag to the project."""
+        if tag not in self.tags:
+            self.tags.append(tag)
+            self.updated_at = datetime.now()
+
+
+class Task(BaseModel):
+    """Task model with project relationships."""
+
+    def __init__(self, title: str, description: str | None = None, project_id: str = "", assignee_id: str | None = None, status: str = "todo", priority: str = "medium", due_date: datetime | None = None):
+        super().__init__()
+        self.title = title
+        self.description = description
+        self.project_id = project_id
+        self.assignee_id = assignee_id
+        self.status = status
+        self.priority = priority
+        self.due_date = due_date
+
+    def mark_complete(self) -> None:
+        """Mark the task as completed."""
+        self.status = "done"
+        self.updated_at = datetime.now()
+
+    def assign_to(self, user_id: str) -> None:
+        """Assign task to a user."""
+        self.assignee_id = user_id
+        self.updated_at = datetime.now()
+# sample_project\backend\service.py
+"""Service layer for task and project management."""
+from __future__ import annotations
+
+from .models import Task, Project, User
+
+
+class TaskService:
+    """Service for managing tasks and projects."""
+
+    def __init__(self):
+        self.tasks: dict[str, Task] = {}
+        self.projects: dict[str, Project] = {}
+        self.users: dict[str, User] = {}
+
+    def create_task(
+        self,
+        title: str,
+        description: str | None = None,
+        project_id: str = "",
+        priority: str = "medium",
+    ) -> Task:
+        """Create a new task."""
+        task = Task(
+            title=title,
+            description=description or "",
+            project_id=project_id,
+            priority=priority,
+        )
+        self.tasks[task.id] = task
+        return task
+
+    def get_task(self, task_id: str) -> Task | None:
+        """Get a task by ID."""
+        return self.tasks.get(task_id)
+
+    def list_tasks(self) -> list[Task]:
+        """List all tasks."""
+        return list(self.tasks.values())
+
+    def assign_task(self, task_id: str, user_id: str) -> bool:
+        """Assign a task to a user."""
+        task = self.get_task(task_id)
+        if task:
+            task.assignee_id = user_id
+            return True
+        return False
+
+    def mark_task_complete(self, task_id: str) -> Task | None:
+        """Mark a task as complete."""
+        task = self.get_task(task_id)
+        if task:
+            task.mark_complete()
+        return task
+
+    def create_project(self, name: str, description: str | None = None) -> Project:
+        """Create a new project."""
+        project = Project(name=name, description=description or "")
+        self.projects[project.id] = project
+        return project
+
+    def get_project(self, project_id: str) -> Project | None:
+        """Get a project by ID."""
+        return self.projects.get(project_id)
+
+    def list_projects(self) -> list[Project]:
+        """List all projects."""
+        return list(self.projects.values())
+
+    def add_user(self, username: str, email: str) -> User:
+        """Add a new user."""
+        user = User(username=username, email=email)
+        self.users[user.id] = user
+        return user
+
+    def get_user(self, user_id: str) -> User | None:
+        """Get a user by ID."""
+        return self.users.get(user_id)
+
+# sample_project\backend\views.py
+"""Django-style views for the sample project API."""
+from __future__ import annotations
+
+from typing import Any
+from .models import Task, Project
+from .service import TaskService
+
+
+class TaskView:
+    """REST-style view for task operations."""
+
+    def __init__(self, service: TaskService):
+        self.service = service
+
+    def get_tasks(self, project_id: str | None = None) -> list[dict[str, Any]]:
+        """Get all tasks, optionally filtered by project."""
+        tasks = self.service.list_tasks()
+        if project_id:
+            tasks = [t for t in tasks if t.project_id == project_id]
+
+        return [
+            {
+                "id": task.id,
+                "title": task.title,
+                "description": task.description,
+                "status": task.status,
+                "priority": task.priority,
+                "assignee_id": task.assignee_id,
+                "project_id": task.project_id,
+                "created_at": task.created_at.isoformat(),
+                "updated_at": task.updated_at.isoformat(),
+            }
+            for task in tasks
+        ]
+
+    def create_task(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Create a new task from request data."""
+        task = self.service.create_task(
+            title=data["title"],
+            description=data.get("description"),
+            project_id=data.get("project_id", ""),
+            priority=data.get("priority", "medium"),
+        )
+
+        if assignee_id := data.get("assignee_id"):
+            self.service.assign_task(task.id, assignee_id)
+
+        return {
+            "id": task.id,
+            "title": task.title,
+            "status": task.status,
+            "created_at": task.created_at.isoformat(),
+        }
+
+    def update_task_status(self, task_id: str, status: str) -> dict[str, Any]:
+        """Update a task's status."""
+        if status == "done":
+            task = self.service.mark_task_complete(task_id)
+        else:
+            task = self.service.get_task(task_id)
+            if task:
+                task.status = status
+                task.updated_at = task.created_at  # Simplified
+
+        return {"id": task.id, "status": task.status} if task else {}
+
+
+class ProjectView:
+    """View for project operations."""
+
+    def __init__(self, service: TaskService):
+        self.service = service
+
+    def get_projects(self) -> list[dict[str, Any]]:
+        """Get all projects."""
+        projects = self.service.list_projects()
+        return [
+            {
+                "id": project.id,
+                "name": project.name,
+                "description": project.description,
+                "status": project.status,
+                "tags": project.tags,
+                "created_at": project.created_at.isoformat(),
+            }
+            for project in projects
+        ]
+
+    def create_project(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Create a new project."""
+        project = self.service.create_project(
+            name=data["name"],
+            description=data.get("description"),
+        )
+
+        return {
+            "id": project.id,
+            "name": project.name,
+            "status": project.status,
+        }
+# sample_project\scripts\manage_db.py
+#!/usr/bin/env python3
+"""
+Database management script for Task Management System.
+Handles migrations, seeding, and database operations.
+"""
+
+import argparse
+import sys
+from pathlib import Path
+
+# Add backend directory to path
+backend_dir = Path(__file__).parent.parent / "backend"
+sys.path.insert(0, str(backend_dir))
+
+try:
+    from models import Task, Project, User
+    from service import TaskService
+except ImportError as e:
+    print(f"Error importing backend modules: {e}")
+    print("Make sure you're running this from the scripts directory")
+    sys.exit(1)
+
+
+class DatabaseManager:
+    """Manages database operations for the Task Management System."""
+
+    def __init__(self, service: TaskService):
+        self.service = service
+
+    def create_tables(self) -> None:
+        """Create database tables (simplified for in-memory storage)."""
+        print("Creating database tables...")
+        # In a real implementation, this would create actual database tables
+        print("Tables created successfully.")
+
+    def drop_tables(self) -> None:
+        """Drop database tables."""
+        print("Dropping database tables...")
+        # Reset in-memory storage
+        self.service.tasks.clear()
+        self.service.projects.clear()
+        self.service.users.clear()
+        print("Tables dropped successfully.")
+
+    def migrate(self, direction: str = "up") -> None:
+        """Run database migrations."""
+        if direction == "up":
+            print("Running migrations up...")
+            # In a real implementation, this would run actual migrations
+            print("Migrations completed successfully.")
+        elif direction == "down":
+            print("Running migrations down...")
+            print("Migrations rolled back successfully.")
+        else:
+            raise ValueError(f"Invalid migration direction: {direction}")
+
+    def seed(self) -> None:
+        """Seed database with sample data."""
+        print("Seeding database with sample data...")
+
+        # Create sample users
+        user1 = self.service.add_user("Alice Johnson", "alice@example.com")
+        user2 = self.service.add_user("Bob Smith", "bob@example.com")
+        user3 = self.service.add_user("Carol Williams", "carol@example.com")
+
+        # Create sample projects
+        project1 = self.service.create_project(
+            "Task Management System",
+            "A comprehensive task and project management application"
+        )
+        project2 = self.service.create_project(
+            "API Development",
+            "RESTful API development for backend services"
+        )
+
+        # Create sample tasks
+        task1 = self.service.create_task(
+            "Implement user authentication",
+            "Add login/logout functionality with JWT tokens",
+            project1.id,
+            "high"
+        )
+        self.service.assign_task(task1.id, user1.id)
+
+        task2 = self.service.create_task(
+            "Design database schema",
+            "Create ER diagram and define table relationships",
+            project1.id,
+            "medium"
+        )
+        self.service.assign_task(task2.id, user2.id)
+
+        task3 = self.service.create_task(
+            "Create API endpoints",
+            "Implement CRUD operations for tasks and projects",
+            project2.id,
+            "high"
+        )
+        self.service.assign_task(task3.id, user3.id)
+
+        task4 = self.service.create_task(
+            "Add input validation",
+            "Implement comprehensive input validation and error handling",
+            project2.id,
+            "medium"
+        )
+
+        # Mark some tasks as complete
+        self.service.mark_task_complete(task2.id)
+
+        print(f"Created {len(self.service.users)} users")
+        print(f"Created {len(self.service.projects)} projects")
+        print(f"Created {len(self.service.tasks)} tasks")
+        print("Database seeded successfully.")
+
+    def reset(self) -> None:
+        """Reset database to clean state."""
+        print("Resetting database...")
+        self.drop_tables()
+        self.create_tables()
+        print("Database reset successfully.")
+
+    def status(self) -> None:
+        """Show database status and statistics."""
+        print("Database Status")
+        print("=" * 50)
+        print(f"Users: {len(self.service.users)}")
+        print(f"Projects: {len(self.service.projects)}")
+        print(f"Tasks: {len(self.service.tasks)}")
+
+        # Show task status breakdown
+        total_tasks = len(self.service.tasks)
+        if total_tasks > 0:
+            todo_count = sum(1 for t in self.service.tasks.values() if t.status == "todo")
+            in_progress_count = sum(1 for t in self.service.tasks.values() if t.status == "in_progress")
+            done_count = sum(1 for t in self.service.tasks.values() if t.status == "done")
+
+            print("\nTask Status Breakdown:")
+            print(f"  To Do: {todo_count} ({todo_count/total_tasks*100:.1f}%)")
+            print(f"  In Progress: {in_progress_count} ({in_progress_count/total_tasks*100:.1f}%)")
+            print(f"  Done: {done_count} ({done_count/total_tasks*100:.1f}%)")
+
+        # Show recent tasks
+        if self.service.tasks:
+            print("\nRecent Tasks:")
+            recent_tasks = sorted(
+                self.service.tasks.values(),
+                key=lambda t: t.created_at,
+                reverse=True
+            )[:5]
+
+            for task in recent_tasks:
+                assignee = self.service.users.get(task.assignee_id).username if task.assignee_id and task.assignee_id in self.service.users else "Unassigned"
+                print(f"  - {task.title} ({task.status}) - {assignee}")
+
+
+def main():
+    """Main entry point for database management script."""
+    parser = argparse.ArgumentParser(
+        description="Database management for Task Management System"
+    )
+    parser.add_argument(
+        "command",
+        choices=["create", "drop", "migrate", "seed", "reset", "status"],
+        help="Database command to execute"
+    )
+    parser.add_argument(
+        "--direction",
+        choices=["up", "down"],
+        default="up",
+        help="Migration direction (default: up)"
+    )
+
+    args = parser.parse_args()
+
+    # Initialize service
+    service = TaskService()
+    manager = DatabaseManager(service)
+
+    try:
+        if args.command == "create":
+            manager.create_tables()
+        elif args.command == "drop":
+            manager.drop_tables()
+        elif args.command == "migrate":
+            manager.migrate(args.direction)
+        elif args.command == "seed":
+            manager.seed()
+        elif args.command == "reset":
+            manager.reset()
+        elif args.command == "status":
+            manager.status()
+
+        print(f"Command '{args.command}' executed successfully.")
+
+    except Exception as e:
+        print(f"Error executing command '{args.command}': {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

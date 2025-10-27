@@ -1,0 +1,1026 @@
+# tests
+
+# tests\conftest.py
+"""Shared pytest fixtures for the zscripts test suite."""
+
+from __future__ import annotations
+
+import importlib
+import json
+import sys
+from pathlib import Path
+
+import pytest
+
+
+def _load_config_helpers():
+    """Import configuration helpers with a runtime sys.path adjustment."""
+
+    root = Path(__file__).resolve().parent.parent
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    module = importlib.import_module("zscripts.config")
+    return module.Config, module.get_config, module.load_config
+
+
+@pytest.fixture(scope="session")
+def repository_root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
+@pytest.fixture(scope="session")
+def sample_project_path(repository_root: Path) -> Path:
+    return repository_root / "sample_project"
+
+
+@pytest.fixture()
+def temp_config_path(tmp_path: Path) -> Path:
+    _, get_config, _ = _load_config_helpers()
+    base = get_config().to_dict()
+    log_root = tmp_path / "logs"
+    base.setdefault("directories", {})["log_root"] = str(log_root)
+    config_path = tmp_path / "zscripts.config.json"
+    config_path.write_text(json.dumps(base), encoding="utf-8")
+    return config_path
+
+
+@pytest.fixture()
+def temp_config(temp_config_path: Path):
+    _, _, load_config = _load_config_helpers()
+    return load_config(temp_config_path)
+
+# tests\test_cli.py
+from __future__ import annotations
+
+from pathlib import Path
+
+from zscripts.cli import main as cli_main
+from zscripts.config import get_config
+
+
+def test_cli_collect(sample_project_path: Path, tmp_path: Path) -> None:
+    config = get_config()
+    log_dir = config.collection_logs.get("python", "logs_apps_pyth")
+    full_log_dir = sample_project_path.parent / "zscripts" / "logs" / log_dir
+    exit_code = cli_main(
+        [
+            "collect",
+            "--types",
+            "python",
+            "--project-root",
+            str(sample_project_path),
+        ]
+    )
+    assert exit_code == 0
+    assert full_log_dir.exists()
+
+
+def test_cli_consolidate(sample_project_path: Path, tmp_path: Path) -> None:
+    output = tmp_path / "python.txt"
+    exit_code = cli_main(
+        [
+            "consolidate",
+            "--types",
+            "python",
+            "--project-root",
+            str(sample_project_path),
+            "--output",
+            str(output),
+        ]
+    )
+    assert exit_code == 0
+    assert output.exists()
+
+
+def test_cli_tree(sample_project_path: Path, tmp_path: Path) -> None:
+    tree_path = tmp_path / "tree.txt"
+    exit_code = cli_main(
+        [
+            "tree",
+            "--project-root",
+            str(sample_project_path),
+            "--output",
+            str(tree_path),
+        ]
+    )
+    assert exit_code == 0
+    assert tree_path.exists()
+
+# tests\test_cli_integration.py
+"""CLI argument validation and integration tests for zscripts."""
+from __future__ import annotations
+
+import time
+from pathlib import Path
+
+import pytest
+
+from zscripts.cli import main as cli_main
+from zscripts.config import get_config
+
+
+class TestCLIArguments:
+    """Test CLI argument validation and edge cases."""
+
+    def test_invalid_types_argument(self, sample_project_path: Path) -> None:
+        """Test handling of invalid --types argument."""
+        from zscripts.cli import UnknownTypeError
+        with pytest.raises(UnknownTypeError):
+            cli_main([
+                "collect",
+                "--types", "invalid,python",
+                "--project-root", str(sample_project_path)
+            ])
+
+    def test_empty_types_argument(self, sample_project_path: Path) -> None:
+        """Test handling of empty --types argument."""
+        exit_code = cli_main([
+            "collect",
+            "--types", "",
+            "--project-root", str(sample_project_path)
+        ])
+        assert exit_code == 0  # Should handle gracefully
+
+    def test_multiple_types_argument(self, sample_project_path: Path) -> None:
+        """Test handling of multiple file types."""
+        exit_code = cli_main([
+            "collect",
+            "--types", "python,js,html",
+            "--project-root", str(sample_project_path)
+        ])
+        assert exit_code == 0
+
+    def test_missing_required_arguments(self) -> None:
+        """Test handling of missing required arguments."""
+        # Missing --project-root, should use current directory
+        exit_code = cli_main(["collect", "--types", "python"])
+        assert exit_code == 0  # Should work with current directory
+
+    def test_invalid_project_root(self) -> None:
+        """Test handling of invalid project root."""
+        exit_code = cli_main([
+            "collect",
+            "--types", "python",
+            "--project-root", "/nonexistent/path"
+        ])
+        assert exit_code == 0  # Should create directory structure
+
+    def test_output_file_in_nonexistent_directory(self, tmp_path: Path, sample_project_path: Path) -> None:
+        """Test output to nested nonexistent directory."""
+        deep_output = tmp_path / "very" / "deep" / "nested" / "output.txt"
+        exit_code = cli_main([
+            "consolidate",
+            "--types", "python",
+            "--project-root", str(sample_project_path),
+            "--output", str(deep_output)
+        ])
+        assert exit_code == 0
+        assert deep_output.exists()
+
+    def test_config_file_argument(self, tmp_path: Path, sample_project_path: Path) -> None:
+        """Test --config argument."""
+        config_file = tmp_path / "test_config.json"
+        config_file.write_text('{"skip": ["*.tmp"], "file_types": {}}')
+
+        exit_code = cli_main([
+            "collect",
+            "--types", "python",
+            "--project-root", str(sample_project_path),
+            "--config", str(config_file)
+        ])
+        assert exit_code == 0
+
+    def test_invalid_config_file(self, sample_project_path: Path) -> None:
+        """Test handling of invalid config file."""
+        with pytest.raises(RuntimeError, match="Configuration file not found"):
+            cli_main([
+                "collect",
+                "--types", "python",
+                "--project-root", str(sample_project_path),
+                "--config", "/nonexistent/config.json"
+            ])
+
+
+class TestCLIIntegration:
+    """Integration tests for CLI functionality."""
+
+    def test_full_workflow(self, tmp_path: Path, sample_project_path: Path) -> None:
+        """Test a complete workflow from collect to consolidate."""
+        # First collect logs
+        exit_code = cli_main([
+            "collect",
+            "--types", "python",
+            "--project-root", str(sample_project_path)
+        ])
+        assert exit_code == 0
+
+        # Then consolidate
+        output = tmp_path / "full_consolidated.txt"
+        exit_code = cli_main([
+            "consolidate",
+            "--types", "python",
+            "--project-root", str(sample_project_path),
+            "--output", str(output)
+        ])
+        assert exit_code == 0
+        assert output.exists()
+        assert output.stat().st_size > 0
+
+    def test_tree_and_consolidate_workflow(self, tmp_path: Path, sample_project_path: Path) -> None:
+        """Test tree generation followed by consolidation."""
+        # Generate tree
+        tree_output = tmp_path / "project_tree.txt"
+        exit_code = cli_main([
+            "tree",
+            "--project-root", str(sample_project_path),
+            "--output", str(tree_output)
+        ])
+        assert exit_code == 0
+        assert tree_output.exists()
+
+        # Consolidate files
+        consolidate_output = tmp_path / "consolidated.txt"
+        exit_code = cli_main([
+            "consolidate",
+            "--types", "python",
+            "--project-root", str(sample_project_path),
+            "--output", str(consolidate_output)
+        ])
+        assert exit_code == 0
+        assert consolidate_output.exists()
+
+    def test_multiple_file_types_integration(self, tmp_path: Path, sample_project_path: Path) -> None:
+        """Test collecting multiple file types and consolidating single type."""
+        # Collect multiple types
+        exit_code = cli_main([
+            "collect",
+            "--types", "python,js",
+            "--project-root", str(sample_project_path)
+        ])
+        assert exit_code == 0
+
+        # Consolidate single type (consolidate command only accepts one type)
+        output = tmp_path / "python_only.txt"
+        exit_code = cli_main([
+            "consolidate",
+            "--types", "python",
+            "--project-root", str(sample_project_path),
+            "--output", str(output)
+        ])
+        assert exit_code == 0
+        assert output.exists()
+
+        content = output.read_text()
+        # Should contain both Python and JS content
+        assert any("def " in line or "function" in line for line in content.split('\n'))
+
+
+class TestCLIOutput:
+    """Test CLI output formatting and content."""
+
+    def test_collect_output_structure(self, sample_project_path: Path) -> None:
+        """Test that collect creates proper directory structure."""
+        exit_code = cli_main([
+            "collect",
+            "--types", "python",
+            "--project-root", str(sample_project_path)
+        ])
+        assert exit_code == 0
+
+        # Check that log directories were created
+        config = get_config()
+        log_dir = config.collection_logs.get("python", "logs_apps_pyth")
+        full_log_dir = sample_project_path.parent / "zscripts" / "logs" / log_dir
+        assert full_log_dir.exists()
+
+    def test_consolidate_output_format(self, tmp_path: Path, sample_project_path: Path) -> None:
+        """Test that consolidate output has proper format."""
+        output = tmp_path / "formatted_output.txt"
+        exit_code = cli_main([
+            "consolidate",
+            "--types", "python",
+            "--project-root", str(sample_project_path),
+            "--output", str(output)
+        ])
+        assert exit_code == 0
+
+        content = output.read_text()
+        lines = content.split('\n')
+
+        # Should contain file headers and content
+        assert any("# " in line and ".py" in line for line in lines)  # File headers
+        assert any("class " in line or "def " in line for line in lines)  # Python content
+
+    def test_tree_output_format(self, tmp_path: Path, sample_project_path: Path) -> None:
+        """Test that tree output has proper format."""
+        output = tmp_path / "tree_output.txt"
+        exit_code = cli_main([
+            "tree",
+            "--project-root", str(sample_project_path),
+            "--output", str(output)
+        ])
+        assert exit_code == 0
+
+        content = output.read_text(encoding='utf-8')
+        lines = content.split('\n')
+
+        # Should contain tree structure - check for Unicode tree characters
+        tree_chars_found = any("├──" in line or "└──" in line for line in lines)
+        assert tree_chars_found, f"Tree characters not found in output. Content preview: {content[:200]}"
+        assert any("sample_project" in line for line in lines)       # Project name
+
+
+class TestCLIPerformance:
+    """Test CLI performance with various inputs."""
+
+    def test_large_project_simulation(self, tmp_path: Path) -> None:
+        """Test CLI with simulated large project."""
+        # Create many files and directories
+        for i in range(20):
+            dir_path = tmp_path / f"module_{i}"
+            dir_path.mkdir()
+
+            for j in range(10):
+                file_path = dir_path / f"file_{j}.py"
+                file_path.write_text(f"# Module {i}, File {j}\ndef func_{i}_{j}():\n    return {i * j}\n")
+
+        # Test collect performance
+        start_time = time.time()
+        exit_code = cli_main([
+            "collect",
+            "--types", "python",
+            "--project-root", str(tmp_path)
+        ])
+        end_time = time.time()
+
+        assert exit_code == 0
+        assert end_time - start_time < 5.0  # Should complete within 5 seconds
+
+    def test_memory_usage(self, tmp_path: Path) -> None:
+        """Test that CLI doesn't use excessive memory."""
+        # Create files with substantial content
+        for i in range(50):
+            file_path = tmp_path / f"large_{i}.py"
+            content = f"# Large file {i}\n" + "\n".join(f"x_{i}_{j} = {i * j}" for j in range(1000))
+            file_path.write_text(content)
+
+        # Should complete without memory issues
+        output = tmp_path / "large_output.txt"
+        exit_code = cli_main([
+            "consolidate",
+            "--types", "python",
+            "--project-root", str(tmp_path),
+            "--output", str(output)
+        ])
+        assert exit_code == 0
+        assert output.exists()
+
+
+# tests\test_config.py
+from __future__ import annotations
+
+from pathlib import Path
+
+from zscripts.config import Config, get_config, get_file_group_resolver, load_config
+
+
+def test_config_loading() -> None:
+    config = get_config()
+    assert isinstance(config, Config)
+    assert isinstance(config.skip, list)
+    assert isinstance(config.file_types, dict)
+    assert isinstance(config.user_ignore_patterns, set)
+    assert isinstance(config.directories, dict)
+    assert isinstance(config.collection_logs, dict)
+    assert isinstance(config.single_targets, dict)
+
+
+def test_load_config_with_path(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.json"
+    config_path.write_text('{"skip": ["test"], "file_types": {}, "user_ignore_patterns": [], "directories": {}, "collection_logs": {}, "single_targets": {}}')
+    config = load_config(config_path)
+    assert config.skip == ["test"]
+
+
+def test_file_group_resolver() -> None:
+    resolver = get_file_group_resolver()
+    assert isinstance(resolver, dict)
+    assert "models.py" in resolver
+
+# tests\test_config_advanced.py
+"""Configuration validation and advanced feature tests for zscripts."""
+from __future__ import annotations
+
+from pathlib import Path
+
+from zscripts.config import Config, get_config, load_config
+from zscripts.utils import IgnoreMatcher, consolidate_files, create_filtered_tree
+
+
+class TestConfigurationValidation:
+    """Test configuration validation and edge cases."""
+
+    def test_config_schema_validation(self) -> None:
+        """Test that config adheres to expected schema."""
+        config = get_config()
+        assert isinstance(config, Config)
+
+        # Required attributes
+        assert hasattr(config, 'skip')
+        assert hasattr(config, 'file_types')
+        assert hasattr(config, 'user_ignore_patterns')
+        assert hasattr(config, 'directories')
+        assert hasattr(config, 'collection_logs')
+        assert hasattr(config, 'single_targets')
+
+        # Type checks
+        assert isinstance(config.skip, list)
+        assert isinstance(config.file_types, dict)
+        assert isinstance(config.user_ignore_patterns, set)
+        assert isinstance(config.directories, dict)
+        assert isinstance(config.collection_logs, dict)
+        assert isinstance(config.single_targets, dict)
+
+    def test_config_file_loading_priority(self, tmp_path: Path) -> None:
+        """Test configuration file loading priority."""
+        # Create a custom config
+        custom_config = tmp_path / "custom.json"
+        custom_config.write_text('{"skip": ["custom_skip"], "file_types": {"test.py": "test_files"}}')
+
+        # Load config
+        config = load_config(custom_config)
+
+        # Should use custom values
+        assert "custom_skip" in config.skip
+        assert "test.py" in config.file_types
+
+    def test_config_merging(self, tmp_path: Path) -> None:
+        """Test that custom config overrides defaults."""
+        partial_config = tmp_path / "partial.json"
+        partial_config.write_text('{"skip": ["new_skip"]}')
+
+        config = load_config(partial_config)
+
+        # Should have custom skip
+        assert "new_skip" in config.skip
+        # file_types will be empty since not specified in partial config
+        assert isinstance(config.file_types, dict)
+        assert len(config.file_types) == 0  # Not merged with defaults
+
+    def test_invalid_config_values(self, tmp_path: Path) -> None:
+        """Test handling of invalid config values."""
+        invalid_config = tmp_path / "invalid.json"
+        invalid_config.write_text('{"skip": "not_a_list", "file_types": "not_a_dict"}')
+
+        # Should handle gracefully or fail appropriately
+        try:
+            config = load_config(invalid_config)
+            # If it loads, types should be corrected or defaults used
+            assert isinstance(config.skip, list)
+            assert isinstance(config.file_types, dict)
+        except Exception:
+            # It's acceptable for invalid configs to cause exceptions
+            pass
+
+    def test_config_with_comments(self, tmp_path: Path) -> None:
+        """Test config files with comments (if supported)."""
+        config_with_comments = tmp_path / "comments.json"
+        config_with_comments.write_text("""
+        {
+            // This is a comment
+            "skip": ["test"],
+            "file_types": {}
+            /* Another comment */
+        }
+        """)
+
+        # JSON doesn't support comments, so this should fail
+        try:
+            config = load_config(config_with_comments)
+            # If it somehow works, that's fine
+        except Exception:
+            # Expected for JSON with comments
+            pass
+
+
+class TestFileTypeHandling:
+    """Test handling of different file types and extensions."""
+
+    def test_python_file_detection(self, tmp_path: Path) -> None:
+        """Test detection and handling of Python files."""
+        py_file = tmp_path / "test.py"
+        py_file.write_text("# Python file\ndef test():\n    pass\n")
+
+        output = tmp_path / "output.txt"
+        consolidate_files(tmp_path, output, {".py"}, [])
+
+        content = output.read_text()
+        assert "# Python file" in content
+        assert "def test():" in content
+
+    def test_javascript_file_detection(self, tmp_path: Path) -> None:
+        """Test detection and handling of JavaScript files."""
+        js_file = tmp_path / "app.js"
+        js_file.write_text("// JavaScript file\nfunction test() {}\n")
+
+        output = tmp_path / "output.txt"
+        from zscripts.utils import consolidate_files
+        consolidate_files(tmp_path, output, {".js"}, [])
+
+        content = output.read_text()
+        assert "// JavaScript file" in content
+        assert "function test()" in content
+
+    def test_mixed_file_types(self, tmp_path: Path) -> None:
+        """Test handling of mixed file types in same directory."""
+        py_file = tmp_path / "code.py"
+        py_file.write_text("# Python\ndef func(): pass")
+
+        js_file = tmp_path / "script.js"
+        js_file.write_text("// JavaScript\nfunction func() {}")
+
+        txt_file = tmp_path / "readme.txt"
+        txt_file.write_text("Readme content")
+
+        # Consolidate only Python and JS
+        output = tmp_path / "output.txt"
+        from zscripts.utils import consolidate_files
+        consolidate_files(tmp_path, output, {".py", ".js"}, [])
+
+        content = output.read_text()
+        assert "# Python" in content
+        assert "// JavaScript" in content
+        assert "Readme content" not in content  # Should exclude .txt
+
+    def test_file_type_case_sensitivity(self, tmp_path: Path) -> None:
+        """Test case sensitivity in file extensions."""
+        py_file = tmp_path / "test.PY"  # Uppercase extension
+        py_file.write_text("# Uppercase PY")
+
+        output = tmp_path / "output.txt"
+        from zscripts.utils import consolidate_files
+        consolidate_files(tmp_path, output, {".py"}, [])
+
+        content = output.read_text()
+        # Should handle case insensitivity (depending on platform)
+        # On Windows, this might work; on Unix, it might not
+        if content:
+            assert "# Uppercase PY" in content
+
+    def test_hidden_files(self, tmp_path: Path) -> None:
+        """Test handling of hidden files."""
+        hidden_file = tmp_path / ".hidden.py"
+        hidden_file.write_text("# Hidden file")
+
+        output = tmp_path / "output.txt"
+        from zscripts.utils import consolidate_files
+        consolidate_files(tmp_path, output, {".py"}, [])
+
+        content = output.read_text()
+        # Hidden files should typically be included unless specifically ignored
+        assert "# Hidden file" in content
+
+
+class TestIgnorePatterns:
+    """Test ignore pattern functionality."""
+
+    def test_gitignore_style_patterns(self, tmp_path: Path) -> None:
+        """Test gitignore-style ignore patterns."""
+        from zscripts.utils import IgnoreMatcher
+
+        matcher = IgnoreMatcher(["*.pyc", "__pycache__", "node_modules"])
+
+        assert matcher.matches(Path("__pycache__/module.pyc"))  # Exact match
+        assert not matcher.matches(Path("node_modules/package.json"))  # Doesn't match directory contents
+        assert matcher.matches(Path("*.pyc"))  # Pattern matches
+        assert not matcher.matches(Path("module.py"))
+
+    def test_complex_ignore_patterns(self, tmp_path: Path) -> None:
+        """Test complex ignore patterns."""
+        from zscripts.utils import IgnoreMatcher
+
+        patterns = [
+            "*.log",
+            "temp",  # Directory name
+            "build",  # Directory name
+            "!important.log"  # Negation (not implemented in simple matcher)
+        ]
+        matcher = IgnoreMatcher(patterns)
+
+        assert matcher.matches(Path("debug.log"))
+        assert matcher.matches(Path("temp"))  # Directory name matches
+        assert matcher.matches(Path("build"))  # Directory name matches
+        # Negation not implemented, so this matches
+        assert matcher.matches(Path("important.log"))
+
+    def test_ignore_pattern_precedence(self, tmp_path: Path) -> None:
+        """Test precedence of ignore patterns."""
+        # Create files that should be ignored and not ignored
+        ignored_file = tmp_path / "cache.pyc"
+        ignored_file.write_text("# Ignored")
+
+        included_file = tmp_path / "code.py"
+        included_file.write_text("# Included")
+
+        output = tmp_path / "output.txt"
+        from zscripts.utils import consolidate_files
+        consolidate_files(tmp_path, output, {".py"}, ["*.pyc"])
+
+        content = output.read_text()
+        assert "# Included" in content
+        assert "# Ignored" not in content
+
+
+class TestOutputFormatting:
+    """Test output formatting and structure."""
+
+    def test_consolidate_output_headers(self, tmp_path: Path) -> None:
+        """Test that consolidate output includes proper file headers."""
+        file1 = tmp_path / "dir1" / "file1.py"
+        file1.parent.mkdir(parents=True)
+        file1.write_text("# File 1 content\ndef func1(): pass")
+
+        file2 = tmp_path / "dir2" / "file2.py"
+        file2.parent.mkdir(parents=True)
+        file2.write_text("# File 2 content\ndef func2(): pass")
+
+        output = tmp_path / "output.txt"
+        from zscripts.utils import consolidate_files
+        consolidate_files(tmp_path, output, {".py"}, [])
+
+        content = output.read_text()
+        lines = content.split('\n')
+
+        # Should contain file separators/headers
+        assert any("===" in line or "file1.py" in line for line in lines)
+        assert any("===" in line or "file2.py" in line for line in lines)
+        assert "# File 1 content" in content
+        assert "# File 2 content" in content
+
+    def test_tree_output_structure(self, tmp_path: Path) -> None:
+        """Test that tree output has proper structure."""
+        # Create directory structure
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "main.py").write_text("# Main")
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "tests" / "test_main.py").write_text("# Test")
+
+        output = tmp_path / "tree.txt"
+        from zscripts.utils import create_filtered_tree
+        create_filtered_tree(tmp_path, output, [])  # No ignore patterns
+
+        content = output.read_text()
+        assert "src" in content
+        assert "tests" in content
+        assert "main.py" in content
+        assert "test_main.py" in content
+
+    def test_empty_output_handling(self, tmp_path: Path) -> None:
+        """Test handling when no files match criteria."""
+        # Create files that don't match filter
+        txt_file = tmp_path / "readme.txt"
+        txt_file.write_text("Text content")
+
+        output = tmp_path / "output.txt"
+        from zscripts.utils import consolidate_files
+        consolidate_files(tmp_path, output, {".py"}, [])
+
+        # Output file should still be created but be empty or minimal
+        assert output.exists()
+        content = output.read_text()
+        assert "Text content" not in content
+# tests\test_security.py
+"""Security and safety tests for zscripts."""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+import pytest
+
+from zscripts.cli import main as cli_main
+from zscripts.config import load_config
+from zscripts.utils import collect_app_logs, consolidate_files
+
+
+class TestSecurity:
+    """Test security features and path traversal protection."""
+
+    def test_path_traversal_protection(self, tmp_path: Path) -> None:
+        """Test that path traversal attempts are blocked."""
+        # Create a malicious file with path traversal
+        malicious_file = tmp_path / "backend" / "service.py"
+        malicious_file.parent.mkdir(parents=True)
+        malicious_file.write_text("# Normal content")
+
+        # Create a file that tries to escape the project root
+        escape_file = tmp_path / "backend" / "..\\..\\..\\etc\\passwd.py"
+        escape_file.parent.mkdir(parents=True, exist_ok=True)
+        escape_file.write_text("# Malicious content")
+
+        # Test that collect_app_logs doesn't follow path traversal
+        log_dir = tmp_path / "logs"
+        collect_app_logs(tmp_path, log_dir, {".py"}, [])
+
+        # Should not create logs outside the log directory
+        assert not (log_dir / ".." / ".." / "etc").exists()
+        assert not (log_dir / "passwd.txt").exists()
+
+    def test_file_size_limits(self, tmp_path: Path) -> None:
+        """Test handling of very large files."""
+        # Create a large file
+        large_file = tmp_path / "large.py"
+        large_content = "# Large file\n" * 10000  # ~120KB
+        large_file.write_text(large_content)
+
+        # Test consolidation with large files
+        output = tmp_path / "output.txt"
+        consolidate_files(tmp_path, output, {".py"}, [])
+
+        assert output.exists()
+        content = output.read_text()
+        assert "# Large file" in content
+
+    def test_symlink_handling(self, tmp_path: Path) -> None:
+        """Test that symlinks are handled safely."""
+        # Create a regular file
+        real_file = tmp_path / "real.py"
+        real_file.write_text("# Real file")
+
+        # Create a symlink (if supported)
+        try:
+            link_file = tmp_path / "link.py"
+            os.symlink(str(real_file), str(link_file))
+
+            # Test that consolidation works with symlinks
+            output = tmp_path / "output.txt"
+            consolidate_files(tmp_path, output, {".py"}, [])
+
+            assert output.exists()
+            content = output.read_text()
+            assert "# Real file" in content
+        except OSError:
+            # Symlinks not supported on this platform
+            pytest.skip("Symlinks not supported on this platform")
+
+    def test_permission_denied_handling(self, tmp_path: Path) -> None:
+        """Test graceful handling of permission denied errors."""
+        # Create a file
+        test_file = tmp_path / "test.py"
+        test_file.write_text("# Test file")
+
+        # Make the directory read-only (if possible)
+        try:
+            # On Windows, this might not work as expected
+            output = tmp_path / "output.txt"
+            consolidate_files(tmp_path, output, {".py"}, [])
+            assert output.exists()
+        except PermissionError:
+            # This is expected behavior - should not crash
+            pass
+
+
+class TestErrorHandling:
+    """Test error handling and edge cases."""
+
+    def test_empty_project_directory(self, tmp_path: Path) -> None:
+        """Test handling of empty project directories."""
+        # Test collect on empty directory
+        exit_code = cli_main(["collect", "--types", "python", "--project-root", str(tmp_path)])
+        assert exit_code == 0  # Should not crash
+
+        # Test consolidate on empty directory
+        output = tmp_path / "output.txt"
+        exit_code = cli_main([
+            "consolidate",
+            "--types", "python",
+            "--project-root", str(tmp_path),
+            "--output", str(output)
+        ])
+        assert exit_code == 0
+        assert output.exists()
+
+    def test_nonexistent_project_root(self, tmp_path: Path) -> None:
+        """Test handling of nonexistent project root."""
+        nonexistent = tmp_path / "does_not_exist"
+        exit_code = cli_main(["collect", "--types", "python", "--project-root", str(nonexistent)])
+        assert exit_code == 0  # Should create directory structure
+
+    def test_invalid_file_types(self, sample_project_path: Path) -> None:
+        """Test handling of invalid file type specifications."""
+        from zscripts.cli import UnknownTypeError
+        with pytest.raises(UnknownTypeError):
+            cli_main([
+                "collect",
+                "--types", "invalid_type",
+                "--project-root", str(sample_project_path)
+            ])
+
+    def test_output_directory_creation(self, tmp_path: Path, sample_project_path: Path) -> None:
+        """Test that output directories are created as needed."""
+        nested_output = tmp_path / "deep" / "nested" / "output.txt"
+
+        exit_code = cli_main([
+            "consolidate",
+            "--types", "python",
+            "--project-root", str(sample_project_path),
+            "--output", str(nested_output)
+        ])
+        assert exit_code == 0
+        assert nested_output.exists()
+        assert nested_output.parent.exists()
+
+
+class TestConfigurationEdgeCases:
+    """Test configuration handling edge cases."""
+
+    def test_malformed_config_file(self, tmp_path: Path) -> None:
+        """Test handling of malformed configuration files."""
+        config_file = tmp_path / "bad_config.json"
+        config_file.write_text("{invalid json")
+
+        # Should raise JSONDecodeError
+        with pytest.raises((ValueError, UnicodeDecodeError)):  # JSON parsing errors
+            load_config(config_file)
+
+    def test_missing_config_values(self, tmp_path: Path) -> None:
+        """Test handling of incomplete configuration."""
+        config_file = tmp_path / "minimal_config.json"
+        config_file.write_text('{"skip": []}')  # Missing other required fields
+
+        config = load_config(config_file)
+        assert config.skip == []
+        # Should have defaults for other fields
+
+    def test_config_file_permissions(self, tmp_path: Path) -> None:
+        """Test handling of inaccessible configuration files."""
+        config_file = tmp_path / "readonly_config.json"
+        config_file.write_text('{"skip": ["test"]}')
+
+        # Try to make it readonly (if possible)
+        try:
+            config_file.chmod(0o444)
+            config = load_config(config_file)
+            assert config is not None  # Should handle gracefully
+        except OSError:
+            # chmod may not work on all platforms
+            pass
+
+
+class TestCrossPlatformCompatibility:
+    """Test cross-platform file handling."""
+
+    def test_path_separators(self, tmp_path: Path) -> None:
+        """Test that path separators are handled correctly."""
+        # Create files with different path structures
+        (tmp_path / "dir1" / "file.py").parent.mkdir(parents=True)
+        (tmp_path / "dir1" / "file.py").write_text("# File 1")
+
+        (tmp_path / "dir2" / "subdir" / "file.py").parent.mkdir(parents=True)
+        (tmp_path / "dir2" / "subdir" / "file.py").write_text("# File 2")
+
+        output = tmp_path / "output.txt"
+        consolidate_files(tmp_path, output, {".py"}, [])
+
+        content = output.read_text()
+        assert "# File 1" in content
+        assert "# File 2" in content
+
+    def test_unicode_filenames(self, tmp_path: Path) -> None:
+        """Test handling of unicode filenames."""
+        unicode_file = tmp_path / "tëst_üñíçødé.py"
+        unicode_file.write_text("# Unicode content")
+
+        output = tmp_path / "output.txt"
+        consolidate_files(tmp_path, output, {".py"}, [])
+
+        content = output.read_text()
+        assert "# Unicode content" in content
+
+    def test_long_paths(self, tmp_path: Path) -> None:
+        """Test handling of long file paths."""
+        # Create a deeply nested directory structure
+        deep_path = tmp_path
+        for i in range(10):
+            deep_path = deep_path / f"level_{i}"
+        deep_path.mkdir(parents=True)
+        deep_file = deep_path / "deep.py"
+        deep_file.write_text("# Deep file")
+
+        output = tmp_path / "output.txt"
+        consolidate_files(tmp_path, output, {".py"}, [])
+
+        content = output.read_text()
+        assert "# Deep file" in content
+
+
+class TestPerformance:
+    """Test performance and scalability."""
+
+    def test_large_number_of_files(self, tmp_path: Path) -> None:
+        """Test handling of many files."""
+        # Create many files
+        for i in range(100):
+            file_path = tmp_path / f"file_{i}.py"
+            file_path.write_text(f"# File {i}\ndef func_{i}():\n    return {i}\n")
+
+        output = tmp_path / "output.txt"
+        consolidate_files(tmp_path, output, {".py"}, [])
+
+        content = output.read_text()
+        assert "File 0" in content
+        assert "File 99" in content
+        assert len(content.split("# File")) > 90  # Most files included
+
+    def test_large_file_content(self, tmp_path: Path) -> None:
+        """Test handling of files with large content."""
+        large_content = "# Header\n" + "x = 1\n" * 10000  # ~50KB
+        large_file = tmp_path / "large.py"
+        large_file.write_text(large_content)
+
+        output = tmp_path / "output.txt"
+        consolidate_files(tmp_path, output, {".py"}, [])
+
+        content = output.read_text()
+        assert "# Header" in content
+        assert "x = 1" in content
+
+
+# tests\test_utils.py
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from zscripts.utils import IgnoreMatcher, collect_app_logs, consolidate_files, create_filtered_tree
+
+
+@pytest.fixture()
+def sample_project_path(tmp_path: Path) -> Path:
+    """Create a minimal sample project for testing."""
+    project = tmp_path / "sample"
+    project.mkdir()
+
+    # Create backend file
+    backend = project / "backend"
+    backend.mkdir()
+    (backend / "service.py").write_text("# Backend service\n\ndef hello():\n    return 'world'\n")
+
+    # Create frontend file
+    frontend = project / "frontend"
+    frontend.mkdir()
+    (frontend / "App.jsx").write_text("// Frontend app\nconst App = () => <div>Hello</div>;\n")
+
+    return project
+
+
+def test_ignore_matcher() -> None:
+    matcher = IgnoreMatcher(["*.pyc", "__pycache__/"])
+    assert matcher.matches(Path("__pycache__/module.pyc"))
+    assert not matcher.matches(Path("module.py"))
+
+
+def test_collect_app_logs(sample_project_path: Path, tmp_path: Path) -> None:
+    log_dir = tmp_path / "logs"
+    ignore_patterns = ["__pycache__"]
+    collect_app_logs(sample_project_path, log_dir, {".py"}, ignore_patterns)
+
+    backend_log = log_dir / "backend.txt"
+    assert backend_log.exists()
+    content = backend_log.read_text()
+    assert "# Backend service" in content
+
+
+def test_consolidate_files(sample_project_path: Path, tmp_path: Path) -> None:
+    output_path = tmp_path / "consolidated.txt"
+    ignore_patterns = ["__pycache__"]
+    consolidate_files(sample_project_path, output_path, {".py"}, ignore_patterns)
+
+    assert output_path.exists()
+    content = output_path.read_text()
+    assert "# Backend service" in content
+
+
+def test_create_filtered_tree(sample_project_path: Path, tmp_path: Path) -> None:
+    output_path = tmp_path / "tree.txt"
+    ignore_patterns = ["__pycache__"]
+    create_filtered_tree(sample_project_path, output_path, ignore_patterns)
+
+    assert output_path.exists()
+    content = output_path.read_text()
+    assert "backend" in content
+    assert "frontend" in content
+
+# tests\__init__.py
+"""Ensure the repository root is on ``sys.path`` during tests."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:  # pragma: no cover - environment guard
+    sys.path.insert(0, str(ROOT))
+

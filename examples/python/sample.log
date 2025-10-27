@@ -1,0 +1,8 @@
+META tool="pytest" ecosystem="python" command="run tests" status=failed summary="Sample failure" timestamp=2025-01-01T00:00:00
+TESTS passed=2 failed=1 skipped=0 duration=12.5
+TESTCASE name=test_success status=passed duration=0.5
+TESTCASE name=test_failure status=failed duration=0.7 message="assert false"
+ERROR message="AssertionError: expected true" file=tests/test_sample.py line=42
+WARNING message="Deprecated API" file=src/module.py line=10
+ARTIFACT path=artifacts/report.xml
+INFO language=python version=3.11

@@ -1,0 +1,61 @@
+{
+  "skip": [
+    "zscripts",
+    "zbuild",
+    "migrations",
+    "static",
+    "yayay",
+    "asgi",
+    "wsgi",
+    "staticfiles",
+    "logs",
+    "media",
+    "__pycache__",
+    "build",
+    "dist",
+    "venv",
+    "env",
+    "envs",
+    "node_modules",
+    "public",
+    "assets",
+    ".git",
+    ".git.txt"
+  ],
+  "file_types": {
+    "admin.py": "admin_files",
+    "apps.py": "apps_files",
+    "forms.py": "forms_files",
+    "models.py": "models_files",
+    "signals.py": "signals_files",
+    "tests.py": "tests_files",
+    "urls.py": "urls_files",
+    "views.py": "views_files",
+    "utils.py": "utils_files"
+  },
+  "directories": {
+    "log_root": "logs",
+    "build": "build_files",
+    "analysis": "analysis_logs",
+    "consolidation": "consoli_files",
+    "work": "logs_files"
+  },
+  "collection_logs": {
+    "all": "logs_apps_all",
+    "python": "logs_apps_pyth",
+    "html": "logs_apps_html",
+    "css": "logs_apps_css",
+    "js": "logs_apps_js",
+    "python_html": "logs_apps_both",
+    "single": "logs_single_files"
+  },
+  "single_targets": {
+    "python": "capture_all_pyth.txt",
+    "html": "capture_all_html.txt",
+    "css": "capture_all_css.txt",
+    "js": "capture_all_js.txt",
+    "python_html": "capture_all_python_html.txt",
+    "any": "capture_all.txt"
+  },
+  "user_ignore_patterns": []
+}

@@ -1,4 +1,4 @@
-# Zscripts – File Compiler
+# Zscripts – Script Helper Log Compiler
 
 The toolkit automates collecting, consolidating, and analysing project files. It builds structured logs for Python, HTML, CSS, and JavaScript sources so you can review application code from a single location.
 

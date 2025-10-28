@@ -230,17 +230,15 @@ def _build_handler(context_bundle: _HandlerContext) -> type[_HealthRequestHandle
 
 
 def _canonical_endpoint(path: str) -> str:
-    match path:
-        case "/healthz":
-            return "healthz"
-        case "/healthz/ready":
-            return "healthz_ready"
-        case "/healthz/live":
-            return "healthz_live"
-        case "/metrics":
-            return "metrics"
-        case _:
-            return "unknown"
+    if path == "/healthz":
+        return "healthz"
+    if path == "/healthz/ready":
+        return "healthz_ready"
+    if path == "/healthz/live":
+        return "healthz_live"
+    if path == "/metrics":
+        return "metrics"
+    return "unknown"
 
 
 def _normalize_health_snapshot(raw: Mapping[str, object]) -> dict[str, object]:
@@ -251,25 +249,19 @@ def _normalize_health_snapshot(raw: Mapping[str, object]) -> dict[str, object]:
     snapshot["status"] = status
     liveness_candidate = snapshot.get("liveness")
     if isinstance(liveness_candidate, Mapping):
-        liveness: dict[str, object] = {
-            str(key): value for key, value in liveness_candidate.items()
-        }
+        liveness: dict[str, object] = {str(key): value for key, value in liveness_candidate.items()}
     else:
         liveness = {"status": status}
     liveness.setdefault("status", status)
     readiness_candidate = snapshot.get("readiness")
     if isinstance(readiness_candidate, Mapping):
-        readiness: dict[str, object] = {
-            str(key): value for key, value in readiness_candidate.items()
-        }
+        readiness: dict[str, object] = {str(key): value for key, value in readiness_candidate.items()}
     else:
         readiness = {"status": status}
     readiness.setdefault("status", status)
     checks_candidate = snapshot.get("checks")
     if isinstance(checks_candidate, Mapping):
-        checks: dict[str, object] = {
-            str(key): value for key, value in checks_candidate.items()
-        }
+        checks: dict[str, object] = {str(key): value for key, value in checks_candidate.items()}
     else:
         checks = {}
     snapshot["liveness"] = liveness

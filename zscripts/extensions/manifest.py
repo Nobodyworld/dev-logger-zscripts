@@ -48,12 +48,8 @@ def build_manifest(
     description = str(raw_description).strip()
     version_value = cast(object, getattr(extension, "version", None))
     version = str(version_value) if version_value is not None else None
-    capabilities = _coerce_iterable_strings(
-        cast(object, getattr(extension, "capabilities", ()))
-    )
-    config_keys = _coerce_iterable_strings(
-        cast(object, getattr(extension, "config_keys", ()))
-    )
+    capabilities = _coerce_iterable_strings(cast(object, getattr(extension, "capabilities", ())))
+    config_keys = _coerce_iterable_strings(cast(object, getattr(extension, "config_keys", ())))
     return ExtensionManifest(
         name=name,
         module=module,

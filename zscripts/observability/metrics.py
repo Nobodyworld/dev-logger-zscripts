@@ -1,4 +1,4 @@
-"""Lightweight metrics registry with Prometheus exposition support."""
+"""In-memory metrics registry compatible with Prometheus text exposition."""
 
 from __future__ import annotations
 

@@ -11,6 +11,7 @@ from zscripts.infrastructure.examples import FileSystemExampleRepository
 from zscripts.infrastructure.redaction import RegexRedactor
 from zscripts.infrastructure.sandbox import build_sandbox_runner
 from zscripts.infrastructure.schema import JsonSchemaValidator
+from zscripts.observability.instrumentation import InstrumentationManager
 from zscripts.observability.telemetry import TelemetryManager
 
 
@@ -19,6 +20,7 @@ def build_toolkit_service(
     *,
     adapter_registry: AdapterRegistryProtocol | None = None,
     telemetry: TelemetryManager | None = None,
+    instrumentation: InstrumentationManager | None = None,
 ) -> ToolkitService:
     """Assemble a :class:`ToolkitService` wired to in-repo infrastructure."""
 
@@ -40,6 +42,7 @@ def build_toolkit_service(
         sandbox_options=sandbox_options,
         default_adapter=config.default_adapter,
         telemetry=telemetry,
+        instrumentation=instrumentation,
     )
 
 

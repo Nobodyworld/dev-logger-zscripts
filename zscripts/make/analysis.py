@@ -1,11 +1,6 @@
 # zscripts/make/analysis.py
 import sys
 from pathlib import Path
-import os
-import re
-
-import sys
-from pathlib import Path
 
 # Ensure the repository root is importable when executed directly.
 script_dir = Path(__file__).resolve().parent

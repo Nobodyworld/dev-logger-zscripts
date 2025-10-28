@@ -1,4 +1,4 @@
-"""Helpers for aggregating runtime diagnostics snapshots."""
+"""Runtime diagnostics helpers for telemetry and extension state."""
 
 from __future__ import annotations
 

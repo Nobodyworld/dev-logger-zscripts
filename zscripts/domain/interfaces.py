@@ -1,4 +1,4 @@
-"""Protocol definitions describing clean architecture boundaries."""
+"""Domain-level protocol definitions shared across application layers."""
 
 from __future__ import annotations
 

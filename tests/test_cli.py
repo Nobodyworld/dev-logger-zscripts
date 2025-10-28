@@ -1,4 +1,5 @@
 """Integration tests exercising the CLI entry point."""
+
 from __future__ import annotations
 
 import json
@@ -180,6 +181,17 @@ def test_cli_report_output_directory_error(tmp_path: Path) -> None:
     assert "is a directory" in result.stderr
 
 
+def test_cli_diagnostics_output_directory_error(tmp_path: Path) -> None:
+    result = _run_cli(
+        "diagnostics",
+        "--output",
+        str(tmp_path),
+    )
+
+    assert result.returncode == 2
+    assert "is a directory" in result.stderr
+
+
 def test_cli_uses_configuration_file(tmp_path: Path) -> None:
     config_path = tmp_path / "settings.toml"
     config_path.write_text(
@@ -282,7 +294,7 @@ def test_cli_extensions_scaffold_creates_file(tmp_path: Path) -> None:
     contents = module_path.read_text(encoding="utf-8")
     assert "class DemoExtension" in contents
     assert "context.instrumentation" in contents
-    assert "version = \"0.1.0\"" in contents
+    assert 'version = "0.1.0"' in contents
     assert "def after_service_ready" in contents
 
 
@@ -300,7 +312,9 @@ def test_cli_extension_command_executes(tmp_path: Path) -> None:
 
 
 @pytest.fixture()
-def telemetry_harness(monkeypatch: pytest.MonkeyPatch) -> tuple[metrics_module.MetricsRegistry, type[cli_module.TelemetryManager]]:
+def telemetry_harness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[metrics_module.MetricsRegistry, type[cli_module.TelemetryManager]]:
     registry = metrics_module.MetricsRegistry()
     monkeypatch.setattr(metrics_module, "default_registry", registry)
 
@@ -322,7 +336,10 @@ def telemetry_harness(monkeypatch: pytest.MonkeyPatch) -> tuple[metrics_module.M
     return registry, RecordingTelemetryManager
 
 
-def test_cli_records_success_metrics(tmp_path: Path, telemetry_harness: tuple[metrics_module.MetricsRegistry, type[cli_module.TelemetryManager]]) -> None:
+def test_cli_records_success_metrics(
+    tmp_path: Path,
+    telemetry_harness: tuple[metrics_module.MetricsRegistry, type[cli_module.TelemetryManager]],
+) -> None:
     registry, manager_cls = telemetry_harness
     config_path = tmp_path / "settings.toml"
     config_path.write_text(f"telemetry_port = {_allocate_port()}\n", encoding="utf-8")
@@ -339,19 +356,24 @@ def test_cli_records_success_metrics(tmp_path: Path, telemetry_harness: tuple[me
     assert instance.health_server.is_running() is False
 
 
-def test_cli_records_failure_metrics(tmp_path: Path, telemetry_harness: tuple[metrics_module.MetricsRegistry, type[cli_module.TelemetryManager]]) -> None:
+def test_cli_records_failure_metrics(
+    tmp_path: Path,
+    telemetry_harness: tuple[metrics_module.MetricsRegistry, type[cli_module.TelemetryManager]],
+) -> None:
     registry, _ = telemetry_harness
     config_path = tmp_path / "settings.toml"
     config_path.write_text(f"telemetry_port = {_allocate_port()}\n", encoding="utf-8")
 
     with pytest.raises(SystemExit) as excinfo:
-        cli_module.main([
-            "--config",
-            str(config_path),
-            "--enable-telemetry",
-            "collect",
-            "--command",
-        ])
+        cli_module.main(
+            [
+                "--config",
+                str(config_path),
+                "--enable-telemetry",
+                "collect",
+                "--command",
+            ]
+        )
 
     assert excinfo.value.code == 2
     metrics_text = registry.collect_prometheus()

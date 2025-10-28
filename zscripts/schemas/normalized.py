@@ -1,4 +1,4 @@
-"""Dataclasses describing the normalized build log schema."""
+"""Dataclasses describing normalized log documents."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import ClassVar, cast
 
 
-@dataclass
+@dataclass(slots=True)
 class LogIssue:
     """Represents a compiler or test issue.
 
@@ -26,7 +26,7 @@ class LogIssue:
     code: str | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class TestCaseResult:
     """Represents an individual test case result."""
 
@@ -37,7 +37,7 @@ class TestCaseResult:
     __test__: ClassVar[bool] = False
 
 
-@dataclass
+@dataclass(slots=True)
 class TestSummary:
     """Summary of test execution results."""
 
@@ -49,7 +49,7 @@ class TestSummary:
     __test__: ClassVar[bool] = False
 
 
-@dataclass
+@dataclass(slots=True)
 class NormalizedLog:
     """Normalized representation of a build, compile, or test log."""
 

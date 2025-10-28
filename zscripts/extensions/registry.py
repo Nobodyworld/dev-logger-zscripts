@@ -1,4 +1,4 @@
-"""Extension loader utilities."""
+"""Extension loading and lifecycle management utilities."""
 
 from __future__ import annotations
 

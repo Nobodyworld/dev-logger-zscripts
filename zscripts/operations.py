@@ -11,9 +11,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, Mapping, MutableSequence, Sequence, Set
+from typing import Iterable, Mapping, MutableSequence, Set
 
-from . import config as _config, utils
+from . import config as _config
+from . import utils
 
 # --------------------------------------------------------------------------- #
 # Context helpers
@@ -40,9 +41,7 @@ def _normalize_suffixes(suffixes: Iterable[str]) -> Set[str]:
 
 
 _SKIP_DIR_PATTERNS = _dedupe_preserving_order(
-    pattern
-    for name in _config.SKIP_DIRS
-    for pattern in (name, f"{name}/", f"*/{name}", f"*/{name}/*")
+    pattern for name in _config.SKIP_DIRS for pattern in (name, f"{name}/", f"*/{name}", f"*/{name}/*")
 )
 
 
@@ -101,6 +100,7 @@ class ProjectContext:
 # --------------------------------------------------------------------------- #
 # Logging helpers
 
+
 def _app_log_destinations() -> Mapping[str, Path]:
     return {
         "python": _config.PYTHON_LOG_DIR,
@@ -121,6 +121,7 @@ def _single_log_destinations() -> Mapping[str, Path]:
         "python-html": _config.CAPTURE_ALL_PYTHON_HTML_LOG,
         "all": _config.CAPTURE_ALL_LOG,
     }
+
 
 _PRESET_ALIASES = {
     "js": "javascript",
@@ -243,11 +244,7 @@ def create_tree_snapshot(
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         destination = _config.TREE_LOG_DIR / f"tree_{timestamp}.txt"
 
-    suffixes = (
-        _normalize_suffixes(file_types)
-        if file_types is not None
-        else _config.FILE_TYPE_PRESETS["all"]
-    )
+    suffixes = _normalize_suffixes(file_types) if file_types is not None else _config.FILE_TYPE_PRESETS["all"]
     suffixes = _normalize_suffixes(suffixes)
 
     ProjectContext.ensure_dir(destination.parent)
@@ -266,8 +263,8 @@ def create_tree_snapshot(
 
 def convert_work_directory(
     *,
-    work_dir: Path = _config.WORK_DIR,
-    build_dir: Path = _config.BUILD_DIR,
+    work_dir: Path | None = None,
+    build_dir: Path | None = None,
 ) -> list[Path]:
     """
     Convert ``*_files.txt`` entries from ``work_dir`` into Python files stored
@@ -276,6 +273,9 @@ def convert_work_directory(
     Returns:
         List of files that were written.
     """
+    work_dir = work_dir if work_dir is not None else _config.WORK_DIR
+    build_dir = build_dir if build_dir is not None else _config.BUILD_DIR
+
     ProjectContext.ensure_dir(build_dir)
     if not work_dir.exists():
         return []
@@ -299,12 +299,15 @@ def convert_work_directory(
 
 def analyse_build_directory(
     *,
-    source_dir: Path = _config.BUILD_DIR,
-    analysis_dir: Path = _config.ANALYSIS_DIR,
+    source_dir: Path | None = None,
+    analysis_dir: Path | None = None,
 ) -> list[Path]:
     """
     Extract class/function definitions from ``source_dir`` into ``analysis_dir``.
     """
+    source_dir = source_dir if source_dir is not None else _config.BUILD_DIR
+    analysis_dir = analysis_dir if analysis_dir is not None else _config.ANALYSIS_DIR
+
     ProjectContext.ensure_dir(analysis_dir)
     if not source_dir.exists():
         return []

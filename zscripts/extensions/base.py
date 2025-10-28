@@ -11,6 +11,7 @@ from zscripts.config import ToolkitConfig
 from zscripts.domain.interfaces import AdapterRegistryProtocol
 from zscripts.extensions.hooks import ExtensionHookRegistry, HookCallback
 from zscripts.extensions.manifest import ExtensionManifest
+from zscripts.observability.health_checks import HealthCheckRegistry
 from zscripts.observability.instrumentation import InstrumentationManager
 from zscripts.observability.telemetry import TelemetryManager
 
@@ -29,6 +30,7 @@ class ExtensionContext:
     logger: logging.Logger
     manifests: dict[str, ExtensionManifest] = field(default_factory=dict)
     hook_registry: ExtensionHookRegistry | None = None
+    health_checks: HealthCheckRegistry = field(default_factory=HealthCheckRegistry)
 
 
 class ToolkitExtensionProtocol(Protocol):
@@ -88,6 +90,14 @@ class ToolkitExtension:
         """Convenience helper to register a callback for a named hook."""
 
         self.hooks.register(hook, callback, extension=self.name)
+
+    @property
+    def health_registry(self) -> HealthCheckRegistry:
+        """Expose the shared health check registry."""
+
+        if self._context is None:
+            raise RuntimeError("Extension context has not been initialised yet.")
+        return self._context.health_checks
 
     def on_load(self, context: ExtensionContext) -> None:  # noqa: D401 - default no-op
         self._context = context

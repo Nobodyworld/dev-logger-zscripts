@@ -6,7 +6,13 @@ import argparse
 import sys
 from pathlib import Path
 
-from zscripts.extensions.scaffolding import scaffold_extension
+try:
+    from zscripts.extensions.scaffolding import scaffold_extension
+except ImportError:  # pragma: no cover - fallback for direct execution
+    REPO_ROOT = Path(__file__).resolve().parents[1]
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+    from zscripts.extensions.scaffolding import scaffold_extension
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

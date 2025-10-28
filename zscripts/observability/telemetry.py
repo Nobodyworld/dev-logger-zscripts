@@ -5,9 +5,15 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import cast
 
 from zscripts import get_version
 from zscripts.observability.health import HealthTelemetryServer
+from zscripts.observability.health_checks import (
+    HealthCheckProvider,
+    HealthCheckRegistry,
+    HealthSnapshot,
+)
 from zscripts.observability.instrumentation import InstrumentationManager
 from zscripts.observability.logging import configure_logging, get_logger
 from zscripts.observability.metrics import MetricsRegistry, default_registry
@@ -33,14 +39,20 @@ class TelemetryManager:
         settings: TelemetrySettings,
         *,
         metrics: MetricsRegistry | None = None,
+        health_checks: HealthCheckRegistry | None = None,
     ) -> None:
         self.settings = settings
         self.metrics = metrics or default_registry
         self._logger = get_logger("telemetry")
         self._logging_configured = False
+        self.health_checks = health_checks or HealthCheckRegistry()
         self._health_server = HealthTelemetryServer(
             metrics=self.metrics,
             status_provider=self._status_payload,
+        )
+        self._health_status_gauge = self.metrics.gauge(
+            "zscripts_health_checks_status",
+            "Count of toolkit health checks grouped by status.",
         )
 
     def start(self) -> None:
@@ -90,6 +102,23 @@ class TelemetryManager:
             }
         return payload
 
+    def register_health_check(
+        self,
+        name: str,
+        provider: HealthCheckProvider,
+        *,
+        kind: str = "generic",
+        description: str | None = None,
+    ) -> None:
+        """Expose registry helper for components and extensions."""
+
+        self.health_checks.register(name, provider, kind=kind, description=description)
+
+    def unregister_health_check(self, name: str) -> None:
+        """Remove a previously registered health check."""
+
+        self.health_checks.unregister(name)
+
     def _configure_logging(self) -> None:
         if not self._logging_configured:
             configure_logging(self.settings.log_level, self.settings.log_format)
@@ -104,8 +133,10 @@ class TelemetryManager:
         readiness_status = "ok" if (not enabled or running) else "starting"
         liveness_status = "ok" if running else ("starting" if enabled else "inactive")
         overall_status = "ok" if readiness_status == "ok" else "degraded"
-        return {
-            "status": overall_status,
+        health_snapshot = self._evaluate_health_checks()
+        combined_status = self._merge_status(overall_status, health_snapshot["status"])
+        payload = {
+            "status": combined_status,
             "version": get_version(),
             "telemetry_enabled": self.settings.enabled,
             "health_endpoint": f"{base_url}/healthz" if base_url else None,
@@ -125,7 +156,31 @@ class TelemetryManager:
                     "port": port,
                 },
             },
+            "health_checks": health_snapshot,
         }
+        checks_section = cast(dict[str, object], payload["checks"])
+        checks_section["health_registry"] = {
+            "status": health_snapshot["status"],
+            "summary": health_snapshot["summary"],
+        }
+        return payload
+
+    def _evaluate_health_checks(self) -> HealthSnapshot:
+        snapshot = self.health_checks.snapshot()
+        summary = snapshot["summary"]
+        for status in ("ok", "degraded", "error"):
+            self._health_status_gauge.set(summary.get(status, 0), labels={"status": status})
+        return snapshot
+
+    @staticmethod
+    def _merge_status(*statuses: str) -> str:
+        order = {"ok": 0, "degraded": 1, "error": 2}
+        worst = "ok"
+        for status in statuses:
+            normalized = status if status in order else "error"
+            if order[normalized] > order[worst]:
+                worst = normalized
+        return worst
 
 
 __all__ = ["TelemetryManager", "TelemetrySettings"]

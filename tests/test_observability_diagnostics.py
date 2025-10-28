@@ -18,6 +18,7 @@ def _build_context(telemetry: TelemetryManager) -> ExtensionContext:
         instrumentation=instrumentation,
         logger=get_logger("extensions.test"),
         hook_registry=ExtensionHookRegistry(instrumentation),
+        health_checks=telemetry.health_checks,
     )
 
 
@@ -38,6 +39,8 @@ def test_collect_runtime_diagnostics_includes_hooks() -> None:
     telemetry_data = payload["telemetry"]
     assert isinstance(telemetry_data, dict)
     assert "metrics" in telemetry_data
+    assert "health_checks" in telemetry_data
+    assert telemetry_data["health_checks"]["summary"]["total"] >= 0
     extension_data = payload["extensions"]
     assert extension_data["count"] == 1
     assert extension_data["hooks"].get("service_ready") == 1

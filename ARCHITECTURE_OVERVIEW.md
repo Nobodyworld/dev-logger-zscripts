@@ -39,8 +39,11 @@ how they interact at runtime.
   new diagnostics layer (`zscripts/observability/diagnostics.py`) aggregates this
   data into a CLI-accessible snapshot (`python cli.py diagnostics`) and an
   automation script (`scripts/diagnostics_probe.py`) that captures telemetry
-  status, Prometheus text, and extension hook metadata. The server continues to
-  expose counters and histograms (`zscripts_health_http_requests_total`,
+  status, Prometheus text, and extension hook metadata. A shared
+  `HealthCheckRegistry` (`zscripts/observability/health_checks.py`) lets
+  extensions and services register readiness probes whose results populate the
+  `zscripts_health_checks_status` gauge. The server continues to expose counters
+  and histograms (`zscripts_health_http_requests_total`,
   `zscripts_health_http_request_duration_seconds`, and
   `zscripts_health_http_requests_inflight`) so operators can see probe traffic.
   The CLI activates telemetry when `telemetry_enabled` is true or
@@ -87,6 +90,8 @@ how they interact at runtime.
   (readiness/liveness) and metrics.
 - `zscripts/observability/diagnostics.py` — aggregates telemetry, extension, and
   metrics data for the diagnostics command/script.
+- `zscripts/observability/health_checks.py` — shared registry powering
+  extension/service health contributions.
 - `zscripts/extensions/base.py` — defines `ExtensionContext` and the
   `ToolkitExtension` contract.
 - `zscripts/extensions/hooks.py` — shared hook registry used by
@@ -103,9 +108,25 @@ how they interact at runtime.
   diagnostics payload with failure thresholds for CI.
 - `scripts/agent_guard.py` — runs lint, mypy, bandit, and pytest for quick
   agent-friendly validation.
+- `scripts/scaffold_module.py` — unified scaffolder for extensions and registry
+  health providers.
 - `scripts/tag_release.py` — bumps semantic versions and optionally creates git
   tags to anchor release notes.
 
 Refer to `EXTENSION_GUIDE.md` for hands-on steps to create a new extension using
-`python cli.py extensions scaffold`, and `AUTOMATION.md` for guidance on
-operating the telemetry endpoints and quality gates in automated environments.
+`python cli.py extensions scaffold` or the richer
+`scripts/scaffold_module.py extension` workflow, and `AUTOMATION.md` for
+guidance on operating the telemetry endpoints and quality gates in automated
+environments.
+
+## Future Opportunities
+
+- **Containerisation**: Package the CLI and telemetry server into a reference
+  container with baked-in scrape configuration and health probes for multi-tenant
+  installations.
+- **Streaming exporters**: Integrate OpenTelemetry exporters (TODO P2, est: 6h)
+  so the `HealthCheckRegistry` and instrumentation metrics can push data to
+  remote collectors without polling.
+- **Adaptive extensions**: Promote the health registry metadata into a policy
+  contract so remote agents can negotiate capabilities before dynamically
+  loading plugins.

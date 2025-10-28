@@ -19,7 +19,10 @@ This guide summarises how automated agents should interact with the toolkit.
   `zscripts_health_http_requests_total`,
   `zscripts_health_http_request_duration_seconds`, and
   `zscripts_health_http_requests_inflight` so operators can observe probe
-  traffic.
+  traffic. Health providers registered through
+  `TelemetryManager.register_health_check()` or `ExtensionContext.health_checks`
+  feed the `zscripts_health_checks_status` gauge, which tracks ok/degraded/error
+  counts for dashboards.
 - Logs use structured key/value format. Set `--log-format json` for machine
   parsing or `--log-level DEBUG` to increase verbosity.
 - Each CLI run binds a correlation ID that is propagated into span logs, so log
@@ -28,6 +31,10 @@ This guide summarises how automated agents should interact with the toolkit.
   `scripts/diagnostics_probe.py` helper) to snapshot telemetry state, active
   extensions, and hook registrations. The probe exits non-zero when the
   reported status falls below `ok`, making it suitable for CI smoke checks.
+- Generate module skeletons safely via `python scripts/scaffold_module.py`
+  (subcommands `extension` and `health`). Automation agents should prefer this
+  tool over manual editing so new components inherit telemetry instrumentation
+  and health registry registration by default.
 
 ## Quality Gate
 

@@ -1,4 +1,4 @@
-"""Report formatters used by the ``report`` CLI command."""
+"""Rendering helpers for :class:`~zscripts.application.reporting.ReportBundle`."""
 
 from __future__ import annotations
 

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import py_compile
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 import pytest
 
+import scripts.scaffold_module as scaffold_module
 from zscripts import get_default_config
 from zscripts.extensions import ExtensionHookRegistry, scaffold_extension
 from zscripts.extensions.base import ExtensionContext
@@ -30,6 +32,7 @@ def _make_context() -> ExtensionContext:
         instrumentation=instrumentation,
         logger=get_logger("extensions.test"),
         hook_registry=hook_registry,
+        health_checks=telemetry.health_checks,
     )
 
 
@@ -113,6 +116,17 @@ def test_extension_manager_hook_summary() -> None:
     assert summary.get("service_ready") == 1
 
 
+def test_health_monitor_extension_registers_health_check() -> None:
+    context = _make_context()
+    manager = load_extensions(["zscripts.extensions.examples.plugin_health"], context=context)
+    assert len(manager) == 1
+    snapshot = context.health_checks.snapshot()
+    assert snapshot["summary"]["total"] == 1
+    entry = snapshot["checks"]["extensions.health_monitor"]
+    assert entry["status"] == "ok"
+    assert entry["kind"] == "extension"
+
+
 def test_scaffold_extension_generates_template(tmp_path: Path) -> None:
     target = scaffold_extension("sample_demo", tmp_path)
     contents = target.read_text(encoding="utf-8")
@@ -122,6 +136,26 @@ def test_scaffold_extension_generates_template(tmp_path: Path) -> None:
         scaffold_extension("sample_demo", tmp_path)
     with pytest.raises(ValueError):
         scaffold_extension("1bad", tmp_path)
+
+
+def test_scaffold_module_health(tmp_path: Path) -> None:
+    target_dir = tmp_path / "checks"
+    exit_code = scaffold_module.main(
+        [
+            "health",
+            "demo_probe",
+            "--directory",
+            str(target_dir),
+            "--description",
+            "Demo health check",
+        ]
+    )
+    assert exit_code == 0
+    module_path = target_dir / "demo_probe.py"
+    contents = module_path.read_text(encoding="utf-8")
+    assert "registry.register" in contents
+    assert "Demo health check" in contents
+    py_compile.compile(str(module_path), doraise=True)
 
 
 def test_echo_extension_handle_cli_outputs_message(capsys: pytest.CaptureFixture[str]) -> None:

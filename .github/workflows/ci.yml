@@ -20,6 +20,9 @@ jobs:
           python -m pip install -e .[dev]
       - name: Run quality gate
         run: python scripts/dev_start.py
+      - name: Capture diagnostics snapshot
+        run: |
+          python scripts/diagnostics_probe.py --include-metrics --output reports/diagnostics_ci.json --fail-on-status degraded
       - name: Upload quality summary
         if: always()
         uses: actions/upload-artifact@v5

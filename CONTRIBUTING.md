@@ -41,15 +41,24 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
    payload and non-zero exit codes when degraded, making it suitable for
    post-deploy smoke checks.
 
-4. **Pre-commit Hooks**
+4. **Module Scaffolding**
+   ```bash
+   python scripts/scaffold_module.py --help
+   ```
+   Use the `extension` subcommand to generate telemetry-aware plugins and the
+   `health` subcommand to scaffold reusable registry providers. Both templates
+   bind instrumentation, logging, and TODO placeholders so follow-up work is
+   traceable.
+
+5. **Pre-commit Hooks**
    - `pre-commit run --all-files` runs Ruff (format + lint), mypy, Bandit, and detect-secrets using `.secrets.baseline`.
    - Commit-msg hooks run `npx commitlint --edit "$1"`; ensure Node.js ≥18 is installed locally.
 
-5. **Software Bill of Materials (SBOM)**
+6. **Software Bill of Materials (SBOM)**
    - Generate CycloneDX manifests with `make sbom`; artifacts are written to `artifacts/sbom/` and uploaded by CI for Python 3.11 runs.
    - Ensure the directory stays in `.gitignore`. If the command fails, verify that `cyclonedx-bom` is installed from `requirements.txt`.
 
-6. **Secrets Baseline Maintenance**
+7. **Secrets Baseline Maintenance**
    - Update `.secrets.baseline` when adding fixtures that intentionally include secret-like strings: `detect-secrets scan > .secrets.baseline`.
    - Review the diff to avoid allow-listing real credentials. CI also runs gitleaks with `.gitleaks.toml` for defense in depth.
 

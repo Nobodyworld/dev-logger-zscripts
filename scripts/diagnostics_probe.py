@@ -75,6 +75,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         instrumentation=instrumentation,
         logger=get_logger("extensions"),
         hook_registry=hook_registry,
+        health_checks=telemetry.health_checks,
     )
 
     try:

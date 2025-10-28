@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 ### Added
+- Health check registry (`zscripts/observability/health_checks.py`) wired into
+  the telemetry manager and diagnostics output, including a Prometheus gauge
+  (`zscripts_health_checks_status`) and CLI support for extension-provided
+  readiness probes.
+- Reference `health_monitor` extension plus scaffolding updates that register
+  baseline health snapshots and demonstrate registry usage in tests.
+- Unified scaffolding tool `scripts/scaffold_module.py` for generating
+  extensions or standalone health providers, accompanied by
+  `agents/AGENTS.md` guardrails and expanded documentation across README,
+  EXTENSION_GUIDE, and AUTOMATION.
+- Regression test covering `python cli.py diagnostics --output <directory>` to
+  guarantee the command surfaces `OutputPathError` with actionable messaging.
+- Trace-based coverage export in `reports/coverage_stage2.txt` that captures the
+  full Stage 2 suite when the `coverage` package is unavailable in restricted
+  environments.
 - Diagnostics pipeline featuring `zscripts/observability/diagnostics.py`, a
   `python cli.py diagnostics` command, and the agent-friendly
   `scripts/diagnostics_probe.py` helper for capturing telemetry snapshots and
@@ -62,6 +77,17 @@
 - Tests covering output-path validation and agent metadata payloads.
 
 ### Changed
+- CI workflow now executes `scripts/diagnostics_probe.py` after the quality gate
+  and uploads the telemetry snapshot so registry regressions are caught in PRs.
+- Raised the minimum supported Python version to 3.11, documented the
+  requirement in the README, and expanded the `dev` extra to install Ruff,
+  mypy, Bandit, and Coverage so `make check` runs end-to-end without manual
+  setup.
+- Refined `scripts/scaffold_extension.py` to use a defensive import fallback
+  while satisfying strict import-order linting.
+- Replaced the telemetry endpoint canonicalisation `match` statement with
+  straightforward conditionals to avoid runtime guardrails depending on Python
+  3.10 syntax support.
 - Output destination validation now requires execute permission for parent
   directories and exercises resolution/mkdir/cleanup failure branches; helper
   coverage increased to 100% with targeted unit tests.

@@ -1,4 +1,4 @@
-"""Infrastructure bindings for adapter discovery and delegation."""
+"""Infrastructure adapters wrapping concrete log adapter implementations."""
 
 from __future__ import annotations
 

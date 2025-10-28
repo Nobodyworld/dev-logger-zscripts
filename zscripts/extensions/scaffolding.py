@@ -31,6 +31,12 @@ class ${class_name}(ToolkitExtension):
     def on_load(self, context: ExtensionContext) -> None:
         super().on_load(context)
         self.register_hook(\"service_ready\", self._on_service_ready)
+        context.health_checks.register(
+            f\"extension:{self.name}\",
+            self._health_snapshot,
+            kind=\"extension\",
+            description=\"Reports readiness state for the extension.\",
+        )
         context.logger.debug(
             \"extension.${name}.hook_registered\", extra={\"extension\": self.name, \"hook\": \"service_ready\"}
         )
@@ -79,6 +85,14 @@ class ${class_name}(ToolkitExtension):
             \"extension.${name}.hook\",
             extra={\"extension\": self.name, \"hook\": \"service_ready\"},
         )
+
+    def _health_snapshot(self) -> dict[str, object]:
+        manifest = self.manifest
+        return {
+            \"status\": \"ok\",
+            \"extension\": self.name,
+            \"version\": manifest.to_dict().get(\"version\") if manifest else self.version,
+        }
 
 
 def get_extension() -> ${class_name}:

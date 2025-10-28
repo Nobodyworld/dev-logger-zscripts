@@ -1,51 +1,22 @@
 {
   "steps": {
+    "coverage": {
+      "status": "skipped",
+      "reason": "coverage-missing"
+    },
     "lint": {
-      "status": "passed",
-      "command": [
-        "ruff",
-        "check",
-        "."
-      ],
-      "duration_seconds": 0.035
+      "status": "skipped"
     },
     "type": {
-      "status": "passed",
-      "command": [
-        "mypy",
-        "zscripts/application",
-        "zscripts/config.py",
-        "zscripts/configuration.py",
-        "zscripts/observability/logging.py",
-        "zscripts/observability/metrics.py",
-        "zscripts/observability/health.py",
-        "zscripts/observability/instrumentation.py",
-        "zscripts/extensions/scaffolding.py",
-        "zscripts/schemas"
-      ],
-      "duration_seconds": 0.263
+      "status": "skipped"
     },
     "security": {
-      "status": "skipped",
-      "reason": "bandit-missing"
+      "status": "skipped"
     },
     "tests": {
-      "status": "passed",
-      "command": [
-        "coverage",
-        "run",
-        "-m",
-        "pytest"
-      ],
-      "duration_seconds": 9.058
-    },
-    "coverage": {
-      "status": "passed",
-      "percent": 88.45625286303252
+      "status": "skipped"
     }
   },
-  "coverage": {
-    "percent": 88.45625286303252
-  },
-  "threshold": 85.0
+  "coverage": null,
+  "threshold": 0.0
 }

@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import tomllib
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Final, cast
-
-import tomllib
 
 from zscripts.config import DEFAULT_CONFIG, ToolkitConfig, clone_config
 

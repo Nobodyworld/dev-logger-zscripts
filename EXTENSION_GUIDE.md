@@ -14,7 +14,9 @@ python cli.py extensions scaffold demo_adapter
 ```
 
 The command creates `zscripts/extensions/demo_adapter.py` with a skeleton
-extension that registers a CLI command and exports `get_extension()`.
+extension that registers a CLI command, exports `get_extension()`, and wires a
+baseline health check into `context.health_checks` so diagnostics immediately
+include extension status.
 
 ## 2. Implement extension logic
 
@@ -37,6 +39,11 @@ Edit the generated module:
   to receive events emitted by the new `ExtensionHookRegistry`. Hook callbacks
   are instrumented automatically and surfaced through diagnostics payloads so
   operators can confirm which plugins respond to each lifecycle stage.
+- Publish health information with `context.health_checks.register(...)`. When
+  telemetry is enabled these entries appear under `cli diagnostics` and update
+  the Prometheus gauge `zscripts_health_checks_status`. Standalone services can
+  scaffold a reusable provider via `python scripts/scaffold_module.py health
+  <name>` and import it wherever the registry is available.
 
 ## 3. Enable the extension
 
@@ -75,7 +82,8 @@ The plugin system loads extensions before parsing subcommands, so new commands
 and overrides are available immediately.
 
 Refer to `zscripts/extensions/examples/plugin_echo.py` for a minimal CLI
-integration and `zscripts/extensions/examples/plugin_metrics.py` for a hook-
-driven diagnostics example. The scaffolding template
-(`scripts/scaffold_extension.py`) now registers a `service_ready` hook and logs
-its manifest automatically so new plugins follow best practices out of the box.
+integration, `plugin_metrics.py` for a hook-driven diagnostics example, and
+`plugin_health.py` for registry-backed health probes. The scaffolding template
+(`scripts/scaffold_extension.py`) now registers a `service_ready` hook, logs its
+manifest automatically, and publishes a baseline health snapshot so new plugins
+follow best practices out of the box.

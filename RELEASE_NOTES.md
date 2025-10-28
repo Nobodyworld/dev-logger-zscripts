@@ -1,6 +1,16 @@
 # Release Notes
 
 ## Highlights
+- Introduced a shared health check registry (`zscripts/observability/health_checks.py`)
+  feeding the new `zscripts_health_checks_status` gauge, plus a
+  `health_monitor` reference extension and tests that surface extension health in
+  CLI diagnostics.
+- Added `scripts/scaffold_module.py` so contributors and agents can scaffold
+  telemetry-ready extensions or standalone health providers with a single
+  command, supported by updated README/EXTENSION_GUIDE/AUTOMATION guidance.
+- CI now runs `scripts/diagnostics_probe.py --include-metrics` after the quality
+  gate and uploads the resulting snapshot alongside other reports to detect
+  health regressions early.
 - Delivered a diagnostics experience that combines
   `zscripts/observability/diagnostics.py`, the `python cli.py diagnostics`
   command, and the `scripts/diagnostics_probe.py` automation helper to export
@@ -12,6 +22,9 @@
 - Hardened CLI output destination validation to require execute permissions,
   exercised resolution/mkdir/cleanup failure scenarios via new tests, and
   delivered coverage/performance artifacts for the helper module.
+- Clarified the Python 3.11+ runtime requirement and expanded the development
+  extra so `make check` installs Ruff, mypy, Bandit, and Coverage without
+  additional setup.
 - Added a full observability stack (structured logging, metrics, tracing, and a
   health server) surfaced through new CLI flags.
 - Hardened report severity evaluation so warning-only runs surface as warnings,
@@ -53,12 +66,18 @@
 - Automated quality gate now reports 88.5% line coverage in
   `reports/coverage.json` while documenting skipped security scans when Bandit
   is unavailable, improving CI diagnostics without blocking local workflows.
-- Stage 2 captured a helper-focused coverage snapshot in
-  `reports/coverage_stage2.txt` (100% for `zscripts/application/io_utils.py`)
-  and performance notes in `reports/performance_notes_stage2.md`, confirming no
-  measurable regression.
+- Stage 2 now exports a trace-based coverage snapshot in
+  `reports/coverage_stage2.txt` (generated via `python -m trace --count --summary`)
+  alongside `reports/performance_notes_stage2.md`, confirming the full suite runs
+  without the third-party `coverage` package in restricted environments.
 
 ## Upgrade Notes
+- Register custom health providers through `TelemetryManager.register_health_check`
+  or `ExtensionContext.health_checks.register` to appear in diagnostics payloads
+  and Prometheus output.
+- Use `python scripts/scaffold_module.py` (subcommands `extension` and `health`)
+  for new modules so instrumentation, logging, and TODO markers remain
+  consistent.
 - New configuration keys are available: `telemetry_enabled`, `telemetry_host`,
   `telemetry_port`, `log_level`, `log_format`, and `extensions`. Existing files
   remain compatible; unspecified keys default to safe values.

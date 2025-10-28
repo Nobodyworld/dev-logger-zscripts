@@ -1,6 +1,6 @@
-# Zscripts – Django File Compiler
+# Zscripts – Script Helper Log Compiler
 
-The toolkit automates collecting, consolidating, and analysing Django-style project files. It builds structured logs for Python, HTML, CSS, and JavaScript sources so you can review application code from a single location. The codebase targets **Python 3.11 or newer** to take advantage of modern typing features and the standard `tomllib` parser.
+The toolkit automates collecting, consolidating, and analysing project files. It builds structured logs for Python, HTML, CSS, and JavaScript sources so you can review application code from a single location.
 
 ## Highlights
 - Unified CLI entry point (`python cli.py`) orchestrating collection, parsing, reporting, diagnostics, and extensions.

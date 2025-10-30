@@ -6,7 +6,15 @@ import os
 import tempfile
 from pathlib import Path
 
-__all__ = ["OutputPathError", "prepare_output_path", "atomic_write_text"]
+from typing import Any, Callable, TextIO
+
+__all__ = [
+    "OutputPathError",
+    "prepare_output_path",
+    "atomic_write_text",
+    "atomic_write_text_stream",
+    "atomic_write_bytes",
+]
 
 
 class OutputPathError(RuntimeError):
@@ -21,7 +29,8 @@ class OutputPathError(RuntimeError):
 def prepare_output_path(path: Path) -> Path:
     """Expand and validate an output path before writing.
 
-    The returned path is safe for writing via :func:`atomic_write_text`. The helper
+    The returned path is safe for writing via :func:`atomic_write_text` or
+    :func:`atomic_write_bytes`. The helper
     ensures parent directories exist, are traversable, and rejects destinations that
     already exist as directories.
     """
@@ -55,25 +64,22 @@ def prepare_output_path(path: Path) -> Path:
     return resolved
 
 
-def atomic_write_text(path: Path, payload: str) -> None:
-    """Write ``payload`` to ``path`` atomically.
-
-    The function writes the payload to a temporary file in the destination directory
-    and then replaces the target path. Failures surface as :class:`OutputPathError`
-    with the original exception chained for debugging.
-    """
-
-    # TODO(P3, est:2h): Provide an ``atomic_write_bytes`` helper for binary artifacts
-    # such as tarballs or coverage reports produced by future commands.
+def _atomic_write(
+    path: Path,
+    *,
+    open_kwargs: dict[str, Any],
+    write_payload: Callable[[Any], None],
+) -> None:
+    """Perform an atomic write using ``write_payload``."""
 
     destination = prepare_output_path(path)
     directory = destination.parent
 
     temp_file_path: Path | None = None
     try:
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=directory, delete=False) as handle:
+        with tempfile.NamedTemporaryFile(dir=directory, delete=False, **open_kwargs) as handle:
             temp_file_path = Path(handle.name)
-            handle.write(payload)
+            write_payload(handle)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temp_file_path, destination)
@@ -88,4 +94,30 @@ def atomic_write_text(path: Path, payload: str) -> None:
                 # Ignore cleanup errors; the temp file lives alongside the target
                 # directory and can be removed manually if necessary.
                 pass
+
+
+def atomic_write_text_stream(path: Path, writer: Callable[[TextIO], None]) -> None:
+    """Write to ``path`` atomically using a callable that receives a text handle."""
+
+    _atomic_write(
+        path,
+        open_kwargs={"mode": "w", "encoding": "utf-8"},
+        write_payload=writer,
+    )
+
+
+def atomic_write_text(path: Path, payload: str) -> None:
+    """Write ``payload`` to ``path`` atomically as UTF-8 text."""
+
+    atomic_write_text_stream(path, lambda handle: handle.write(payload))
+
+
+def atomic_write_bytes(path: Path, payload: bytes) -> None:
+    """Write ``payload`` to ``path`` atomically as raw bytes."""
+
+    _atomic_write(
+        path,
+        open_kwargs={"mode": "wb"},
+        write_payload=lambda handle: handle.write(payload),
+    )
 

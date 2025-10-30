@@ -1,8 +1,15 @@
 from pathlib import Path
+from typing import Any, Callable
 
 import pytest
 
-from zscripts.application.io_utils import OutputPathError, atomic_write_text, prepare_output_path
+from zscripts.application.io_utils import (
+    OutputPathError,
+    atomic_write_bytes,
+    atomic_write_text,
+    atomic_write_text_stream,
+    prepare_output_path,
+)
 
 
 def test_prepare_output_path_creates_parents(tmp_path: Path) -> None:
@@ -105,18 +112,54 @@ def test_prepare_output_path_parent_not_directory(
     assert "is not a directory" in str(excinfo.value)
 
 
-def test_atomic_write_text_replaces_atomically(tmp_path: Path) -> None:
-    destination = tmp_path / "report.txt"
-    destination.write_text("old", encoding="utf-8")
+Writer = Callable[[Path, Any], None]
+Reader = Callable[[Path], Any]
 
-    atomic_write_text(destination, "new contents")
 
-    assert destination.read_text(encoding="utf-8") == "new contents"
+@pytest.mark.parametrize(
+    ("writer", "prepare_existing", "reader", "payload"),
+    [
+        (
+            atomic_write_text,
+            lambda destination: destination.write_text("old", encoding="utf-8"),
+            lambda destination: destination.read_text(encoding="utf-8"),
+            "new contents",
+        ),
+        (
+            atomic_write_bytes,
+            lambda destination: destination.write_bytes(b"old"),
+            lambda destination: destination.read_bytes(),
+            b"\x00\x01payload",
+        ),
+    ],
+)
+def test_atomic_write_replaces_atomically(
+    tmp_path: Path,
+    writer: Writer,
+    prepare_existing: Callable[[Path], None],
+    reader: Reader,
+    payload: Any,
+) -> None:
+    destination = tmp_path / "report.bin"
+    prepare_existing(destination)
+
+    writer(destination, payload)
+
+    assert reader(destination) == payload
     entries = list(tmp_path.iterdir())
     assert entries == [destination]
 
 
-def test_atomic_write_text_raises_on_permission_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ("writer", "payload"),
+    [
+        (atomic_write_text, "payload"),
+        (atomic_write_bytes, b"payload"),
+    ],
+)
+def test_atomic_write_raises_on_permission_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, writer: Writer, payload: Any
+) -> None:
     destination = tmp_path / "report.txt"
 
     def _raise_permission_error(*args, **kwargs):  # type: ignore[no-untyped-def]
@@ -128,13 +171,23 @@ def test_atomic_write_text_raises_on_permission_error(tmp_path: Path, monkeypatc
     )
 
     with pytest.raises(OutputPathError) as excinfo:
-        atomic_write_text(destination, "payload")
+        writer(destination, payload)
 
     assert "unable to write" in str(excinfo.value)
 
 
-def test_atomic_write_text_handles_cleanup_failures(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    ("writer", "payload"),
+    [
+        (atomic_write_text, "payload"),
+        (atomic_write_bytes, b"payload"),
+    ],
+)
+def test_atomic_write_handles_cleanup_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    writer: Writer,
+    payload: Any,
 ) -> None:
     destination = tmp_path / "report.txt"
     captured: dict[str, Path] = {}
@@ -155,9 +208,21 @@ def test_atomic_write_text_handles_cleanup_failures(
     monkeypatch.setattr(Path, "unlink", _unlink)
 
     with pytest.raises(OutputPathError) as excinfo:
-        atomic_write_text(destination, "payload")
+        writer(destination, payload)
 
     assert "unable to write" in str(excinfo.value)
     temp_path = captured["temp"]
     assert temp_path.exists()
     original_unlink(temp_path)
+
+
+def test_atomic_write_text_stream(tmp_path: Path) -> None:
+    destination = tmp_path / "streamed.txt"
+
+    def _writer(handle: Any) -> None:
+        handle.write("stream")
+        handle.write("ed")
+
+    atomic_write_text_stream(destination, _writer)
+
+    assert destination.read_text(encoding="utf-8") == "streamed"

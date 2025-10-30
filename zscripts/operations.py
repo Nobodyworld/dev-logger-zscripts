@@ -13,6 +13,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Mapping, MutableSequence, Set
 
+from zscripts.application.io_utils import atomic_write_text_stream, prepare_output_path
+
 from . import config as _config
 from . import utils
 
@@ -193,14 +195,17 @@ def consolidate_file_types(
     ``output_path``.
     """
     context = context or ProjectContext.build()
-    ProjectContext.ensure_dir(output_path.parent)
-    utils.consolidate_files(
-        context.project_root,
-        output_path,
-        _normalize_suffixes(file_types),
-        list(context.ignore_patterns),
+    destination = prepare_output_path(output_path)
+    atomic_write_text_stream(
+        destination,
+        lambda handle: utils.consolidate_files(
+            context.project_root,
+            handle,
+            _normalize_suffixes(file_types),
+            list(context.ignore_patterns),
+        ),
     )
-    return output_path
+    return destination
 
 
 def consolidate_file_types_for_preset(
@@ -244,15 +249,19 @@ def create_tree_snapshot(
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         destination = _config.TREE_LOG_DIR / f"tree_{timestamp}.txt"
 
+    destination = prepare_output_path(destination)
+
     suffixes = _normalize_suffixes(file_types) if file_types is not None else _config.FILE_TYPE_PRESETS["all"]
     suffixes = _normalize_suffixes(suffixes)
 
-    ProjectContext.ensure_dir(destination.parent)
-    utils.create_filtered_tree(
-        context.project_root,
+    atomic_write_text_stream(
         destination,
-        suffixes,
-        list(context.ignore_patterns),
+        lambda handle: utils.create_filtered_tree(
+            context.project_root,
+            handle,
+            suffixes,
+            list(context.ignore_patterns),
+        ),
     )
     return destination
 

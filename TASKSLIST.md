@@ -10,6 +10,9 @@ Use this file to compile and track all tasks that need to be completed for this 
 - [ ] Task 2: Description of what needs to be done - Task Unique Identifier - When completed: Timestamp, Hyperlink to REPORT.md Task Report Unique Identifier
 - [ ] Task 3: Description of what needs to be done - Task Unique Identifier - When completed: Timestamp, Hyperlink to REPORT.md Task Report Unique Identifier
 
+<a id="task-0001"></a>- [x] Add atomic_write_bytes helper for binary artifact support in io_utils - TASK-0001 - When completed: 2025-02-15T00:00Z, [REPORT-0001](REPORTS.md#report-0001)
+<a id="task-0002"></a>- [x] Harden log snapshot writers with atomic filesystem handling - TASK-0002 - When completed: 2025-02-15T01:30Z, [REPORT-0002](REPORTS.md#report-0002)
+
 ## Notes
 
 *Add all additional context, blockers, or decisions made during task execution to REPORTS.md and include a link to the task and include a link to the report in this TASKLIST.md file.*

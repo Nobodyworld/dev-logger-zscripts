@@ -1,8 +1,25 @@
 # zscripts/utils.py
+from __future__ import annotations
+
 import fnmatch
 import os
 import re
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator, TextIO, Union, cast
+
+LogDestination = Union[Path, str, os.PathLike[str], TextIO]
+
+
+@contextmanager
+def _open_text_destination(destination: LogDestination) -> Iterator[TextIO]:
+    if hasattr(destination, "write"):
+        yield cast(TextIO, destination)
+        return
+
+    path = Path(destination)
+    with open(path, "w", encoding="utf-8") as handle:
+        yield handle
 
 
 def load_gitignore_patterns(root_path):
@@ -86,7 +103,7 @@ def create_app_logs(root_dir, log_dir, file_types, ignore_patterns):
                             print(content, file=log_file)
                             print("\n---\n", file=log_file)
 
-def consolidate_files(root_dir, log_file_path, file_types, ignore_patterns):
+def consolidate_files(root_dir: Path, log_file_path: LogDestination, file_types, ignore_patterns):
     """
     Consolidates content of all specified file types from the root directory into a single log file.
 
@@ -96,7 +113,7 @@ def consolidate_files(root_dir, log_file_path, file_types, ignore_patterns):
         file_types (set): A set of file extensions to include in the log.
         ignore_patterns (list): A list of patterns to ignore.
     """
-    with open(log_file_path, 'w', encoding='utf-8') as log_file:
+    with _open_text_destination(log_file_path) as log_file:
         for root, dirs, files in os.walk(root_dir):
             # Skip the 'zscripts' directory
             if 'zscripts' in Path(root).parts:
@@ -113,7 +130,12 @@ def consolidate_files(root_dir, log_file_path, file_types, ignore_patterns):
                         log_file.write("\n" + ("." * 3) + "\n")
 
 
-def create_filtered_tree(start_path, log_file_path, file_types=None, ignore_patterns=None):
+def create_filtered_tree(
+    start_path: Path,
+    log_file_path: LogDestination,
+    file_types=None,
+    ignore_patterns=None,
+):
     """
     Creates a directory tree structure and logs the content of specified file types, ignoring certain patterns.
 
@@ -128,10 +150,14 @@ def create_filtered_tree(start_path, log_file_path, file_types=None, ignore_patt
     if ignore_patterns is None:
         ignore_patterns = []
 
-    with open(log_file_path, 'w') as log_file:
+    with _open_text_destination(log_file_path) as log_file:
         for root, dirs, files in os.walk(start_path, topdown=True):
             dirs[:] = [d for d in dirs if not file_matches_any_pattern(Path(root) / d, ignore_patterns)]
-            files = [f for f in files if Path(f).suffix in file_types and not file_matches_any_pattern(Path(root) / f, ignore_patterns)]
+            files = [
+                f
+                for f in files
+                if Path(f).suffix in file_types and not file_matches_any_pattern(Path(root) / f, ignore_patterns)
+            ]
 
             if files:
                 relative_root = Path(root).relative_to(start_path)

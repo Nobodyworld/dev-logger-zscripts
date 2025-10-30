@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
 
 from zscripts import config, operations
+from zscripts.application import io_utils
 
 
 @pytest.fixture()
@@ -116,3 +118,39 @@ def test_consolidate_default_directories_returns_expected_paths(sandbox: dict[st
     assert set(results) == {"build", "analysis"}
     for path in results.values():
         assert path.exists()
+
+
+def test_consolidate_file_types_reports_unwritable_destination(
+    sandbox: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    destination = sandbox["log_dir"] / "logs_single_files" / "blocked.txt"
+    parent = destination.parent
+    original_access = io_utils.os.access
+
+    def _deny_parent(path: os.PathLike[str] | str, mode: int) -> bool:
+        if Path(path) == parent:
+            return False
+        return original_access(path, mode)
+
+    monkeypatch.setattr(io_utils.os, "access", _deny_parent)
+
+    with pytest.raises(io_utils.OutputPathError):
+        operations.consolidate_file_types([".py"], destination)
+
+
+def test_create_tree_snapshot_reports_unwritable_destination(
+    sandbox: dict[str, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    destination = sandbox["log_dir"] / "logs_tree" / "blocked.txt"
+    parent = destination.parent
+    original_access = io_utils.os.access
+
+    def _deny_parent(path: os.PathLike[str] | str, mode: int) -> bool:
+        if Path(path) == parent:
+            return False
+        return original_access(path, mode)
+
+    monkeypatch.setattr(io_utils.os, "access", _deny_parent)
+
+    with pytest.raises(io_utils.OutputPathError):
+        operations.create_tree_snapshot(destination=destination)

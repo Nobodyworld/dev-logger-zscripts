@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import tempfile
 from pathlib import Path
-
 from typing import Any, Callable, TextIO
 
 __all__ = [
@@ -109,15 +108,21 @@ def atomic_write_text_stream(path: Path, writer: Callable[[TextIO], None]) -> No
 def atomic_write_text(path: Path, payload: str) -> None:
     """Write ``payload`` to ``path`` atomically as UTF-8 text."""
 
-    atomic_write_text_stream(path, lambda handle: handle.write(payload))
+    def _writer(handle: TextIO) -> None:
+        handle.write(payload)
+
+    atomic_write_text_stream(path, _writer)
 
 
 def atomic_write_bytes(path: Path, payload: bytes) -> None:
     """Write ``payload`` to ``path`` atomically as raw bytes."""
 
+    def _writer(handle: Any) -> None:
+        handle.write(payload)
+
     _atomic_write(
         path,
         open_kwargs={"mode": "wb"},
-        write_payload=lambda handle: handle.write(payload),
+        write_payload=_writer,
     )
 

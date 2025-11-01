@@ -4,11 +4,11 @@ Welcome to the universal build log and LLM operations toolkit. This index
 links to the core documentation required to use and extend the toolkit.
 
 - [CLI Overview](../README.md)
-- [Architecture Deep-Dive](architecture.md)
-- [Architecture Overview](../ARCHITECTURE_OVERVIEW.md)
+- [Architecture Deep-Dive](architecture/ARCHITECTURE.md)
+- [Architecture Overview](architecture/ARCHITECTURE_OVERVIEW.md)
 - [ToolkitService API Reference](api.md)
 - [Operational Workflows](workflows.md)
-- [Automation Playbook](../AUTOMATION.md)
+- [Automation Playbook](automation/AUTOMATION.md)
 - [Normalized Log Schema](schema.md)
 - [Dependency Audit](DEPENDENCIES.md)
 - [Telemetry & Incident Response](operations.md)
@@ -25,6 +25,6 @@ links to the core documentation required to use and extend the toolkit.
 - [Guardrails and Redaction](guardrails.md)
 - [Configuration & Overrides](configuration.md)
 - [Reporting Guide](reporting.md)
-- [Extension Guide](../EXTENSION_GUIDE.md)
+- [Extension Guide](guides/EXTENSION_GUIDE.md)
 - [Future Roadmap](future_roadmap.md)
 - [Final Refinement Report](final_report.md)

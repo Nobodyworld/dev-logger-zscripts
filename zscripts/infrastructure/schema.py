@@ -2,15 +2,26 @@
 
 from __future__ import annotations
 
-from typing import Any
+from importlib import import_module
+from importlib.util import find_spec
+from typing import Any, Protocol, cast
 
 from zscripts.domain.interfaces import SchemaValidatorProtocol
 from zscripts.schemas import NormalizedLog, load_normalized_schema
 
-try:  # pragma: no cover - optional dependency
-    import jsonschema
-except ImportError:  # pragma: no cover - optional dependency missing
-    jsonschema = None  # type: ignore[assignment]
+
+class _JsonSchemaModule(Protocol):
+    def validate(self, *, instance: Any, schema: dict[str, Any]) -> None: ...
+
+
+def _resolve_jsonschema() -> _JsonSchemaModule | None:
+    if find_spec("jsonschema") is None:
+        return None
+    module = import_module("jsonschema")
+    return cast(_JsonSchemaModule, module)
+
+
+jsonschema = _resolve_jsonschema()
 
 
 class JsonSchemaValidator(SchemaValidatorProtocol):

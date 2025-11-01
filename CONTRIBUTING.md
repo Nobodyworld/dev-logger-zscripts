@@ -30,7 +30,7 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
    ```
    This runs lint, type checks, Bandit, and pytest. Use `--only`/`--skip` to
    tailor the workflow; `make quality` remains available for coverage-enforced
-   pipelines and produces `reports/quality_gate.json`.
+   pipelines and writes summaries to `artifacts/quality/quality_gate.json`.
 
 3. **Ops Health Probe**
    ```bash
@@ -70,7 +70,7 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
 ## Documentation Standards
 - Update README.md, relevant docs, and changelog entries for new features.
 - Extensions must follow [AGENTS.md](zscripts/extensions/AGENTS.md) and be
-  documented in [EXTENSION_GUIDE.md](EXTENSION_GUIDE.md).
+  documented in [docs/guides/EXTENSION_GUIDE.md](docs/guides/EXTENSION_GUIDE.md).
 - Record dependency rationale updates in `docs/DEPENDENCIES.md` whenever packages change.
 - Include inline docstrings and type hints for new modules.
 - Capture architectural decisions as ADRs under `docs/adr/`.

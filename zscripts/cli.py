@@ -10,7 +10,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from zscripts import get_default_config
 from zscripts.application.io_utils import OutputPathError, atomic_write_text, prepare_output_path
@@ -27,7 +27,7 @@ from zscripts.extensions import (
 )
 from zscripts.infrastructure import build_toolkit_service
 from zscripts.infrastructure.adapters import AdapterRegistry
-from zscripts.observability.diagnostics import collect_runtime_diagnostics
+from zscripts.observability.diagnostics import DiagnosticsSnapshot, collect_runtime_diagnostics
 from zscripts.observability.health_checks import HealthCheckRegistry
 from zscripts.observability.instrumentation import InstrumentationManager
 from zscripts.observability.logging import configure_logging, get_logger
@@ -495,13 +495,21 @@ def _handle_diagnostics(args: argparse.Namespace, runtime: RuntimeState) -> int:
     return 0
 
 
-def _format_diagnostics_text(snapshot) -> str:
+def _format_diagnostics_text(snapshot: DiagnosticsSnapshot) -> str:
     payload = snapshot.to_dict()
+    telemetry = payload.get("telemetry")
+    telemetry_mapping: Mapping[str, object] | None = (
+        telemetry if isinstance(telemetry, Mapping) else None
+    )
+    extensions = payload.get("extensions")
+    extensions_mapping: Mapping[str, object] | None = (
+        extensions if isinstance(extensions, Mapping) else None
+    )
     lines = [
-        f"Generated: {payload['generated_at']}",
-        f"Status: {payload['telemetry'].get('status', 'unknown')}",
-        f"Telemetry enabled: {payload['telemetry'].get('telemetry_enabled', False)}",
-        f"Extensions loaded: {payload['extensions'].get('count', 0)}",
+        f"Generated: {payload.get('generated_at', 'unknown')}",
+        f"Status: {telemetry_mapping.get('status', 'unknown') if telemetry_mapping else 'unknown'}",
+        f"Telemetry enabled: {telemetry_mapping.get('telemetry_enabled', False) if telemetry_mapping else False}",
+        f"Extensions loaded: {extensions_mapping.get('count', 0) if extensions_mapping else 0}",
     ]
     return "\n".join(lines)
 

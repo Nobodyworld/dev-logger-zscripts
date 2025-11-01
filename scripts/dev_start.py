@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-QUALITY_DIR = Path("reports")
+QUALITY_DIR = Path("artifacts/quality")
 SUMMARY_FILE = QUALITY_DIR / "quality_gate.json"
 COVERAGE_FILE = QUALITY_DIR / "coverage.json"
 COVERAGE_THRESHOLD = float(os.environ.get("QUALITY_COVERAGE_MIN", "85"))
@@ -40,7 +40,7 @@ class Step:
 STEPS: Sequence[Step] = (
     Step("lint", ("ruff", "check", "."), "ZSKIP_LINT"),
     Step("type", ("mypy", *MYPY_TARGETS), "ZSKIP_TYPE"),
-    Step("security", ("bandit", "-q", "-r", "zscripts", "sample_project"), "ZSKIP_SECURITY"),
+    Step("security", ("bandit", "-q", "-r", "zscripts", "examples/sample_project"), "ZSKIP_SECURITY"),
     Step("tests", ("coverage", "run", "-m", "pytest"), "ZSKIP_TESTS"),
 )
 

@@ -7,7 +7,7 @@ production or automated environments.
 
 The toolkit exposes an HTTP server (disabled by default) that publishes health checks and
 Prometheus metrics. Enable it by passing `--enable-telemetry` to the CLI or setting
-`telemetry_enabled` to `true` in `zscripts.config.json`.
+`telemetry_enabled` to `true` in `configs/zscripts.config.json`.
 
 Once enabled, the server listens on `telemetry_host`/`telemetry_port` (defaults to
 `127.0.0.1:9464`). The following endpoints are available:
@@ -22,7 +22,7 @@ Once enabled, the server listens on `telemetry_host`/`telemetry_port` (defaults 
 - `python cli.py diagnostics` – Structured snapshot combining the health payload,
   extension manifest data, hook registrations, and optional Prometheus text. Use
   `--include-metrics` to embed the raw exposition in JSON output.
-- `python scripts/diagnostics_probe.py --output reports/diagnostics.json` –
+- `python scripts/diagnostics_probe.py --output artifacts/diagnostics/diagnostics.json` –
   Automation-friendly wrapper that writes the same snapshot to disk and exits
   non-zero when telemetry reports a degraded status (configurable via
   `--fail-on-status`).
@@ -80,7 +80,7 @@ request across services:
 2. **Check metrics for anomalies** – Scrape `/metrics` and inspect `status="error"`
    labels on `zscripts_operations_total` or `zscripts_cli_invocations_total`.
 3. **Review structured logs** – Use the correlation ID from the failing command to locate
-   the error in `zscripts_logs/` or centralised log storage.
+   the error in `examples/artifacts/zscripts_logs/` or centralised log storage.
 4. **Mitigate** – Disable problematic extensions by removing them from the configuration
    or redeploy with known-good settings. The `zscripts_extensions_active` gauge should
    drop after removal.

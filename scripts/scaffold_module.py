@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from string import Template
 from textwrap import dedent
+from typing import cast
 
 from zscripts.extensions.scaffolding import scaffold_extension, validate_extension_name
 
@@ -69,6 +71,9 @@ def _scaffold_health(args: argparse.Namespace) -> int:
     return 0
 
 
+CommandHandler = Callable[[argparse.Namespace], int]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Scaffold extensions or health check modules.")
     subparsers = parser.add_subparsers(dest="kind", required=True)
@@ -104,7 +109,8 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     try:
-        return args.func(args)
+        handler = cast(CommandHandler, args.func)
+        return handler(args)
     except FileExistsError as exc:
         print(str(exc), file=sys.stderr)
         return 1

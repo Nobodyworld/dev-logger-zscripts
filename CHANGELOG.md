@@ -14,7 +14,7 @@
   EXTENSION_GUIDE, and AUTOMATION.
 - Regression test covering `python cli.py diagnostics --output <directory>` to
   guarantee the command surfaces `OutputPathError` with actionable messaging.
-- Trace-based coverage export in `reports/coverage_stage2.txt` that captures the
+- Trace-based coverage export in `artifacts/coverage/coverage_stage2.txt` that captures the
   full Stage 2 suite when the `coverage` package is unavailable in restricted
   environments.
 - Diagnostics pipeline featuring `zscripts/observability/diagnostics.py`, a
@@ -30,11 +30,11 @@
   emission to preserve observability guarantees.
 - Stage 2 hardening artifacts for CLI output helpers, including
   `EXEC_PLAN_STAGE2_OUTPUT_SAFETY_VALIDATION.md`,
-  `reports/coverage_stage2.txt`, and
-  `reports/performance_notes_stage2.md`.
+  `artifacts/coverage/coverage_stage2.txt`, and
+  `artifacts/quality/performance_notes_stage2.md`.
 - Regression tests covering configuration validation edge cases, observability
   logging JSON formatting, and infrastructure adapters/sandbox wrappers,
-  elevating overall coverage to ~90% with artifacts in `reports/`.
+  elevating overall coverage to ~90% with artifacts in `artifacts/quality/`.
 - Observability stack (`zscripts/observability`) with structured logging,
   Prometheus-compatible metrics, tracing spans, and a background health server.
 - Health server metrics now track HTTP request counts, latency, and inflight
@@ -59,10 +59,10 @@
   automation playbook, incident response runbook, and roadmap.
 - GitHub workflow (`ci.yml`) and Dependabot configuration to keep dependencies
   fresh.
-- Stewardship artifacts (`STEWARDS_REPORT.md`, `AUTOMATION_ROLES.md`) describing
+- Stewardship artifacts (`STEWARDS_REPORT.md`, `docs/automation/AUTOMATION_ROLES.md`) describing
   Stage 4 audit metrics, agent responsibilities, and future roadmap.
 ### Added
-- Trace-friendly pytest harness (`scripts/run_pytest_with_trace.py`) and a generated summary stored at `reports/coverage_summary.txt`.
+- Trace-friendly pytest harness (`scripts/run_pytest_with_trace.py`) and a generated summary stored at `artifacts/quality/coverage_summary.txt`.
 - Expanded configuration loader tests covering JSON files, delimiter handling, and defensive error paths.
 - Architecture, API, workflow, dependency, and final summary documentation under `docs/` to support the Codex refinement chain.
 - README usage walkthroughs and CLI help examples for common collection flows.
@@ -77,6 +77,11 @@
 - Tests covering output-path validation and agent metadata payloads.
 
 ### Changed
+- Performed a post-refactor validation pass: added README files to every top-level
+  directory, refreshed the root README/SPEC/style guide to reflect the new
+  layout, modernised agent CLI metadata, and tightened type hints across
+  automation helpers and IO utilities.
+- Reorganized repository layout: consolidated execution plans and automation guides under `docs/`, moved sample fixtures to `examples/`, and redirected quality artifacts to `artifacts/` to simplify the repository root.
 - CI workflow now executes `scripts/diagnostics_probe.py` after the quality gate
   and uploads the telemetry snapshot so registry regressions are caught in PRs.
 - Raised the minimum supported Python version to 3.11, documented the

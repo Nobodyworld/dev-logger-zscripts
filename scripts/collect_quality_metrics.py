@@ -17,7 +17,7 @@ from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PACKAGE = PACKAGE_ROOT / "zscripts"
-DEFAULT_COVERAGE = PACKAGE_ROOT / "reports" / "coverage.json"
+DEFAULT_COVERAGE = PACKAGE_ROOT / "artifacts" / "quality" / "coverage.json"
 
 
 def _load_cli() -> Callable[[list[str] | None], None] | None:
@@ -50,7 +50,7 @@ class _ComplexityVisitor(ast.NodeVisitor):
     def __init__(self) -> None:
         self.score = 1
 
-    def generic_visit(self, node: ast.AST) -> None:  # type: ignore[override]
+    def generic_visit(self, node: ast.AST) -> None:
         super().generic_visit(node)
 
     # Decision points that increase complexity counts.

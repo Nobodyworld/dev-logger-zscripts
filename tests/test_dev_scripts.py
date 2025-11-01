@@ -46,7 +46,7 @@ def test_dev_start_honors_skip_environment(monkeypatch: pytest.MonkeyPatch, tmp_
         capture_output=True,
     )
     assert result.returncode == 0, result.stderr
-    summary_path = Path("reports/quality_gate.json")
+    summary_path = Path("artifacts/quality/quality_gate.json")
     assert summary_path.exists()
     payload = json.loads(summary_path.read_text(encoding="utf-8"))
     assert payload["steps"]["lint"]["status"] == "skipped"

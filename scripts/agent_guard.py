@@ -23,7 +23,7 @@ COMMANDS: dict[str, Sequence[str]] = {
     "ruff": [sys.executable, "-m", "ruff", "check", "."],
     "mypy": [sys.executable, "-m", "mypy", *MYPY_TARGETS],
     "pytest": [sys.executable, "-m", "pytest"],
-    "bandit": ["bandit", "-q", "-r", "zscripts", "sample_project"],
+    "bandit": ["bandit", "-q", "-r", "zscripts", "examples/sample_project"],
 }
 
 

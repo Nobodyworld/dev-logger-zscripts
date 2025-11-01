@@ -14,11 +14,11 @@
 
 ## Self-Service Resources
 - [README](README.md) – Overview, CLI usage, and configuration reference.
-- [ARCHITECTURE](ARCHITECTURE.md) – Component responsibilities and extension points.
+- [ARCHITECTURE](docs/architecture/ARCHITECTURE.md) – Component responsibilities and extension points.
 - [docs/AI_INTERFACE.md](docs/AI_INTERFACE.md) – Agent/automation integration contract.
 - [CONTRIBUTING](CONTRIBUTING.md) – Setup instructions, testing, and review checklist.
-- [REPORT](REPORT.md) & [PLAN](PLAN.md) – Current architecture findings and roadmap.
-- [STATUS](STATUS.md) – Operational cadence, release status, and maintenance windows.
+- [REPORT](docs/plans/REPORT.md) & [PLAN](docs/plans/PLAN.md) – Current architecture findings and roadmap.
+- [STATUS](docs/plans/STATUS.md) – Operational cadence, release status, and maintenance windows.
 
 ## Escalation
 If you require additional assistance, email `support@zscripts.dev` with context,

@@ -2,14 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass
-
-from zscripts.presets import (
-    get_collect_extension_map,
-    get_single_extension_map,
-    presets_to_agent_payload,
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,128 +54,218 @@ class CLICommandSpec:
         }
 
 
-def _choices_from_mapping(mapping: Iterable[str]) -> tuple[str, ...]:
-    return tuple(mapping)
+GLOBAL_PARAMETERS: tuple[CLIParameterSpec, ...] = (
+    CLIParameterSpec(
+        name="config",
+        type="path",
+        description="Path to a configuration file containing ToolkitConfig overrides.",
+    ),
+    CLIParameterSpec(
+        name="set",
+        type="string",
+        description="Repeatable KEY=VALUE overrides applied on top of configuration files.",
+    ),
+    CLIParameterSpec(
+        name="adapter",
+        type="string",
+        description="Preferred adapter identifier when multiple integrations are available.",
+    ),
+    CLIParameterSpec(
+        name="enable_telemetry",
+        type="boolean",
+        description="Force-enable or disable telemetry for the current invocation.",
+        default=False,
+    ),
+    CLIParameterSpec(
+        name="log_level",
+        type="string",
+        description="Override the configured logging level (e.g., INFO, DEBUG).",
+    ),
+    CLIParameterSpec(
+        name="log_format",
+        type="string",
+        description="Select structured JSON logging or plaintext output.",
+        choices=("text", "json"),
+    ),
+)
+def _collect_params() -> tuple[CLIParameterSpec, ...]:
+    return (
+        CLIParameterSpec(
+            name="input",
+            type="path",
+            description="Optional path to a log file to ingest instead of executing a command.",
+        ),
+        CLIParameterSpec(
+            name="command",
+            type="string[]",
+            description="Command to execute within the sandbox when capturing live output.",
+        ),
+        CLIParameterSpec(
+            name="redact",
+            type="boolean",
+            description="Toggle automatic redaction for collected payloads.",
+            default=False,
+        ),
+    )
+
+
+def _parse_params() -> tuple[CLIParameterSpec, ...]:
+    return (
+        CLIParameterSpec(
+            name="input",
+            type="path",
+            description="Path to the raw log file that should be parsed into the normalised schema.",
+        ),
+        CLIParameterSpec(
+            name="command",
+            type="string[]",
+            description="Command to run when capturing logs prior to parsing.",
+        ),
+    )
+
+
+def _report_params() -> tuple[CLIParameterSpec, ...]:
+    return (
+        CLIParameterSpec(
+            name="input",
+            type="path",
+            description="Log file to summarise via the report generator.",
+        ),
+        CLIParameterSpec(
+            name="command",
+            type="string[]",
+            description="Optional command executed to produce the report input inline.",
+        ),
+        CLIParameterSpec(
+            name="format",
+            type="string",
+            description="Desired report format (defaults to configuration).",
+            choices=("json", "markdown"),
+        ),
+        CLIParameterSpec(
+            name="output",
+            type="path",
+            description="File destination for the rendered report (stdout always emits results).",
+        ),
+        CLIParameterSpec(
+            name="fail_on",
+            type="string",
+            description="Severity threshold that forces a non-zero exit code.",
+            choices=("never", "warnings", "errors"),
+        ),
+        CLIParameterSpec(
+            name="redact",
+            type="boolean",
+            description="Control whether report sections are redacted prior to emission.",
+        ),
+    )
+
+
+def _diagnostics_params() -> tuple[CLIParameterSpec, ...]:
+    return (
+        CLIParameterSpec(
+            name="format",
+            type="string",
+            description="Diagnostics payload format (JSON for automation, text for humans).",
+            default="json",
+            choices=("json", "text"),
+        ),
+        CLIParameterSpec(
+            name="output",
+            type="path",
+            description="Optional file path to write diagnostics output.",
+        ),
+        CLIParameterSpec(
+            name="include_metrics",
+            type="boolean",
+            description="Include Prometheus text-format metrics in the diagnostics bundle.",
+            default=False,
+        ),
+    )
+
+
+def _extensions_params() -> tuple[CLIParameterSpec, ...]:
+    return (
+        CLIParameterSpec(
+            name="output_format",
+            type="string",
+            description="Format for extension listings when inspecting installed hooks.",
+            default="text",
+            choices=("text", "json"),
+        ),
+        CLIParameterSpec(
+            name="extensions_command",
+            type="string",
+            description="Sub-command executed under the extensions namespace (e.g., scaffold).",
+        ),
+    )
+
+
+CLI_COMMANDS: tuple[CLICommandSpec, ...] = (
+    CLICommandSpec(
+        name="collect",
+        summary="Collect raw logs from files or sandboxed commands.",
+        parameters=_collect_params(),
+        examples=(
+            "python -m zscripts collect --input ./logs/latest.log",
+            "python -m zscripts collect --command pytest --redact",
+        ),
+        returns="Exit code 0 on success; writes collected data to stdout or configured destinations.",
+    ),
+    CLICommandSpec(
+        name="parse",
+        summary="Parse logs into the normalised schema for downstream tooling.",
+        parameters=_parse_params(),
+        examples=(
+            "python -m zscripts parse --input ./logs/latest.log",
+            "python -m zscripts parse --command pytest -q",
+        ),
+        returns="Exit code 0 on success; emits JSON payloads to stdout or files.",
+    ),
+    CLICommandSpec(
+        name="guardrails",
+        summary="Display sandbox guardrail settings inferred from configuration.",
+        parameters=(),
+        examples=("python -m zscripts guardrails",),
+        returns="Exit code 0 on success; prints guardrail configuration to stdout.",
+    ),
+    CLICommandSpec(
+        name="report",
+        summary="Generate build/test summaries with optional redaction and severity gating.",
+        parameters=_report_params(),
+        examples=(
+            "python -m zscripts report --input ./logs/latest.log --format markdown",
+            "python -m zscripts report --command pytest -q --fail-on errors",
+        ),
+        returns="Exit code 0 on success; writes reports to stdout and optionally disk.",
+    ),
+    CLICommandSpec(
+        name="diagnostics",
+        summary="Collect runtime diagnostics including telemetry and extension metadata.",
+        parameters=_diagnostics_params(),
+        examples=(
+            "python -m zscripts diagnostics --format text",
+            "python -m zscripts diagnostics --include-metrics --output diagnostics.json",
+        ),
+        returns="Exit code 0 on success; emits diagnostics payloads for troubleshooting.",
+    ),
+    CLICommandSpec(
+        name="extensions",
+        summary="Inspect or scaffold toolkit extensions.",
+        parameters=_extensions_params(),
+        examples=(
+            "python -m zscripts extensions --output-format json",
+            "python -m zscripts extensions scaffold demo_extension --directory ./extensions",
+        ),
+        returns="Exit code 0 on success; prints extension inventory or scaffold results.",
+    ),
+)
 
 
 def get_cli_command_specs() -> tuple[CLICommandSpec, ...]:
     """Return the structured metadata for the supported CLI commands."""
 
-    collect_choices = _choices_from_mapping(get_collect_extension_map().keys())
-    single_choices = _choices_from_mapping(get_single_extension_map().keys())
-
-    collect_params = (
-        CLIParameterSpec(
-            name="types",
-            type="string",
-            description="Comma-separated list of stack presets to capture.",
-            default="python",
-            choices=collect_choices,
-        ),
-        CLIParameterSpec(
-            name="project_root",
-            type="path",
-            description=(
-                "Root directory to scan. Defaults to auto-detecting the nearest "
-                "project or repository root."
-            ),
-        ),
-        CLIParameterSpec(
-            name="output_dir",
-            type="path",
-            description="Optional directory for generated log bundles.",
-        ),
-        CLIParameterSpec(
-            name="dry_run",
-            type="boolean",
-            description="Preview actions without writing any files.",
-            default=False,
-        ),
-    )
-
-    consolidate_params = (
-        CLIParameterSpec(
-            name="types",
-            type="string",
-            description="Stack preset to consolidate (single value).",
-            default="python",
-            choices=single_choices,
-        ),
-        CLIParameterSpec(
-            name="output",
-            type="path",
-            description="Destination file for the consolidated bundle. Use '-' for stdout.",
-        ),
-        CLIParameterSpec(
-            name="project_root",
-            type="path",
-            description="Root directory to consolidate from (auto-detected when omitted).",
-        ),
-        CLIParameterSpec(
-            name="dry_run",
-            type="boolean",
-            description="Preview consolidation without touching the filesystem.",
-            default=False,
-        ),
-    )
-
-    tree_params = (
-        CLIParameterSpec(
-            name="output",
-            type="path",
-            description="Destination for the tree snapshot. Use '-' to stream to stdout.",
-        ),
-        CLIParameterSpec(
-            name="include_contents",
-            type="boolean",
-            description="Include file contents inline with the tree output.",
-            default=False,
-        ),
-        CLIParameterSpec(
-            name="max_bytes",
-            type="integer",
-            description="Maximum bytes to read per file when including contents.",
-            default="4096",
-        ),
-        CLIParameterSpec(
-            name="project_root",
-            type="path",
-            description="Root directory to inspect (auto-detected when omitted).",
-        ),
-    )
-
-    return (
-        CLICommandSpec(
-            name="collect",
-            summary="Generate per-application source logs for selected stacks.",
-            parameters=collect_params,
-            examples=(
-                "python -m zscripts collect --types python,js",
-                "zscripts --verbose collect --dry-run",
-            ),
-            returns="Exit code 0 on success; writes log files to the configured directory.",
-        ),
-        CLICommandSpec(
-            name="consolidate",
-            summary="Merge sources for a stack into a single file or stream.",
-            parameters=consolidate_params,
-            examples=(
-                "python -m zscripts consolidate --types html --output -",
-                "zscripts consolidate --types python --output-dir ./logs",
-            ),
-            returns="Exit code 0 on success; writes a consolidated log file or stdout stream.",
-        ),
-        CLICommandSpec(
-            name="tree",
-            summary="Produce a filtered project tree with optional file contents.",
-            parameters=tree_params,
-            examples=(
-                "python -m zscripts tree --include-contents --max-bytes 2048",
-                "zscripts tree --output ./logs/project_tree.txt",
-            ),
-            returns="Exit code 0 on success; writes a project tree snapshot.",
-        ),
-    )
+    return CLI_COMMANDS
 
 
 def export_cli_metadata() -> dict[str, object]:
@@ -190,5 +273,5 @@ def export_cli_metadata() -> dict[str, object]:
 
     return {
         "commands": [spec.to_payload() for spec in get_cli_command_specs()],
-        "presets": presets_to_agent_payload(),
+        "global_parameters": [parameter.to_payload() for parameter in GLOBAL_PARAMETERS],
     }

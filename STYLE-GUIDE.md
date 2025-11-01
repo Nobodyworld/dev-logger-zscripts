@@ -23,6 +23,11 @@ This document is a concise, drop-in style and process guide for any repository i
   - `scripts/` — developer tooling (idempotent, cross‑platform when possible)
   - `assets/` — small static assets (icons, images) needed at build/runtime
   - `data/` — small sample/test data only (large datasets belong in storage)
+- Repository-specific layout
+  - `dev-logger-zscripts` keeps runtime modules under `zscripts/` with supporting
+    directories (`adapters/`, `agents/`, `configs/`, `examples/`, `schemas/`,
+    `scripts/`, `tests/`, `docs/`). Each directory carries its own `README.md`
+    describing scope and entry points.
 - Naming
   - Directories: `kebab-case` (e.g., `ui-components`)
   - Files (JS/TS/Go/Rust): `camelCase.ts|.go|.rs` where idiomatic; Python: `snake_case.py`

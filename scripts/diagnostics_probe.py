@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from zscripts import get_default_config
@@ -100,7 +100,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error(str(exc))
         raise SystemExit(2) from exc
 
-    status = str(payload.get("telemetry", {}).get("status", "unknown")).lower()
+    telemetry_section = payload.get("telemetry")
+    status_value: str | object = "unknown"
+    if isinstance(telemetry_section, Mapping):
+        status_value = telemetry_section.get("status", "unknown")
+    elif telemetry_section is not None:
+        status_value = telemetry_section
+    status = str(status_value).lower()
     exit_code = _determine_exit_code(status, args.fail_on_status)
     telemetry.stop()
     return exit_code

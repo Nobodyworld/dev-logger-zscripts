@@ -28,7 +28,7 @@ We appreciate coordinated disclosure and are happy to credit researchers unless 
 
 ## Pre-release Security Checklist
 - [ ] Run `make check` (or `python scripts/dev_start.py`) to execute linting, typing, security, and pytest suites.
-- [ ] Confirm coverage meets the configured threshold (85% by default) and archive the JSON summary under `reports/`.
+- [ ] Confirm coverage meets the configured threshold (85% by default) and archive the JSON summary under `artifacts/quality/`.
 - [ ] Review dependency advisories via `pip list --outdated` and the SBOM in `artifacts/sbom/`.
 - [ ] Verify configuration changes are documented and secrets are loaded from environment variables or secure stores.
-- [ ] Update `CHANGELOG.md` and `RELEASE_NOTES.md` with any security-impacting fixes or breaking changes.
+- [ ] Update `CHANGELOG.md` and `docs/releases/RELEASE_NOTES.md` with any security-impacting fixes or breaking changes.

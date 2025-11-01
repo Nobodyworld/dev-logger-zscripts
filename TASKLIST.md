@@ -22,5 +22,7 @@ Completion note (indented, one line):
 
 ## Tasks
 
-<a id="task-0001"></a>- [x] Add atomic_write_bytes helper for binary artifact support in io_utils - TASK-0001 - When completed: 2025-02-15T00:00Z, [REPORT-0001](REPORTS.md#report-0001)
-<a id="task-0002"></a>- [x] Harden log snapshot writers with atomic filesystem handling - TASK-0002 - When completed: 2025-02-15T01:30Z, [REPORT-0002](REPORTS.md#report-0002)
+<a id="task-0001"></a>- [x] Add atomic_write_bytes helper for binary artifact support in io_utils - TASK-0001 - When completed: 2025-02-15T00:00Z, [REPORT-0001](docs/reports/narratives/REPORTS/000_CONTEXT.md)
+<a id="task-0002"></a>- [x] Harden log snapshot writers with atomic filesystem handling - TASK-0002 - When completed: 2025-02-15T01:30Z, [REPORT-0002](docs/reports/narratives/REPORTS/001_DIAGNOSIS.md)
+<a id="task-0003"></a>- [x] Restructure repository layout for clarity and maintainability - TASK-20250215-003
+  - Completed: 2025-02-15 — PR: (internal) — Consolidated documentation, configs, and fixtures into dedicated directories.

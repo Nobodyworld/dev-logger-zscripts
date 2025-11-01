@@ -6,12 +6,8 @@ import argparse
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
-
-try:  # Python 3.11+
-    import tomllib  # type: ignore[attr-defined]
-except ModuleNotFoundError:  # pragma: no cover - fallback for <3.11
-    import tomli as tomllib  # type: ignore[no-redef]
 
 PYPROJECT_PATH = Path("pyproject.toml")
 VERSION_PATTERN = re.compile(r"^version\s*=\s*\"(?P<version>\d+\.\d+\.\d+)\"\s*$", re.MULTILINE)
@@ -72,7 +68,7 @@ def main(argv: list[str] | None = None) -> None:
     new_version = bump_version(current, args.bump)
     write_version(current, new_version)
     print(f"Version bumped from {current} to {new_version}.")
-    print("Update CHANGELOG.md and RELEASE_NOTES.md before committing.")
+    print("Update CHANGELOG.md and docs/releases/RELEASE_NOTES.md before committing.")
     if args.tag:
         create_git_tag(new_version)
 

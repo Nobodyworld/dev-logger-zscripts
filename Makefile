@@ -21,14 +21,15 @@ type:
 	mypy $(MYPY_TARGETS)
 
 security:
-	bandit -q -r zscripts sample_project
+	bandit -q -r zscripts examples/sample_project
 
 test:
 	pytest
 
 coverage:
 	coverage run -m pytest
-	coverage json -o reports/coverage.json
+	mkdir -p artifacts/coverage
+	coverage json -o artifacts/coverage/coverage.json
 	coverage report
 
 quality:

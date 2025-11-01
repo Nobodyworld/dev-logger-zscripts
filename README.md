@@ -1,92 +1,121 @@
-# Zscripts – Script Helper Log Compiler
+# Zscripts – Structured Log Toolkit
 
-The toolkit automates collecting, consolidating, and analysing project files. It builds structured logs for Python, HTML, CSS, and JavaScript sources so you can review application code from a single location.
+Zscripts collects, consolidates, and analyses project logs so that engineers and
+automation can reason about an entire codebase from a single command-line
+interface. The toolkit ships with adapters for multiple languages, a telemetry-
+aware runtime, and automation hooks for health checks and extension scaffolding.
 
 ## Highlights
-- Unified CLI entry point (`python cli.py`) orchestrating collection, parsing, reporting, diagnostics, and extensions.
-- Typed configuration system (`ToolkitConfig`) with TOML overrides and inline `--set` coercion.
-- Telemetry-aware observability pipeline with Prometheus metrics and diagnostics snapshots.
-- Central `operations` module with reusable helpers for logging, consolidation, and analysis.
-- Pytest-based regression suite covering the core workflows.
-- `pyproject.toml` for reproducible tooling (install `.[dev]` to get the optional test extra).
+
+- Unified CLI entry point (`python cli.py`) orchestrating collection, parsing,
+  reporting, diagnostics, and extension tooling.
+- Strictly typed configuration system (`zscripts.config.ToolkitConfig`) with
+  support for JSON/TOML files and inline `--set` overrides.
+- Observability pipeline with structured logging, Prometheus metrics, and
+  diagnostics snapshots suitable for dashboards.
+- Automation adapters (`agents/`, `adapters/`) that expose the CLI surface to
+  external systems without shelling out.
+- Comprehensive pytest suite covering operations, adapters, observability, and
+  infrastructure layers.
 
 ## Quickstart
-Run commands from the repository root (the `cli.py` shim simply executes `zscripts.cli.main()`):
+
+Run commands from the repository root. The top-level `cli.py` shim simply
+dispatches to `zscripts.cli.main()`.
 
 ```sh
-# Inspect guardrail settings derived from configuration
+# Inspect the active sandbox guardrails
 python cli.py guardrails
 
-# Parse a log file using a specific adapter
-python cli.py --adapter python parse --input examples/python/sample.log
+# Collect logs from an external command with redaction enabled
+python cli.py collect --command pytest --redact
 
-# Generate a report in Markdown and write it to disk
+# Parse a log file into the normalised schema
+python cli.py parse --input examples/python/sample.log
+
+# Generate a Markdown summary and write it to disk
 python cli.py report --input examples/python/sample.log --format markdown --output report.md
 
-# Emit diagnostics (with Prometheus metrics when telemetry is enabled)
-python cli.py --enable-telemetry diagnostics --format text
+# Capture diagnostics including metrics and extension inventory
+python cli.py diagnostics --include-metrics --format json
 
-# List loaded extensions and scaffold a new one
-python cli.py extensions --output-format json
-python cli.py extensions scaffold demo_extension --directory my_extensions
-
-# Execute an extension-provided command (after enabling it via configuration)
-python cli.py --config settings.toml echo "hello world"
+# Scaffold a new extension skeleton
+python cli.py extensions scaffold demo_extension --directory ./my_extensions
 ```
 
-Legacy scripts inside `zscripts/all`, `zscripts/all_single`, `zscripts/make`, and `zscripts/create` remain as thin wrappers but now delegate to the shared operations module and CLI.
+Global flags such as `--config`, `--set`, `--adapter`, `--enable-telemetry`,
+`--log-level`, and `--log-format` are available to every command. See
+`agents/cli_adapter.py` for a machine-readable description of the surface area.
 
-## Project Structure
+## Repository Layout
 
-- `pyproject.toml` – packaging metadata and dev dependencies.
-- `zscripts/__init__.py` – package initialiser exposing core modules.
-- `zscripts/config.py` – houses `ToolkitConfig`, default presets, and legacy directory constants.
-- `zscripts/configuration.py` – loads configuration files, applies CLI overrides, and returns `ToolkitConfig` instances.
-- `zscripts/utils.py` – low-level filesystem helpers (gitignore handling, aggregation).
-- `zscripts/operations.py` – high-level orchestration utilities used by the CLI and legacy scripts.
-- `zscripts/cli.py` – argparse-based CLI frontend.
-- `tests/test_operations.py` – regression coverage for the operations workflows.
-- Remaining subdirectories (`all`, `all_single`, `make`, `create`, `by_file`, `todo`, `zreadme`) retain their original purpose but now benefit from the refactored helpers.
+The root directory intentionally stays small. Consult the README in each folder
+for deeper context.
 
-## Development Notes
+- `adapters/` – Adapter interfaces and language-specific integrations.
+- `agents/` – Automation-friendly wrappers that describe the CLI for AI clients.
+- `configs/` – Version-controlled configuration defaults (see `configs/README.md`).
+- `docs/` – Documentation hub (`docs/INDEX.md` links architecture, automation, and
+  planning material).
+- `examples/` – Sample projects and captured artifacts used in guides/tests.
+- `schemas/` – JSON schema definitions for normalised logs.
+- `scripts/` – Developer utilities for scaffolding, diagnostics, and releases.
+- `tests/` – Pytest suite mirroring the runtime modules.
+- `zscripts/` – Core package containing the CLI, runtime services, extensions,
+  and observability infrastructure.
 
-Install the optional dev dependencies and run the full quality gate:
+Additional governance documents live at the root:
+
+- `SPEC.md` – Repository expectations, maintenance status, and tasking guidance.
+- `STYLE-GUIDE.md` – Organisation-wide coding standards.
+- `CHANGELOG.md` – Chronological record of notable changes.
+
+## Development Workflow
+
+Create a virtual environment and install the optional tooling extras:
 
 ```sh
+python -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
 pip install .[dev]
-make check  # fmt + lint + mypy + bandit + pytest
 ```
 
-Useful follow-up commands:
+Execute the full quality gate with:
 
-- `make coverage` – generate a JSON coverage report under `reports/`.
-- `make fmt` / `make lint` – run Ruff format and lint passes independently.
-- `make type` – execute the strict mypy suite (`pyproject.toml` defines the targets).
-- `make security` – invoke Bandit over `zscripts` and the sample project assets.
+```sh
+make check  # formatting, lint, mypy, security, pytest
+```
 
-All CLI commands automatically create required log directories. Outputs live under `zscripts/logs/`, mirroring the preset names (`logs_apps_pyth`, `logs_single_files`, `logs_tree`, etc.).
+Common individual commands:
 
-Configuration tips:
+- `ruff check` / `ruff format` – lint and format the Python codebase.
+- `mypy zscripts agents scripts` – static type checks for runtime and automation
+  helpers.
+- `pytest` – run the automated test suite (see `tests/README.md`).
+- `python scripts/collect_quality_metrics.py` – emit complexity and dependency metrics.
 
-- Use `python cli.py --config settings.toml ...` to load TOML overrides (see `examples/config/` for inspiration).
-- Apply ad-hoc overrides with `--set key=value` (e.g., `--set report_fail_on=errors`).
-- Enable telemetry metrics via `--enable-telemetry` (optional `--telemetry-host`/`--telemetry-port`).
-- Extensions and services can now publish custom health checks via the shared
-  registry. Use `context.health_checks.register(...)` inside an extension or the
-  `scripts/scaffold_module.py health <name>` helper to generate a reusable
-  provider skeleton. The diagnostics command (`python cli.py diagnostics
-  --include-metrics`) surfaces each registered check alongside the core HTTP
-  probe, making it easy to trace degraded states back to individual modules.
+## Configuration and Extensions
 
-### Scaffolding shortcuts
+Configuration defaults live in `zscripts/config.py` with a JSON mirror in
+`configs/zscripts.config.json`. Supply a TOML or JSON file via
+`--config` or pass inline overrides with `--set key=value` pairs. Telemetry can
+be toggled per-invocation using `--enable-telemetry`.
 
-- `python scripts/scaffold_module.py extension demo_probe` – create an
-  extension skeleton instrumented with telemetry and a ready-to-use health
-  snapshot.
-- `python scripts/scaffold_module.py health ingestion_queue` – generate a
-  standalone health check provider that can be imported from schedulers or
-  background workers and registered against the telemetry registry.
-- Reference implementations live under
-  `zscripts/extensions/examples/`, including
-  `plugin_health.py` (registry integration) and `plugin_metrics.py` (hook
-  instrumentation).
+Extensions implement `ToolkitExtensionProtocol` from
+`zscripts/extensions/base.py`. Use `python scripts/scaffold_module.py extension
+<name>` to generate a telemetry-aware skeleton or
+`python scripts/scaffold_module.py health <name>` to create a reusable health
+check provider. Extension and health-check contributions must follow
+`zscripts/extensions/AGENTS.md` and `agents/AGENTS.md`.
+
+## Further Reading
+
+- `docs/architecture/ARCHITECTURE.md` – Component relationships, flows, and
+  extension guidance.
+- `docs/guides/` – How-to guides for extending adapters and running automation.
+- `docs/releases/RELEASE_NOTES.md` – Narrative release history.
+- `SUPPORT.md` / `SECURITY.md` – Support channels and vulnerability reporting.
+
+Keep `TASKLIST.md` updated when work completes and log notable upgrades in
+`CHANGELOG.md`.

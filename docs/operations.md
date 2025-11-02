@@ -32,7 +32,7 @@ Example response for `/healthz`:
 ```
 {
   "status": "ok",
-  "version": "1.2.3",
+  "version": "0.1.0",
   "telemetry_enabled": true,
   "health_endpoint": "http://127.0.0.1:9464/healthz",
   "metrics_endpoint": "http://127.0.0.1:9464/metrics",
@@ -41,6 +41,8 @@ Example response for `/healthz`:
   "checks": {"http_server": {"status": "ok", "host": "127.0.0.1", "port": 9464}}
 }
 ```
+
+Confirm the running version with `python cli.py --version` when comparing incident snapshots.
 
 ## Metrics to Watch
 

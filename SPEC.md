@@ -72,6 +72,6 @@ when shipping notable changes.
 
 ## Contacts
 
-- Maintainers: _TBD_
+- Maintainers: Zscripts Maintainers (see `pyproject.toml`)
 - Support: See `SUPPORT.md`
 - Security: See `SECURITY.md`

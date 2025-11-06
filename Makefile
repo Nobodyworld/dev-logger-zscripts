@@ -1,4 +1,10 @@
-.PHONY: fmt lint type test security check sbom
+.PHONY: setup dev fmt lint type security test coverage build deploy quality check sbom
+
+setup:
+	python scripts/bootstrap.py || python scripts/bootstrap.py --skip-install
+
+dev:
+	python scripts/dev_start.py
 
 MYPY_TARGETS = \
     zscripts/application \
@@ -27,10 +33,16 @@ test:
 	pytest
 
 coverage:
-	coverage run -m pytest
+	python -m coverage run -m pytest
 	mkdir -p artifacts/coverage
-	coverage json -o artifacts/coverage/coverage.json
-	coverage report
+	python -m coverage json -o artifacts/coverage/coverage.json
+	python -m coverage report
+
+build:
+	python scripts/build_artifact.py
+
+deploy: build
+	python artifacts/build/zscripts.pyz guardrails > artifacts/build/guardrails.json
 
 quality:
 	python scripts/dev_start.py

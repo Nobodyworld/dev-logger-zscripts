@@ -33,14 +33,26 @@ python cli.py collect --command pytest --redact
 # Parse a log file into the normalised schema
 python cli.py parse --input examples/python/sample.log
 
+# Generate a concise summary for the collected log
+python cli.py summarize --input examples/python/sample.log
+
+# Produce a detailed explanation of failures and guardrails
+python cli.py explain --input examples/python/sample.log
+
 # Generate a Markdown summary and write it to disk
 python cli.py report --input examples/python/sample.log --format markdown --output report.md
+
+# Redact sensitive values from collected output using configured patterns
+python cli.py redact --input examples/python/sample.log
 
 # Capture diagnostics including metrics and extension inventory
 python cli.py diagnostics --include-metrics --format json
 
 # Scaffold a new extension skeleton
 python cli.py extensions scaffold demo_extension --directory ./my_extensions
+
+# Discover bundled example logs for each adapter
+python cli.py examples --format json
 ```
 
 Global flags such as `--config`, `--set`, `--adapter`, `--enable-telemetry`,
@@ -94,6 +106,23 @@ Common individual commands:
   helpers.
 - `pytest` – run the automated test suite (see `tests/README.md`).
 - `python scripts/collect_quality_metrics.py` – emit complexity and dependency metrics.
+
+### One-Command Flows
+
+- `make setup` – bootstrap the environment (falls back to `--skip-install` if
+  package installation fails, useful in restricted sandboxes).
+- `make dev` – execute the full quality gate defined in `scripts/dev_start.py`.
+- `make test` – run the full pytest suite.
+- `make build` – build the zipapp bundle at `artifacts/build/zscripts.pyz`.
+- `make deploy` – smoke the packaged CLI by running `guardrails` and saving the
+  JSON snapshot to `artifacts/build/guardrails.json`.
+
+Operational and quality snapshots are documented in:
+
+- `docs/operations/BASELINE.md` – runtime, automation, and dependency
+  inventory.
+- `docs/operations/QUALITY_AUDIT.md` – lint/type/test/security/coverage audit
+  results and profiling notes.
 
 ## Configuration and Extensions
 

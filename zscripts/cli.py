@@ -157,6 +157,69 @@ def _build_main_parser(
     )
     report_parser.set_defaults(handler=_handle_report)
 
+    summarize_parser = subparsers.add_parser(
+        "summarize",
+        help="Produce a concise summary for collected logs.",
+    )
+    summarize_parser.add_argument("--input", metavar="PATH", help="Path to a log file to summarize.")
+    summarize_parser.add_argument(
+        "--command",
+        nargs="+",
+        metavar="ARG",
+        help="Command to execute when capturing logs prior to summarizing.",
+    )
+    summarize_parser.add_argument(
+        "--redact",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Apply redaction patterns to the generated summary.",
+    )
+    summarize_parser.set_defaults(handler=_handle_summarize)
+
+    explain_parser = subparsers.add_parser(
+        "explain",
+        help="Generate a detailed explanation for collected logs.",
+    )
+    explain_parser.add_argument("--input", metavar="PATH", help="Path to a log file to explain.")
+    explain_parser.add_argument(
+        "--command",
+        nargs="+",
+        metavar="ARG",
+        help="Command to execute when capturing logs before explaining results.",
+    )
+    explain_parser.add_argument(
+        "--redact",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Apply redaction patterns to the explanation output.",
+    )
+    explain_parser.set_defaults(handler=_handle_explain)
+
+    redact_parser = subparsers.add_parser(
+        "redact",
+        help="Redact sensitive data from log content.",
+    )
+    redact_parser.add_argument("--input", metavar="PATH", help="Path to a log file to redact.")
+    redact_parser.add_argument(
+        "--command",
+        nargs="+",
+        metavar="ARG",
+        help="Command to execute when collecting logs to redact.",
+    )
+    redact_parser.set_defaults(handler=_handle_redact)
+
+    examples_parser = subparsers.add_parser(
+        "examples",
+        help="List bundled example log files for adapters.",
+    )
+    examples_parser.add_argument(
+        "--format",
+        choices={"text", "json"},
+        default="text",
+        help="Output format for the example listing (default: text).",
+    )
+    examples_parser.set_defaults(handler=_handle_examples)
+
     diagnostics_parser = subparsers.add_parser(
         "diagnostics",
         help="Collect runtime diagnostics including telemetry and extension metadata.",
@@ -445,6 +508,49 @@ def _handle_report(args: argparse.Namespace, runtime: RuntimeState) -> int:
     return 1 if _should_fail(policy, bundle.severity) else 0
 
 
+def _handle_summarize(args: argparse.Namespace, runtime: RuntimeState) -> int:
+    raw_text = _collect_raw_logs(args, runtime, redact=False)
+    summary = runtime.service.summarize_logs(
+        adapter_key=runtime.adapter_override,
+        raw_text=raw_text,
+    )
+    if getattr(args, "redact", False):
+        summary = runtime.service.redact_text(summary)
+    print(summary)
+    return 0
+
+
+def _handle_explain(args: argparse.Namespace, runtime: RuntimeState) -> int:
+    raw_text = _collect_raw_logs(args, runtime, redact=False)
+    explanation = runtime.service.explain_logs(
+        adapter_key=runtime.adapter_override,
+        raw_text=raw_text,
+    )
+    if getattr(args, "redact", False):
+        explanation = runtime.service.redact_text(explanation)
+    print(explanation)
+    return 0
+
+
+def _handle_redact(args: argparse.Namespace, runtime: RuntimeState) -> int:
+    raw_text = _collect_raw_logs(args, runtime, redact=False)
+    redacted = runtime.service.redact_text(raw_text)
+    print(redacted)
+    return 0
+
+
+def _handle_examples(args: argparse.Namespace, runtime: RuntimeState) -> int:
+    examples = runtime.service.list_examples(adapter_filter=runtime.adapter_override)
+    if args.format == "json":
+        print(json.dumps(sorted(examples), indent=2, sort_keys=True))
+        return 0
+    if examples:
+        print("\n".join(sorted(examples)))
+    else:
+        print("No examples available.")
+    return 0
+
+
 def _handle_extensions(args: argparse.Namespace, runtime: RuntimeState) -> int:
     if getattr(args, "extensions_command", None) == "scaffold":
         target = scaffold_extension(args.name, args.directory)
@@ -498,13 +604,9 @@ def _handle_diagnostics(args: argparse.Namespace, runtime: RuntimeState) -> int:
 def _format_diagnostics_text(snapshot: DiagnosticsSnapshot) -> str:
     payload = snapshot.to_dict()
     telemetry = payload.get("telemetry")
-    telemetry_mapping: Mapping[str, object] | None = (
-        telemetry if isinstance(telemetry, Mapping) else None
-    )
+    telemetry_mapping: Mapping[str, object] | None = telemetry if isinstance(telemetry, Mapping) else None
     extensions = payload.get("extensions")
-    extensions_mapping: Mapping[str, object] | None = (
-        extensions if isinstance(extensions, Mapping) else None
-    )
+    extensions_mapping: Mapping[str, object] | None = extensions if isinstance(extensions, Mapping) else None
     lines = [
         f"Generated: {payload.get('generated_at', 'unknown')}",
         f"Status: {telemetry_mapping.get('status', 'unknown') if telemetry_mapping else 'unknown'}",

@@ -166,6 +166,64 @@ def test_cli_report_fail_on_cli_override(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
 
 
+def test_cli_summarize_outputs_summary() -> None:
+    result = _run_cli(
+        "summarize",
+        "--input",
+        str(Path("examples/python/sample.log")),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "[FAILED] pytest run for python" in result.stdout
+
+
+def test_cli_explain_outputs_details() -> None:
+    result = _run_cli(
+        "explain",
+        "--input",
+        str(Path("examples/python/sample.log")),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith("Tool: pytest")
+    assert "Summary:" in result.stdout
+
+
+def test_cli_redact_applies_patterns(tmp_path: Path) -> None:
+    sample = tmp_path / "secret.log"
+    sample.write_text("token=SECRET12345\n", encoding="utf-8")
+    config_path = tmp_path / "settings.toml"
+    config_path.write_text("redact_patterns = ['SECRET\\d+']\n", encoding="utf-8")
+
+    result = _run_cli(
+        "--config",
+        str(config_path),
+        "redact",
+        "--input",
+        str(sample),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "[REDACTED]" in result.stdout
+    assert "SECRET" not in result.stdout
+
+
+def test_cli_examples_lists_paths() -> None:
+    result = _run_cli("examples")
+
+    assert result.returncode == 0, result.stderr
+    lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    assert "examples/python/sample.log" in lines
+
+
+def test_cli_examples_json_format() -> None:
+    result = _run_cli("examples", "--format", "json")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert "examples/python/sample.log" in payload
+
+
 def test_cli_report_output_directory_error(tmp_path: Path) -> None:
     result = _run_cli(
         "report",

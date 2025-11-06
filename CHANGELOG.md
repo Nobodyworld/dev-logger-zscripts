@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 ### Added
+- Operational baseline and quality audit documentation, zipapp build/deploy
+  workflow targets, and agent metadata tests covering the expanded CLI surface.
 - Health check registry (`zscripts/observability/health_checks.py`) wired into
   the telemetry manager and diagnostics output, including a Prometheus gauge
   (`zscripts_health_checks_status`) and CLI support for extension-provided

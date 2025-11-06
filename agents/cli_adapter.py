@@ -88,6 +88,8 @@ GLOBAL_PARAMETERS: tuple[CLIParameterSpec, ...] = (
         choices=("text", "json"),
     ),
 )
+
+
 def _collect_params() -> tuple[CLIParameterSpec, ...]:
     return (
         CLIParameterSpec(
@@ -129,7 +131,7 @@ def _report_params() -> tuple[CLIParameterSpec, ...]:
         CLIParameterSpec(
             name="input",
             type="path",
-            description="Log file to summarise via the report generator.",
+            description="Log file to summarize via the report generator.",
         ),
         CLIParameterSpec(
             name="command",
@@ -201,6 +203,75 @@ def _extensions_params() -> tuple[CLIParameterSpec, ...]:
     )
 
 
+def _summarize_params() -> tuple[CLIParameterSpec, ...]:
+    return (
+        CLIParameterSpec(
+            name="input",
+            type="path",
+            description="Optional path to a log file that should be summarized.",
+        ),
+        CLIParameterSpec(
+            name="command",
+            type="string[]",
+            description="Command to execute in the sandbox before summarizing logs.",
+        ),
+        CLIParameterSpec(
+            name="redact",
+            type="boolean",
+            description="Apply configured redaction rules to the generated summary.",
+            default=False,
+        ),
+    )
+
+
+def _explain_params() -> tuple[CLIParameterSpec, ...]:
+    return (
+        CLIParameterSpec(
+            name="input",
+            type="path",
+            description="Optional path to a log file that should be explained.",
+        ),
+        CLIParameterSpec(
+            name="command",
+            type="string[]",
+            description="Command to execute in the sandbox before generating an explanation.",
+        ),
+        CLIParameterSpec(
+            name="redact",
+            type="boolean",
+            description="Apply configured redaction rules to the explanation output.",
+            default=False,
+        ),
+    )
+
+
+def _redact_params() -> tuple[CLIParameterSpec, ...]:
+    return (
+        CLIParameterSpec(
+            name="input",
+            type="path",
+            description="Optional path to a log file that should be redacted.",
+        ),
+        CLIParameterSpec(
+            name="command",
+            type="string[]",
+            description="Command to execute when capturing logs for redaction.",
+        ),
+    )
+
+
+def _examples_params() -> tuple[CLIParameterSpec, ...]:
+    return (
+        CLIParameterSpec(
+            name="format",
+            type="string",
+            description="Format for listing examples (text for humans, JSON for automation).",
+            default="text",
+            choices=("text", "json"),
+        ),
+    )
+
+
 CLI_COMMANDS: tuple[CLICommandSpec, ...] = (
     CLICommandSpec(
         name="collect",
@@ -238,6 +309,46 @@ CLI_COMMANDS: tuple[CLICommandSpec, ...] = (
             "python -m zscripts report --command pytest -q --fail-on errors",
         ),
         returns="Exit code 0 on success; writes reports to stdout and optionally disk.",
+    ),
+    CLICommandSpec(
+        name="summarize",
+        summary="Produce concise summaries for collected logs.",
+        parameters=_summarize_params(),
+        examples=(
+            "python -m zscripts summarize --input ./logs/latest.log",
+            "python -m zscripts summarize --command pytest --redact",
+        ),
+        returns="Exit code 0 on success; prints summaries to stdout for further use.",
+    ),
+    CLICommandSpec(
+        name="explain",
+        summary="Generate detailed explanations for collected logs.",
+        parameters=_explain_params(),
+        examples=(
+            "python -m zscripts explain --input ./logs/latest.log",
+            "python -m zscripts explain --command pytest --redact",
+        ),
+        returns="Exit code 0 on success; writes explanations to stdout for troubleshooting.",
+    ),
+    CLICommandSpec(
+        name="redact",
+        summary="Apply configured redaction rules to log content.",
+        parameters=_redact_params(),
+        examples=(
+            "python -m zscripts redact --input ./logs/latest.log",
+            "python -m zscripts redact --command pytest -q",
+        ),
+        returns="Exit code 0 on success; prints redacted log output to stdout.",
+    ),
+    CLICommandSpec(
+        name="examples",
+        summary="List bundled example log files for available adapters.",
+        parameters=_examples_params(),
+        examples=(
+            "python -m zscripts examples",
+            "python -m zscripts --adapter go examples --format json",
+        ),
+        returns="Exit code 0 on success; emits example paths for discovery workflows.",
     ),
     CLICommandSpec(
         name="diagnostics",

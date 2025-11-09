@@ -1,0 +1,10 @@
+# These libraries do not yet publish Python 3.14 wheels on Windows.
+# They will be skipped automatically on 3.14 via environment markers.
+# Last checked: October 27, 2025
+tensorflow==2.20.0; python_version < "3.14"
+pygame==2.6.1; python_version < "3.14"
+
+# These packages now have Python 3.14 support:
+# opencv-python==4.12.0.88 (available)
+# openai==2.6.1 (available)
+# torchtext==0.6.0 (available)

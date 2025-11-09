@@ -59,6 +59,26 @@ Global flags such as `--config`, `--set`, `--adapter`, `--enable-telemetry`,
 `--log-level`, and `--log-format` are available to every command. See
 `agents/cli_adapter.py` for a machine-readable description of the surface area.
 
+## Helpers
+
+Zscripts includes a collection of Python helpers organized by domain for common tasks:
+
+- Image processing (`zscripts.helpers.pillow`)
+- Web crawling (`zscripts.helpers.web_crawl`)
+- Data manipulation (`zscripts.helpers.pandas`)
+- And more
+
+Install helpers extras: `pip install .[helpers]` or `pip install .[helpers-web]` for web-related.
+
+Use the registry system to call helpers by tag:
+
+```python
+from zscripts.helpers.registry import call
+
+# Add watermark to image
+call("pillow.add_watermark", input_path="img.png", output_path="out.png", text="Demo")
+```
+
 ## Repository Layout
 
 The root directory intentionally stays small. Consult the README in each folder
@@ -74,7 +94,7 @@ for deeper context.
 - `scripts/` – Developer utilities for scaffolding, diagnostics, and releases.
 - `tests/` – Pytest suite mirroring the runtime modules.
 - `zscripts/` – Core package containing the CLI, runtime services, extensions,
-  and observability infrastructure.
+  and observability infrastructure. Includes `helpers/` for domain-specific Python utilities.
 
 Additional governance documents live at the root:
 
@@ -90,7 +110,7 @@ Create a virtual environment and install the optional tooling extras:
 python -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
-pip install .[dev]
+pip install .[dev,helpers]  # Add helpers for full functionality
 ```
 
 Execute the full quality gate with:

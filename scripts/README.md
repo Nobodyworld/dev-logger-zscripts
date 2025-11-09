@@ -1,15 +1,18 @@
-# Automation Scripts
+# Scripts
 
-Utility scripts that support development, release automation, and quality
-reporting live in this directory. They are safe to call from CI or local
-environments and honour the configuration defaults documented in `README.md`.
+Automation entry points that support development and CI workflows live here.
+These utilities are designed to be invoked through `python scripts/tasks.py` but
+can also be executed directly when necessary.
 
-Notable entries:
+## Key Tools
 
-* `dev_start.py` bootstraps local development with telemetry disabled.
-* `collect_quality_metrics.py` analyses code complexity, dependency health, and
-  CLI responsiveness, emitting JSON metrics suitable for dashboards.
-* `tag_release.py` bumps the project version in `pyproject.toml` and optionally
-  creates a git tag.
-* `scaffold_module.py` generates extension or health-check skeletons compliant
-  with the guidance in `docs/guides/`.
+- `tasks.py` — consolidated task runner providing linting, typing, testing, and
+  dependency utilities.
+- `quality_gate.py` — orchestrates the checks that run in CI (`ruff`, `mypy`,
+  `pytest`, and optional security scanners).
+- `no_binaries.py` — guards against committing binary artefacts.
+- `trace_coverage_summary.py` — compiles coverage artefacts into
+  `artifacts/coverage/`.
+
+If a script requires configuration, document it in `configs/README.md` and link
+the relevant section from the top-level `README.md`.

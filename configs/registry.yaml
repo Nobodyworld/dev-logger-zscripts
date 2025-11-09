@@ -1,0 +1,13 @@
+html_ops.listify: zscripts.helpers.web_crawl.html_ops:listify_numbered_paragraphs
+html_ops.section: zscripts.helpers.web_crawl.html_ops:section_by_h2
+html_ops.bold_prefix: zscripts.helpers.web_crawl.html_ops:bold_li_prefix_before_colon
+pillow.add_watermark: zscripts.helpers.pillow.add_watermark:add_watermark
+pillow.resize_by_ratio: zscripts.helpers.pillow.ratio_image_2:resize_images_by_ratio
+pillow.resize_by_aspect: zscripts.helpers.pillow.ratio_image_2:resize_images_by_aspect_ratio
+pandas.concat_csvs: zscripts.helpers.pandas.concat_csvs:consolidate_files
+pandas.excel_to_json_posts: zscripts.helpers.pandas.excel_to_json_posts:process_excel_file
+numpy.normalize_columns: zscripts.helpers.numpy.array_utils:normalize_columns
+numpy.rolling_window: zscripts.helpers.numpy.array_utils:rolling_window
+numpy.batched: zscripts.helpers.numpy.array_utils:batched
+requests.fetch_json: zscripts.helpers.requests.http:fetch_json
+requests.retrying_session: zscripts.helpers.requests.http:create_retrying_session

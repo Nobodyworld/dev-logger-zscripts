@@ -19,6 +19,35 @@ dev = [
     "bandit>=1.7.10",
     "coverage[toml]>=7.6.0",
 ]
+helpers = [
+    "beautifulsoup4>=4.14.2",
+    "img2pdf>=0.6.1",
+    "lxml>=6.0.2",
+    "matplotlib>=3.10.7",
+    "nltk>=3.9.2",
+    "numpy>=2.3.4",
+    "openpyxl>=3.1.5",
+    "pandas>=2.3.3",
+    "pikepdf>=10.0.0",
+    "pillow>=12.0.0",
+    "python-dotenv>=1.2.1",
+    "requests>=2.32.5",
+    "tqdm>=4.67.1",
+]
+helpers-web = [
+    "google-api-python-client>=2.186.0",
+    "google-auth-oauthlib>=1.2.3",
+    "google-auth>=2.42.1",
+]
+helpers-ml = [
+    "scikit-learn>=1.7.2",
+    "tiktoken>=0.12.0",
+    "torch>=2.9.0",
+]
+helpers-optional = [
+    "tensorflow>=2.20.0; python_version < '3.14'",
+    "pygame>=2.6.1; python_version < '3.14'",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

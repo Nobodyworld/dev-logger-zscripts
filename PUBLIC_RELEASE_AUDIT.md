@@ -114,20 +114,39 @@ Potential blockers for next phases:
 ## Next-Phase Remediation Plan
 
 1. Phase 2 (CI/build integrity)
+
 - Run local quality/security truth set and tighten mandatory checks.
 
-2. Phase 3 (critical fixes)
+1. Phase 3 (critical fixes)
+
 - Apply repo-specific corrective work:
   - strict quality tools and scans
   - narrow core log processing scope where needed
   - adapter/redaction-order verification
   - packaged zipapp validation
 
-3. Phase 4 (employer-facing docs)
+1. Phase 4 (employer-facing docs)
+
 - Update docs to classify behavior as Verified, Experimental, Partial, Planned.
 
-4. Phase 5 (clean-clone validation)
+1. Phase 5 (clean-clone validation)
+
 - Execute documented process in clean clone and record objective outcomes.
+
+## Follow-Up Update (2026-06-27)
+
+Completed remediation work from phases 2-5:
+
+- CI now enforces strict tools and scans directly in workflow steps
+  (ruff format check, ruff lint, mypy, bandit, pip-audit, binary-file scan, pytest).
+- Package metadata now reflects the structured log ETL product identity and
+  includes an installed `zscripts` console command.
+- Core log collection scope was narrowed to log-like input artifacts when using
+  `--input` (`.log`, `.txt`, `.out`, `.json`, `.jsonl`).
+- Tests now verify adapter inventory, redaction ordering, and packaged zipapp
+  runtime execution.
+- Documentation now includes a log ETL case study, schema mapping walkthrough,
+  and clean-clone release validation record.
 
 ## Commands Executed During Audit
 

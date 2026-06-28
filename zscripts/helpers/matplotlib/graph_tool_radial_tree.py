@@ -1,6 +1,5 @@
 import pandas as pd
 from graph_tool.all import Graph, graph_draw, radial_tree_layout  # noqa: F401
-
 from helpers.utilities.paths import org_path
 
 # Read data from Excel sheet via org_path

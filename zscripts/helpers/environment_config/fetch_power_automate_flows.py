@@ -12,6 +12,7 @@ client_secret = os.getenv("CLIENT_SECRET")
 tenant_id = os.getenv("TENANT_ID")
 organization_uri = os.getenv("ORGANIZATION_URI")  # This is your Organization URI
 environment_id = os.getenv("ENVIRONMENT_ID")
+REQUEST_TIMEOUT = 30
 
 # Define the Azure AD token endpoint
 # TODO - add global path function
@@ -26,7 +27,7 @@ payload = {
 }
 
 # Request an access token
-response = requests.post(token_url, data=payload)
+response = requests.post(token_url, data=payload, timeout=REQUEST_TIMEOUT)
 access_token = response.json().get("access_token")
 
 # Define the Power Automate API endpoint (wrapped for readability)
@@ -47,7 +48,7 @@ headers = {
 }
 
 # Request your flows
-response = requests.get(api_url, headers=headers)
+response = requests.get(api_url, headers=headers, timeout=REQUEST_TIMEOUT)
 
 # Print status code and content of the response
 print("Status Code:", response.status_code)

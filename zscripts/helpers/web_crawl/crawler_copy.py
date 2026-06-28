@@ -18,6 +18,7 @@ from bs4 import BeautifulSoup
 # Regex pattern to match a URL
 # TODO - add global path function
 HTTP_URL_PATTERN = r"^http[s]*://.+"
+REQUEST_TIMEOUT = 20
 
 # Define root domain to crawl
 domain = "lakewoodforestfund.com"
@@ -50,7 +51,9 @@ def get_hyperlinks(url: str) -> List[str]:
     # Try to open the URL and read the HTML
     try:
         # Open the URL and read the HTML
-        with urllib.request.urlopen(url) as response:
+        with urllib.request.urlopen(
+            url, timeout=REQUEST_TIMEOUT
+        ) as response:  # nosec B310
 
             # If the response is not HTML or is a PDF, return an empty list
             content_type = response.info().get("Content-Type")
@@ -158,7 +161,10 @@ def crawl(url: str) -> None:
         ) as f:
 
             # Get the text from the URL using BeautifulSoup
-            soup = BeautifulSoup(requests.get(url, headers=headers).text, "html.parser")
+            soup = BeautifulSoup(
+                requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT).text,
+                "html.parser",
+            )
 
             # Check if the page requires JavaScript to run
             if "You need to enable JavaScript to run this app." in soup.get_text():

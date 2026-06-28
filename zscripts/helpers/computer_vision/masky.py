@@ -1,7 +1,6 @@
 import os
 
 import cv2
-
 from helpers.utilities.paths import org_path
 
 # Set input and output directories via organization storage root

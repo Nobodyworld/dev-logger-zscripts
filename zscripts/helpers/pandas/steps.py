@@ -1,5 +1,6 @@
-import pandas as pd
 from helpers.utilities.paths import org_path
+
+import pandas as pd
 
 # Generating a CSV type log of steps for deploying the system
 # Including steps for SharePoint, Teams, and WordPress setup and integration

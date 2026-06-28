@@ -22,11 +22,15 @@ def build_cli_bundle(output: Path) -> Path:
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmpdir:
         staging_root = Path(tmpdir)
-        for package in ("zscripts", "adapters", "scripts"):
+        for package in ("zscripts", "adapters", "scripts", "schemas"):
             source = PROJECT_ROOT / package
             if not source.exists():
                 raise SystemExit(f"Package directory missing: {source}")
-            shutil.copytree(source, staging_root / package, ignore=shutil.ignore_patterns("__pycache__"))
+            shutil.copytree(
+                source,
+                staging_root / package,
+                ignore=shutil.ignore_patterns("__pycache__"),
+            )
         create_archive(
             source=staging_root,
             target=output,

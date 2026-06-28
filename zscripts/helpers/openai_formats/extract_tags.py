@@ -1,7 +1,6 @@
 import json
 
 from bs4 import BeautifulSoup
-
 from helpers.utilities.paths import org_path
 
 # Define output directory

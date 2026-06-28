@@ -1,8 +1,7 @@
 import os
 
-from PIL import Image
-
 from helpers.utilities.paths import org_path
+from PIL import Image
 
 
 def compress_image(image_path: str, max_file_size: int = 20 * 1024 * 1024) -> None:

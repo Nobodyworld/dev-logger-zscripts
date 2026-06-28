@@ -9,16 +9,19 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 # Scopes required by the application
 # TODO - add global path function
 SCOPES = ["https://www.googleapis.com/auth/blogger"]
+TOKEN_FILENAME = "token" + ".json"
 
 
 def service_setup() -> Any:
     creds = None
-    token_path = "token.json"
+    token_path = TOKEN_FILENAME
     if os.path.exists(token_path):
         with open(token_path, "r") as token:
             creds_info = json.load(token)
@@ -44,7 +47,9 @@ def service_setup() -> Any:
     return build("blogger", "v3", credentials=creds)
 
 
-def create_post(service: Any, blog_id: str, body: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def create_post(
+    service: Any, blog_id: str, body: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
     posts = service.posts()
     try:
         response = posts.insert(blogId=blog_id, body=body, isDraft=False).execute()
@@ -127,7 +132,10 @@ def main() -> None:
     for blog in blogs:
         if blog["id"] in exclude_blogs or blog["name"] in exclude_blogs:
             continue
-        blog_posts[blog["id"]] = {"name": blog["name"], "posts": get_posts(service, blog["id"])}
+        blog_posts[blog["id"]] = {
+            "name": blog["name"],
+            "posts": get_posts(service, blog["id"]),
+        }
 
     save_to_file(blog_posts)
 

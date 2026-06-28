@@ -1,9 +1,8 @@
 import os
 import shutil
 
-from PIL import Image
-
 from helpers.utilities.paths import org_path
+from PIL import Image
 
 # Define the new aspect ratios and their recommended resolutions
 aspect_ratios = [

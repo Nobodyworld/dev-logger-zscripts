@@ -42,3 +42,44 @@ The optional `tests` field aggregates test execution details:
 Adapters may include additional metadata relevant to their ecosystem, such as
 toolchain versions or CI run identifiers. Consumers should tolerate unknown
 metadata keys.
+
+## ETL Mapping Example
+
+The toolkit ETL flow is intentionally linear:
+
+1. Extract raw log text from `--input`, `--command`, or STDIN.
+2. Transform text into a `NormalizedLog` through the selected adapter.
+3. Load the transformed payload by validating against `schemas/normalized_log.json`.
+
+Example fragment from a Python run:
+
+```text
+META tool=pytest ecosystem=python command="pytest -q" status=failed summary="1 failed"
+ERROR message="AssertionError" file="tests/test_api.py" line=42
+TESTS passed=19 failed=1 skipped=0 duration=7.53
+```
+
+Maps to this normalized structure:
+
+```json
+{
+  "tool": "pytest",
+  "ecosystem": "python",
+  "command": "pytest -q",
+  "status": "failed",
+  "summary": "1 failed",
+  "errors": [
+    {
+      "message": "AssertionError",
+      "file": "tests/test_api.py",
+      "line": 42
+    }
+  ],
+  "tests": {
+    "passed": 19,
+    "failed": 1,
+    "skipped": 0,
+    "duration": 7.53
+  }
+}
+```

@@ -3,7 +3,6 @@ from collections import defaultdict
 from typing import Iterable, List, Tuple
 
 from bs4 import BeautifulSoup
-
 from helpers.utilities.paths import org_path
 
 

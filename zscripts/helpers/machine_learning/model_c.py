@@ -3,6 +3,7 @@ import random
 from typing import Callable, Iterable, List, Sequence, Tuple
 
 import torch
+from helpers.utilities.paths import org_path
 from torch import nn
 from torch.nn import CrossEntropyLoss
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, pad_sequence
@@ -10,8 +11,6 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader, Dataset
 from torchtext.data.utils import get_tokenizer
 from torchtext.vocab import build_vocab_from_iterator
-
-from helpers.utilities.paths import org_path
 
 tokenizer = get_tokenizer("basic_english")
 
@@ -87,7 +86,9 @@ class HtmlDataset(Dataset):
         self.trg_vocab = trg_vocab
         self.tokenizer = tokenizer
 
-    def __getitem__(self, idx: int) -> Tuple[Tuple[List[int], int], Tuple[List[int], int]]:
+    def __getitem__(
+        self, idx: int
+    ) -> Tuple[Tuple[List[int], int], Tuple[List[int], int]]:
         """Return tokenized source/target pair and their lengths."""
         before_html, after_html = self.html_pairs[idx]
         source = [self.src_vocab[token] for token in self.tokenizer(before_html)]
@@ -111,7 +112,9 @@ DEBUG = False
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 dataset = HtmlDataset(html_pairs, src_vocab, trg_vocab, tokenizer)
-data_iterator = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_batch)
+data_iterator = DataLoader(
+    dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_batch
+)
 
 
 class Encoder(nn.Module):
@@ -176,7 +179,9 @@ class Decoder(nn.Module):
 class Seq2Seq(nn.Module):
     """Encoder-decoder wrapper with teacher forcing support."""
 
-    def __init__(self, encoder: Encoder, decoder: Decoder, device: torch.device) -> None:
+    def __init__(
+        self, encoder: Encoder, decoder: Decoder, device: torch.device
+    ) -> None:
         """Wire encoder/decoder modules and training device."""
         super().__init__()
         self.encoder: Encoder = encoder
@@ -202,7 +207,7 @@ class Seq2Seq(nn.Module):
         for t in range(1, trg_len):
             output, hidden, cell = self.decoder(input, hidden, cell)
             outputs[t] = output
-            teacher_force = random.random() < teacher_forcing_ratio
+            teacher_force = random.random() < teacher_forcing_ratio  # nosec B311
             top1 = output.argmax(1)
             input = trg[t] if teacher_force else top1
 
@@ -230,7 +235,7 @@ model = Seq2Seq(encoder, decoder, device).to(device)
 
 try:
     if os.path.exists(model_save_path):
-        model.load_state_dict(torch.load(model_save_path))
+        model.load_state_dict(torch.load(model_save_path))  # nosec B614
         print("Loaded saved model.")
 except Exception as e:
     print(f"Error loading the model: {e}")

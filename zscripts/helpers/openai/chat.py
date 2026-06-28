@@ -6,8 +6,9 @@ from pathlib import Path
 from time import sleep, time
 from typing import Any, Dict, List, Optional, Sequence
 
-import openai
 from helpers.utilities.paths import org_path
+
+import openai
 
 logger = logging.getLogger(__name__)
 

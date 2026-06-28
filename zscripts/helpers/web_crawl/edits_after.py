@@ -1,7 +1,6 @@
 import os
 
 from bs4 import BeautifulSoup, Comment
-
 from helpers.utilities.paths import org_path
 
 directory = str(org_path("project_user", "projects", "format_ai", "data", "after_mst"))

@@ -1,8 +1,7 @@
 import os
 
-from PyPDF2 import PdfReader
-
 from helpers.utilities.paths import org_path
+from PyPDF2 import PdfReader
 
 # Set the path of the directory containing PDF files via org_path
 pdf_dir = str(org_path("project_user", "notes", "data", "wiki", "test"))

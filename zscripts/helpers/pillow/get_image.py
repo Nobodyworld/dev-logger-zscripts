@@ -4,9 +4,8 @@ import re
 from typing import Tuple
 
 import openpyxl
-from PIL import Image, ImageOps
-
 from helpers.utilities.paths import org_path
+from PIL import Image, ImageOps
 
 
 def sanitize_filename(name: str) -> str:

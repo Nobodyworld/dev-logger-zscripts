@@ -1,7 +1,18 @@
 # Changelog
 
 ## [Unreleased]
+
 ### Added
+
+- Public release documentation updates including
+  `docs/operations/PUBLIC_RELEASE_AUDIT.md` and
+  `docs/operations/CLEAN_CLONE_RELEASE_VALIDATION.md`.
+- ETL documentation additions with `docs/guides/LOG_ETL_CASE_STUDY.md` and
+  expanded schema mapping guidance in `docs/schema.md`.
+- Package-level console script entry point `zscripts` via
+  `project.scripts` in `pyproject.toml`.
+- Regression tests for adapter inventory coverage, service redaction ordering,
+  and zipapp runtime validation.
 - Operational baseline and quality audit documentation, zipapp build/deploy
   workflow targets, and agent metadata tests covering the expanded CLI surface.
 - Health check registry (`zscripts/observability/health_checks.py`) wired into
@@ -63,7 +74,9 @@
   fresh.
 - Stewardship artifacts (`STEWARDS_REPORT.md`, `docs/automation/AUTOMATION_ROLES.md`) describing
   Stage 4 audit metrics, agent responsibilities, and future roadmap.
-### Added
+
+### Added (Historical)
+
 - Trace-friendly pytest harness (`scripts/run_pytest_with_trace.py`) and a generated summary stored at `artifacts/quality/coverage_summary.txt`.
 - Expanded configuration loader tests covering JSON files, delimiter handling, and defensive error paths.
 - Architecture, API, workflow, dependency, and final summary documentation under `docs/` to support the Codex refinement chain.
@@ -79,6 +92,14 @@
 - Tests covering output-path validation and agent metadata payloads.
 
 ### Changed
+
+- CI now enforces strict quality/security commands directly in workflow steps:
+  Ruff format check, Ruff lint, mypy, Bandit, pip-audit, binary-file scan,
+  and pytest.
+- Package metadata now reflects product identity as a structured log ETL and
+  reporting toolkit, with project URLs and classifiers.
+- Core service collection now only accepts log-like input artifacts (`.log`,
+  `.txt`, `.out`, `.json`, `.jsonl`) when reading from `--input`.
 - Performed a post-refactor validation pass: added README files to every top-level
   directory, refreshed the root README/SPEC/style guide to reflect the new
   layout, modernised agent CLI metadata, and tightened type hints across
@@ -126,6 +147,7 @@
   mypy gates and remove pytest collection warnings.
 
 ### Fixed
+
 - Prevent empty `--command` sequences from reaching the sandbox, ensuring actionable validation errors reach users.
 - Lint violations throughout the sample assets and wrappers detected by Ruff.
 - Consolidated dependency list with pinned tooling for reproducible local runs.

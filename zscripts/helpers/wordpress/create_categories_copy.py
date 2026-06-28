@@ -10,6 +10,7 @@ load_dotenv()
 wordpress_username = os.getenv("WORDPRESS_USERNAME")
 wordpress_password = os.getenv("WORDPRESS_PASSWORD")
 base_url = "https://yayay.ai/wp-json/wp/v2"
+REQUEST_TIMEOUT = 30
 
 
 def get_wordpress_categories() -> Optional[list[dict[str, Any]]]:
@@ -18,7 +19,10 @@ def get_wordpress_categories() -> Optional[list[dict[str, Any]]]:
     try:
         headers = {"User-Agent": "python-requests/2.x"}
         response = requests.get(
-            url, auth=(wordpress_username or "", wordpress_password or ""), headers=headers
+            url,
+            auth=(wordpress_username or "", wordpress_password or ""),
+            headers=headers,
+            timeout=REQUEST_TIMEOUT,
         )
         if response.status_code == 200:
             return response.json()
@@ -39,23 +43,31 @@ def create_wordpress_category(
     existing_categories = get_wordpress_categories() or []
     for category in existing_categories:
         if category.get("name") == name and category.get("parent") == parent:
-            print(f"Category '{name}' with parent '{parent_name}' (ID: {parent}) already exists.")
+            print(
+                f"Category '{name}' with parent '{parent_name}' (ID: {parent}) already exists."
+            )
             return category
 
     url = f"{base_url}/categories"
     try:
-        headers = {"User-Agent": "python-requests/2.x", "Content-Type": "application/json"}
+        headers = {
+            "User-Agent": "python-requests/2.x",
+            "Content-Type": "application/json",
+        }
         data: Dict[str, Any] = {"name": name, "slug": slug, "parent": parent}
         response = requests.post(
             url,
             auth=(wordpress_username or "", wordpress_password or ""),
             headers=headers,
             json=data,
+            timeout=REQUEST_TIMEOUT,
         )
         if response.status_code == 201:
             return response.json()
         if response.status_code == 400:
-            print(f"Category '{name}' with parent '{parent_name}' (ID: {parent}) already exists.")
+            print(
+                f"Category '{name}' with parent '{parent_name}' (ID: {parent}) already exists."
+            )
             return None
         print(f"Failed to create category '{name}'. Status code:", response.status_code)
         print(response.content)
@@ -88,8 +100,12 @@ def create_categories_recursive(
                 create_wordpress_category(
                     nind_name, slug=nind_slug, parent=category["id"], parent_name=name
                 )
-                print(f"  - Created National Industry category for: {name} (ID: {category['id']})")
-            create_categories_recursive(item_data, parent_id=category["id"], parent_name=name)
+                print(
+                    f"  - Created National Industry category for: {name} (ID: {category['id']})"
+                )
+            create_categories_recursive(
+                item_data, parent_id=category["id"], parent_name=name
+            )
 
 
 def main() -> None:

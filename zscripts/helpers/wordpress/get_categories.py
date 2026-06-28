@@ -11,6 +11,7 @@ load_dotenv()
 wordpress_username = os.getenv("WORDPRESS_USERNAME")
 wordpress_password = os.getenv("WORDPRESS_PASSWORD")
 base_url = "https://yayay.ai/wp-json/wp/v2"
+REQUEST_TIMEOUT = 30
 
 
 def get_wordpress_categories() -> Optional[list[dict[str, Any]]]:
@@ -19,7 +20,10 @@ def get_wordpress_categories() -> Optional[list[dict[str, Any]]]:
     try:
         headers = {"User-Agent": "python-requests/2.x"}
         response = requests.get(
-            url, auth=(wordpress_username or "", wordpress_password or ""), headers=headers
+            url,
+            auth=(wordpress_username or "", wordpress_password or ""),
+            headers=headers,
+            timeout=REQUEST_TIMEOUT,
         )
         if response.status_code == 200:
             return response.json()

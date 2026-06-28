@@ -32,7 +32,7 @@ class FakeAdapter(LogAdapterProtocol):
 
     def collect(self, source: Path, sandbox: SandboxOptions | None = None) -> str:
         self.collected.append(source)
-        return "raw"
+        return f"raw:{source.name}"
 
     def parse(self, raw: str) -> NormalizedLog:
         self.parsed.append(raw)
@@ -160,7 +160,9 @@ def test_parse_logs_validates_output(service_components: dict[str, object]) -> N
     assert validator.validated and validator.validated[0] is normalized
 
 
-def test_collect_logs_runs_command_and_redacts(service_components: dict[str, object]) -> None:
+def test_collect_logs_runs_command_and_redacts(
+    service_components: dict[str, object],
+) -> None:
     service: ToolkitService = service_components["service"]  # type: ignore[assignment]
     sandbox: StubSandboxRunner = service_components["sandbox"]  # type: ignore[assignment]
     redactor: RecordingRedactor = service_components["redactor"]  # type: ignore[assignment]
@@ -178,7 +180,29 @@ def test_collect_logs_runs_command_and_redacts(service_components: dict[str, obj
     assert payload == "redacted:out\nerr"
 
 
-def test_collect_logs_omits_empty_sections(service_components: dict[str, object]) -> None:
+def test_collect_logs_redacts_after_adapter_collection(
+    service_components: dict[str, object],
+) -> None:
+    service: ToolkitService = service_components["service"]  # type: ignore[assignment]
+    adapter: FakeAdapter = service_components["adapter"]  # type: ignore[assignment]
+    redactor: RecordingRedactor = service_components["redactor"]  # type: ignore[assignment]
+
+    payload = service.collect_logs(
+        adapter_key=None,
+        input_path=Path("examples/python/sample.log"),
+        command=None,
+        stdin_fallback=None,
+        redact=True,
+    )
+
+    assert adapter.collected == [Path("examples/python/sample.log")]
+    assert redactor.calls == ["raw:sample.log"]
+    assert payload == "redacted:raw:sample.log"
+
+
+def test_collect_logs_omits_empty_sections(
+    service_components: dict[str, object],
+) -> None:
     service: ToolkitService = service_components["service"]  # type: ignore[assignment]
     sandbox: StubSandboxRunner = service_components["sandbox"]  # type: ignore[assignment]
     redactor: RecordingRedactor = service_components["redactor"]  # type: ignore[assignment]
@@ -198,7 +222,7 @@ def test_collect_logs_omits_empty_sections(service_components: dict[str, object]
 
 
 def test_collect_logs_includes_returncode_on_failure(
-    service_components: dict[str, object]
+    service_components: dict[str, object],
 ) -> None:
     service: ToolkitService = service_components["service"]  # type: ignore[assignment]
     sandbox: StubSandboxRunner = service_components["sandbox"]  # type: ignore[assignment]
@@ -218,7 +242,7 @@ def test_collect_logs_includes_returncode_on_failure(
 
 
 def test_collect_logs_reuses_cached_sandbox_runner(
-    service_components: dict[str, object]
+    service_components: dict[str, object],
 ) -> None:
     service: ToolkitService = service_components["service"]  # type: ignore[assignment]
     sandbox: StubSandboxRunner = service_components["sandbox"]  # type: ignore[assignment]
@@ -256,7 +280,9 @@ def test_collect_logs_requires_a_source(service_components: dict[str, object]) -
         )
 
 
-def test_collect_logs_rejects_empty_stdin(service_components: dict[str, object]) -> None:
+def test_collect_logs_rejects_empty_stdin(
+    service_components: dict[str, object],
+) -> None:
     service: ToolkitService = service_components["service"]  # type: ignore[assignment]
 
     with pytest.raises(ValueError, match="STDIN data was empty"):
@@ -269,8 +295,23 @@ def test_collect_logs_rejects_empty_stdin(service_components: dict[str, object])
         )
 
 
+def test_collect_logs_rejects_non_log_input_files(
+    service_components: dict[str, object],
+) -> None:
+    service: ToolkitService = service_components["service"]  # type: ignore[assignment]
+
+    with pytest.raises(ValueError, match="supported log artifact"):
+        service.collect_logs(
+            adapter_key=None,
+            input_path=Path("src/main.py"),
+            command=None,
+            stdin_fallback=None,
+            redact=False,
+        )
+
+
 def test_collect_logs_rejects_empty_command_sequence(
-    service_components: dict[str, object]
+    service_components: dict[str, object],
 ) -> None:
     service: ToolkitService = service_components["service"]  # type: ignore[assignment]
 
@@ -284,7 +325,9 @@ def test_collect_logs_rejects_empty_command_sequence(
         )
 
 
-def test_guardrails_snapshot_reflects_sandbox_options(service_components: dict[str, object]) -> None:
+def test_guardrails_snapshot_reflects_sandbox_options(
+    service_components: dict[str, object],
+) -> None:
     service: ToolkitService = service_components["service"]  # type: ignore[assignment]
     snapshot = service.guardrails_snapshot()
 
@@ -308,7 +351,9 @@ def test_explain_logs_includes_metadata(service_components: dict[str, object]) -
     assert "Metadata:\n  - key: value" in explanation
 
 
-def test_summarize_logs_resolves_adapter_once(service_components: dict[str, object]) -> None:
+def test_summarize_logs_resolves_adapter_once(
+    service_components: dict[str, object],
+) -> None:
     service: ToolkitService = service_components["service"]  # type: ignore[assignment]
     registry: SingleAdapterRegistry = service_components["registry"]  # type: ignore[assignment]
     adapter: FakeAdapter = service_components["adapter"]  # type: ignore[assignment]
@@ -320,7 +365,9 @@ def test_summarize_logs_resolves_adapter_once(service_components: dict[str, obje
     assert registry.resolutions == [adapter.identifier]
 
 
-def test_generate_report_combines_artifacts(service_components: dict[str, object]) -> None:
+def test_generate_report_combines_artifacts(
+    service_components: dict[str, object],
+) -> None:
     service: ToolkitService = service_components["service"]  # type: ignore[assignment]
 
     bundle = service.generate_report(adapter_key=None, raw_text="payload", redact=False)
@@ -333,7 +380,9 @@ def test_generate_report_combines_artifacts(service_components: dict[str, object
     assert bundle.normalized.summary == "all good"
 
 
-def test_generate_report_applies_redaction(service_components: dict[str, object]) -> None:
+def test_generate_report_applies_redaction(
+    service_components: dict[str, object],
+) -> None:
     service: ToolkitService = service_components["service"]  # type: ignore[assignment]
     redactor: RecordingRedactor = service_components["redactor"]  # type: ignore[assignment]
 
@@ -347,7 +396,9 @@ def test_generate_report_applies_redaction(service_components: dict[str, object]
     assert redactor.calls == ["summary", raw_explanation, "payload"]
 
 
-def test_generate_report_marks_error_severity(service_components: dict[str, object]) -> None:
+def test_generate_report_marks_error_severity(
+    service_components: dict[str, object],
+) -> None:
     service: ToolkitService = service_components["service"]  # type: ignore[assignment]
     adapter: FakeAdapter = service_components["adapter"]  # type: ignore[assignment]
 
@@ -366,7 +417,9 @@ def test_generate_report_marks_error_severity(service_components: dict[str, obje
     assert bundle.severity == "error"
 
 
-def test_generate_report_marks_warning_severity(service_components: dict[str, object]) -> None:
+def test_generate_report_marks_warning_severity(
+    service_components: dict[str, object],
+) -> None:
     service: ToolkitService = service_components["service"]  # type: ignore[assignment]
     adapter: FakeAdapter = service_components["adapter"]  # type: ignore[assignment]
 
@@ -385,7 +438,9 @@ def test_generate_report_marks_warning_severity(service_components: dict[str, ob
     assert bundle.severity == "warning"
 
 
-def test_generate_report_marks_ok_when_no_issues(service_components: dict[str, object]) -> None:
+def test_generate_report_marks_ok_when_no_issues(
+    service_components: dict[str, object],
+) -> None:
     service: ToolkitService = service_components["service"]  # type: ignore[assignment]
     adapter: FakeAdapter = service_components["adapter"]  # type: ignore[assignment]
 
@@ -428,5 +483,5 @@ def test_service_operations_emit_metrics_when_telemetry_enabled() -> None:
 
     metrics = telemetry.metrics.collect_prometheus()
     assert "zscripts_operations_total" in metrics
-    assert "component=\"service\"" in metrics
-    assert "operation=\"parse_logs\"" in metrics
+    assert 'component="service"' in metrics
+    assert 'operation="parse_logs"' in metrics

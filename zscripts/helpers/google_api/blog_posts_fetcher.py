@@ -1,6 +1,6 @@
 import json
 import os
-import pickle
+import pickle  # nosec B403
 from typing import Any, Dict, List, Optional
 
 from google.auth.transport.requests import Request
@@ -16,7 +16,7 @@ def service_setup() -> Any:
     creds = None
     if os.path.exists("token.pickle"):
         with open("token.pickle", "rb") as token:
-            creds = pickle.load(token)
+            creds = pickle.load(token)  # nosec B301
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
@@ -32,7 +32,9 @@ def service_setup() -> Any:
         return None
 
 
-def create_post(service: Any, blog_id: str, body: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def create_post(
+    service: Any, blog_id: str, body: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
     posts = service.posts()
     try:
         response = posts.insert(blogId=blog_id, body=body, isDraft=False).execute()
@@ -119,7 +121,10 @@ def main() -> None:
         if blog["id"] in exclude_blogs or blog["name"] in exclude_blogs:
             continue
 
-        blog_posts[blog["id"]] = {"name": blog["name"], "posts": get_posts(service, blog["id"])}
+        blog_posts[blog["id"]] = {
+            "name": blog["name"],
+            "posts": get_posts(service, blog["id"]),
+        }
 
     save_to_file(blog_posts)
 

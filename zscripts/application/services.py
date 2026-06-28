@@ -21,6 +21,14 @@ from zscripts.observability.instrumentation import InstrumentationManager
 from zscripts.observability.telemetry import TelemetryManager
 from zscripts.schemas import NormalizedLog
 
+_ALLOWED_LOG_INPUT_SUFFIXES: tuple[str, ...] = (
+    ".log",
+    ".txt",
+    ".out",
+    ".json",
+    ".jsonl",
+)
+
 
 class ToolkitService:
     """Coordinates adapters, sandboxing, and validation for CLI use cases."""
@@ -49,7 +57,9 @@ class ToolkitService:
         self._telemetry = telemetry
         self._instrumentation = instrumentation
         if self._instrumentation is None and telemetry is not None:
-            self._instrumentation = telemetry.create_instrumentation(component="service")
+            self._instrumentation = telemetry.create_instrumentation(
+                component="service"
+            )
 
     def collect_logs(
         self,
@@ -169,7 +179,9 @@ class ToolkitService:
 
         with self._instrument("guardrails_snapshot", None):
             return {
-                "allowed_paths": [str(path) for path in self._sandbox_options.allowed_paths],
+                "allowed_paths": [
+                    str(path) for path in self._sandbox_options.allowed_paths
+                ],
                 "timeout_seconds": self._sandbox_options.timeout_seconds,
                 "dangerous_mode": self._sandbox_options.dangerous_mode,
             }
@@ -201,7 +213,7 @@ class ToolkitService:
         attributes = {"adapter_filter": adapter_filter or "<any>"}
         with self._instrument("list_examples", attributes):
             examples = self._examples.list_examples(adapter_filter)
-            return [str(path) for path in examples]
+            return [path.as_posix() for path in examples]
 
     def _resolve_adapter(self, adapter_key: str | None) -> LogAdapterProtocol:
         key = adapter_key or self._default_adapter
@@ -254,6 +266,11 @@ class ToolkitService:
         if command is not None:
             return self._run_command(command)
         if input_path:
+            if input_path.suffix.lower() not in _ALLOWED_LOG_INPUT_SUFFIXES:
+                raise ValueError(
+                    "Input path must point to a supported log artifact "
+                    f"({_ALLOWED_LOG_INPUT_SUFFIXES})."
+                )
             return adapter.collect(input_path, self._sandbox_options)
         if stdin_fallback is not None:
             if stdin_fallback.strip():

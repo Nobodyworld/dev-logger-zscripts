@@ -2,9 +2,8 @@ import ast
 import os
 from typing import Set
 
-from stdlib_list import stdlib_list
-
 from helpers.utilities.paths import org_path
+from stdlib_list import stdlib_list
 
 # Define the path to your scripts folder
 scripts_folder = str(org_path("Core", "Command", "Scripts"))

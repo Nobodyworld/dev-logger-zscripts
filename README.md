@@ -21,11 +21,15 @@ aware runtime, and automation hooks for health checks and extension scaffolding.
 ## Quickstart
 
 Run commands from the repository root. The top-level `cli.py` shim simply
-dispatches to `zscripts.cli.main()`.
+dispatches to `zscripts.cli.main()`, and installed environments also expose
+the `zscripts` console command.
 
 ```sh
 # Inspect the active sandbox guardrails
 python cli.py guardrails
+
+# Equivalent installed entry point
+zscripts guardrails
 
 # Collect logs from an external command with redaction enabled
 python cli.py collect --command pytest --redact
@@ -124,6 +128,8 @@ Common individual commands:
 - `ruff check` / `ruff format` – lint and format the Python codebase.
 - `mypy zscripts agents scripts` – static type checks for runtime and automation
   helpers.
+- `bandit -q -r zscripts examples/sample_project` / `pip-audit` – security
+  checks for code and dependencies.
 - `pytest` – run the automated test suite (see `tests/README.md`).
 - `python scripts/collect_quality_metrics.py` – emit complexity and dependency metrics.
 

@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import requests
 from dotenv import load_dotenv
@@ -10,6 +10,7 @@ load_dotenv()
 wordpress_username = os.getenv("WORDPRESS_USERNAME")
 wordpress_password = os.getenv("WORDPRESS_PASSWORD")
 base_url = "https://yayay.ai/wp-json/wp/v2"
+REQUEST_TIMEOUT = 30
 
 
 def get_wordpress_categories() -> Optional[list[dict[str, Any]]]:
@@ -18,10 +19,14 @@ def get_wordpress_categories() -> Optional[list[dict[str, Any]]]:
     try:
         headers = {"User-Agent": "python-requests/2.x"}
         response = requests.get(
-            url, auth=(wordpress_username or "", wordpress_password or ""), headers=headers
+            url,
+            auth=(wordpress_username or "", wordpress_password or ""),
+            headers=headers,
+            timeout=REQUEST_TIMEOUT,
         )
         if response.status_code == 200:
-            return response.json()
+            payload: list[dict[str, Any]] = cast(list[dict[str, Any]], response.json())
+            return payload
         print("Failed to get categories. Status code:", response.status_code)
         return None
     except requests.RequestException as e:
@@ -36,21 +41,28 @@ def create_wordpress_category(
     existing_categories = get_wordpress_categories() or []
     for category in existing_categories:
         if category.get("name") == name and category.get("parent") == parent:
-            print(f"Category '{name}' with parent ID '{parent}' already exists. Skipping.")
+            print(
+                f"Category '{name}' with parent ID '{parent}' already exists. Skipping."
+            )
             return category
 
     url = f"{base_url}/categories"
     try:
-        headers = {"User-Agent": "python-requests/2.x", "Content-Type": "application/json"}
+        headers = {
+            "User-Agent": "python-requests/2.x",
+            "Content-Type": "application/json",
+        }
         data: Dict[str, Any] = {"name": name, "slug": slug, "parent": parent}
         response = requests.post(
             url,
             auth=(wordpress_username or "", wordpress_password or ""),
             headers=headers,
             json=data,
+            timeout=REQUEST_TIMEOUT,
         )
         if response.status_code == 201:
-            return response.json()
+            payload: dict[str, Any] = cast(dict[str, Any], response.json())
+            return payload
         print(f"Failed to create category '{name}'. Status code:", response.status_code)
         return None
     except requests.RequestException as e:

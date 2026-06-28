@@ -115,7 +115,9 @@ class HyperlinkParser(HTMLParser):
         super().__init__()
         self.links: list[str] = []
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:  # noqa: D401
+    def handle_starttag(
+        self, tag: str, attrs: list[tuple[str, str | None]]
+    ) -> None:  # noqa: D401
         """Collect the ``href`` attribute when parsing anchor tags."""
         if tag != "a":
             return
@@ -165,7 +167,9 @@ SleepCallable = Callable[[float], None]
 TextExtractor = Callable[[str], str]
 
 
-def default_fetch(url: str, *, user_agent: str, timeout: float = DEFAULT_TIMEOUT) -> FetchResult:
+def default_fetch(
+    url: str, *, user_agent: str, timeout: float = DEFAULT_TIMEOUT
+) -> FetchResult:
     """Fetch a URL using :mod:`urllib`.
 
     Parameters
@@ -230,7 +234,7 @@ def slugify_url(url: str) -> str:
     parsed = urlparse(url)
     candidate = parsed.path.rsplit("/", 1)[-1] or "index"
     candidate = SAFE_FILENAME.sub("_", candidate)[:80] or "page"
-    digest = hashlib.sha1(url.encode("utf-8")).hexdigest()[:8]
+    digest = hashlib.blake2s(url.encode("utf-8"), digest_size=8).hexdigest()
     return f"{candidate}-{digest}"
 
 
@@ -280,7 +284,9 @@ class RobotsGate:
             try:
                 robots_parser.set_url(robots_url)
                 robots_parser.read()
-            except Exception as exc:  # pragma: no cover - network failures depend on environment
+            except (
+                Exception
+            ) as exc:  # pragma: no cover - network failures depend on environment
                 logger.debug("Failed to read robots.txt for %s: %s", domain, exc)
                 self._cache[domain] = None
             else:
@@ -352,7 +358,10 @@ class Crawler:
         self.retry_base_delay = retry_base_delay
         self.retry_backoff = retry_backoff
         self.retry_jitter = retry_jitter
-        self.crawl_id = crawl_id or hashlib.sha1(self.root_url.encode("utf-8")).hexdigest()[:8]
+        self.crawl_id = (
+            crawl_id
+            or hashlib.blake2s(self.root_url.encode("utf-8"), digest_size=8).hexdigest()
+        )
         self._log_extra = {"crawl_id": self.crawl_id, "root_url": self.root_url}
         self.telemetry = telemetry or NullCrawlerTelemetry()
         self.extensions = ExtensionManager(extensions or [])
@@ -398,7 +407,9 @@ class Crawler:
                 seen.add(url)
 
                 if not self.robots.allows(url):
-                    logger.debug("Skipping disallowed URL %s", url, extra=self._log_extra)
+                    logger.debug(
+                        "Skipping disallowed URL %s", url, extra=self._log_extra
+                    )
                     self.extensions.on_skip(event, "robots")
                     self.health.record_skip(url, "robots")
                     continue
@@ -423,11 +434,15 @@ class Crawler:
                     continue
 
                 text = self.text_extractor(response.content)
-                content_hash = hashlib.sha1(text.encode("utf-8")).hexdigest()
+                content_hash = hashlib.blake2s(
+                    text.encode("utf-8"), digest_size=16
+                ).hexdigest()
                 if self.deduplicate_content and content_hash in self._seen_hashes:
                     reason = "duplicate-content"
                     logger.debug(
-                        "Skipping duplicate content for %s", response.url, extra=self._log_extra
+                        "Skipping duplicate content for %s",
+                        response.url,
+                        extra=self._log_extra,
                     )
                     self.extensions.on_skip(event, reason)
                     self.health.record_skip(response.url, reason)
@@ -515,7 +530,10 @@ class Crawler:
         wait = self.rate_limiter.delay_before_request(url)
         if wait > 0:
             logger.debug(
-                "Rate limiter delaying fetch of %s by %.2fs", url, wait, extra=self._log_extra
+                "Rate limiter delaying fetch of %s by %.2fs",
+                url,
+                wait,
+                extra=self._log_extra,
             )
             self.sleep(wait)
 
@@ -543,11 +561,10 @@ class Crawler:
                         header_value.get("Retry-After") if header_value else None,
                         now=time.time(),
                     )
-                    if (
-                        retry_after_delay is not None
-                        and self.rate_limiter is not None
-                    ):
-                        self.rate_limiter.register_retry_after(event.url, retry_after_delay)
+                    if retry_after_delay is not None and self.rate_limiter is not None:
+                        self.rate_limiter.register_retry_after(
+                            event.url, retry_after_delay
+                        )
                         logger.debug(
                             "Honouring Retry-After %.2fs for %s",
                             retry_after_delay,
@@ -564,13 +581,18 @@ class Crawler:
                 self.extensions.on_retry(event, tries, exc)
                 if attempt >= self.max_retries:
                     logger.error(
-                        "Giving up on %s after %s attempts", event.url, tries, extra=self._log_extra
+                        "Giving up on %s after %s attempts",
+                        event.url,
+                        tries,
+                        extra=self._log_extra,
                     )
                     self.extensions.on_give_up(event, tries, exc)
                     self.health.record_error(event.url, exc)
                     return None
                 sleep_for = delay + (
-                    random.uniform(0, self.retry_jitter) if self.retry_jitter else 0.0
+                    random.uniform(0, self.retry_jitter)  # nosec B311
+                    if self.retry_jitter
+                    else 0.0  # nosec B311
                 )
                 if retry_after_delay is not None:
                     sleep_for = max(sleep_for, retry_after_delay)
@@ -615,7 +637,9 @@ class Crawler:
             self.health.record_error(url, exc)
             return None
         except Exception as exc:  # pragma: no cover - defensive guardrail
-            logger.exception("Unexpected storage failure for %s", url, extra=self._log_extra)
+            logger.exception(
+                "Unexpected storage failure for %s", url, extra=self._log_extra
+            )
             self.telemetry.record_error(url, exc)
             self.health.record_error(url, exc)
             return None

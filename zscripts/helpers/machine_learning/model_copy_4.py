@@ -57,12 +57,16 @@ class HtmlDataPreprocessor:
 class HtmlDataset(Dataset):
     """Dataset producing token index sequences with <sos>/<eos> markers."""
 
-    def __init__(self, html_pairs: Sequence[Tuple[str, str]], token2index: dict[str, int]) -> None:
+    def __init__(
+        self, html_pairs: Sequence[Tuple[str, str]], token2index: dict[str, int]
+    ) -> None:
         """Initialize dataset with pairs and a token-to-index map."""
         self.html_pairs = list(html_pairs)
         self.token2index = token2index
 
-    def __getitem__(self, idx: int) -> Tuple[Tuple[List[int], int], Tuple[List[int], int]]:
+    def __getitem__(
+        self, idx: int
+    ) -> Tuple[Tuple[List[int], int], Tuple[List[int], int]]:
         """Return tokenized (source, target) sequences and their lengths."""
         before_html, after_html = self.html_pairs[idx]
         source = (
@@ -197,7 +201,9 @@ class Seq2Seq(nn.Module):
         batch_size = src.shape[1]
         seq_len = trg.shape[0]
         trg_vocab_size = self.decoder.fc_out.out_features
-        outputs = torch.zeros(seq_len, batch_size, trg_vocab_size, device=Configuration.DEVICE)
+        outputs = torch.zeros(
+            seq_len, batch_size, trg_vocab_size, device=Configuration.DEVICE
+        )
         output, hidden, cell = self.encoder(src, src_len)
         hidden = hidden[:, :batch_size, :]
         cell = cell[:, :batch_size, :]
@@ -206,7 +212,7 @@ class Seq2Seq(nn.Module):
         for t in range(1, seq_len):
             output, hidden, cell = self.decoder(input, hidden, cell)
             outputs[t] = output
-            teacher_force = random.random() < Configuration.TEACHER_FORCING_RATIO
+            teacher_force = random.random() < Configuration.TEACHER_FORCING_RATIO  # nosec B311
             top1 = output.argmax(1)
             input = trg[t, :] if teacher_force else top1
 
@@ -222,7 +228,7 @@ def load_model(input_dim: int, output_dim: int) -> Seq2Seq:
 
     if os.path.exists(Configuration.MODEL_SAVE_PATH):
         try:
-            model.load_state_dict(torch.load(Configuration.MODEL_SAVE_PATH))
+            model.load_state_dict(torch.load(Configuration.MODEL_SAVE_PATH))  # nosec B614
             print("Loaded saved model.")
         except Exception as e:
             print(f"Error loading the model: {e}")
@@ -233,7 +239,9 @@ def load_model(input_dim: int, output_dim: int) -> Seq2Seq:
     return model
 
 
-def train_model(model: Seq2Seq, data_iterator: DataLoader, src_vocab: dict[str, int]) -> None:
+def train_model(
+    model: Seq2Seq, data_iterator: DataLoader, src_vocab: dict[str, int]
+) -> None:
     """Train the model for configured epochs and persist checkpoints."""
     optimizer = Adam(model.parameters())
     PAD_IDX = src_vocab["<pad>"] if "<pad>" in src_vocab else None
@@ -245,7 +253,9 @@ def train_model(model: Seq2Seq, data_iterator: DataLoader, src_vocab: dict[str, 
         model.train()
         epoch_loss = 0
 
-        with tqdm(total=len(data_iterator), desc=f"Epoch {epoch + 1}", unit="batch") as pbar:
+        with tqdm(
+            total=len(data_iterator), desc=f"Epoch {epoch + 1}", unit="batch"
+        ) as pbar:
             for _i, batch in enumerate(data_iterator):
                 src, trg, src_len, trg_len = batch
                 src = src.to(Configuration.DEVICE)

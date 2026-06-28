@@ -1,18 +1,23 @@
 import os
-import urllib.request
+from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 
-from helpers.utilities.paths import org_path
+from zscripts.helpers.utilities.paths import org_path
 
 api_key = os.environ.get("OPENAI_API_KEY", "")
+REQUEST_TIMEOUT = 30
 
 descriptions = ["image variation 1", "image variation 2", "image variation 3"]
 
 for description in descriptions:
     response = requests.post(
         "https://api.openai.com/v1/images/generations",
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
         json={
             "model": "image-alpha-001",
             "prompt": description,
@@ -20,6 +25,7 @@ for description in descriptions:
             "n": 1,
             "response_format": "url",
         },
+        timeout=REQUEST_TIMEOUT,
     )
 
     if response.status_code == 200:
@@ -41,6 +47,11 @@ for description in descriptions:
                     counter += 1
 
             # download the image and save it to the specified file path
-            urllib.request.urlretrieve(image_url, file_path)
+            parsed_url = urlparse(image_url)
+            if parsed_url.scheme not in {"http", "https"}:
+                raise ValueError(f"Unsupported image URL scheme: {parsed_url.scheme}")
+            image_response = requests.get(image_url, timeout=REQUEST_TIMEOUT)
+            image_response.raise_for_status()
+            Path(file_path).write_bytes(image_response.content)
     else:
         print(f"Failed to generate images: {response.text}")

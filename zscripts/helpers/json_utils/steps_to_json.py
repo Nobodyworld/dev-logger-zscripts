@@ -1,8 +1,7 @@
 import json
 
-from steps import steps
-
 from helpers.utilities.paths import org_path
+from steps import steps
 
 # Converting the steps to a JSON format
 json_data = json.dumps(steps, indent=4)

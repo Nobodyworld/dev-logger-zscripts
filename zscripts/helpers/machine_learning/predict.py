@@ -3,11 +3,10 @@ import os
 from typing import List, Optional
 
 import torch
+from helpers.utilities.paths import org_path
 from model_work import Configuration, HtmlDataPreprocessor, HtmlDataset, load_model
 from torch import nn
 from torchtext.vocab import Vocab
-
-from helpers.utilities.paths import org_path
 
 
 def sample_model(

@@ -84,17 +84,25 @@ class HtmlDataset(Dataset):
         self.src_vocab = src_vocab
         self.trg_vocab = trg_vocab
 
-    def __getitem__(self, idx: int) -> Tuple[Tuple[List[int], int], Tuple[List[int], int]]:
+    def __getitem__(
+        self, idx: int
+    ) -> Tuple[Tuple[List[int], int], Tuple[List[int], int]]:
         """Return tokenized source/target sequences and their lengths for index."""
         before_html, after_html = self.html_pairs[idx]
         source = (
             [self.src_vocab["<sos>"]]
-            + [self.src_vocab[token] for token in HtmlDataPreprocessor.TOKENIZER(before_html)]
+            + [
+                self.src_vocab[token]
+                for token in HtmlDataPreprocessor.TOKENIZER(before_html)
+            ]
             + [self.src_vocab["<eos>"]]
         )
         target = (
             [self.trg_vocab["<sos>"]]
-            + [self.trg_vocab[token] for token in HtmlDataPreprocessor.TOKENIZER(after_html)]
+            + [
+                self.trg_vocab[token]
+                for token in HtmlDataPreprocessor.TOKENIZER(after_html)
+            ]
             + [self.trg_vocab["<eos>"]]
         )
         return (source, len(source)), (target, len(target))
@@ -201,7 +209,9 @@ class Seq2Seq(nn.Module):
         batch_size = src.shape[1]
         t_len = trg.shape[0]
         trg_vocab_size = self.decoder.fc_out.out_features
-        outputs = torch.zeros(t_len, batch_size, trg_vocab_size, device=Configuration.DEVICE)
+        outputs = torch.zeros(
+            t_len, batch_size, trg_vocab_size, device=Configuration.DEVICE
+        )
         output, hidden, cell = self.encoder(src, src_len)
         hidden = hidden[:, :batch_size, :]
         cell = cell[:, :batch_size, :]
@@ -213,7 +223,7 @@ class Seq2Seq(nn.Module):
             print("hidden:", hidden)
             print("cell:", cell)
             outputs[t] = output
-            teacher_force = random.random() < Configuration.TEACHER_FORCING_RATIO
+            teacher_force = random.random() < Configuration.TEACHER_FORCING_RATIO  # nosec B311
             top1 = output.argmax(1)
             input = trg[t] if teacher_force else top1
         return outputs
@@ -226,7 +236,7 @@ def load_model(
     if input_dim is None or output_dim is None:
         if os.path.exists(Configuration.MODEL_SAVE_PATH):
             try:
-                checkpoint = torch.load(Configuration.MODEL_SAVE_PATH)
+                checkpoint = torch.load(Configuration.MODEL_SAVE_PATH)  # nosec B614
                 src_vocab = checkpoint["src_vocab"]
                 trg_vocab = checkpoint["trg_vocab"] if not is_eval else None
                 input_dim = len(src_vocab)
@@ -243,7 +253,7 @@ def load_model(
     model = model.to(Configuration.DEVICE)
     if os.path.exists(Configuration.MODEL_SAVE_PATH):
         try:
-            checkpoint = torch.load(Configuration.MODEL_SAVE_PATH)
+            checkpoint = torch.load(Configuration.MODEL_SAVE_PATH)  # nosec B614
             model.load_state_dict(checkpoint["model_state_dict"])
             src_vocab = checkpoint["src_vocab"]
             trg_vocab = checkpoint["trg_vocab"] if not is_eval else None
@@ -270,7 +280,9 @@ def train_model(
         model.train()
         epoch_loss = 0
 
-        with tqdm(total=len(data_iterator), desc=f"Epoch {epoch + 1}", unit="batch") as pbar:
+        with tqdm(
+            total=len(data_iterator), desc=f"Epoch {epoch + 1}", unit="batch"
+        ) as pbar:
             for _, batch in enumerate(data_iterator):
                 src, trg, src_len, trg_len = batch
                 src = src.to(Configuration.DEVICE)

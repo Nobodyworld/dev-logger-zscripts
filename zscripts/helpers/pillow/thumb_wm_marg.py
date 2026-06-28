@@ -1,9 +1,8 @@
 import os
 
-from PIL import Image
-
 from helpers.pillow.add_watermark import add_watermark
 from helpers.utilities.paths import org_path
+from PIL import Image
 
 # Define the watermark text, font, and color
 font_size = 30

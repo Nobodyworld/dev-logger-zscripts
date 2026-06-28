@@ -1,8 +1,9 @@
 ﻿import os
 from typing import List, Optional, Tuple
 
-import pandas as pd
 from helpers.utilities.paths import org_path
+
+import pandas as pd
 
 
 def is_valid_line(line: str) -> bool:

@@ -1,8 +1,7 @@
 import os
 
-from PIL import Image
-
 from helpers.utilities.paths import org_path
+from PIL import Image
 
 # Use org_path for the input directory
 input_dir = str(org_path("projects", "masky", "input"))

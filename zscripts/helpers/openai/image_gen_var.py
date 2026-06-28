@@ -1,11 +1,12 @@
 import os
-import urllib.request
+from urllib.parse import urlparse
 
 import requests
 
-from helpers.utilities.paths import org_path
+from zscripts.helpers.utilities.paths import org_path
 
 api_key = os.environ.get("OPENAI_API_KEY", "")
+REQUEST_TIMEOUT = 30
 
 # Path to the directory containing the image files
 directory_path = str(org_path("Scripts", "image_gen_var"))
@@ -28,6 +29,7 @@ for image_file in image_files:
             "response_format": "url",
             "prompt": prompt,
         },
+        timeout=REQUEST_TIMEOUT,
     )
 
     if response.status_code == 200:
@@ -44,11 +46,19 @@ for image_file in image_files:
             if os.path.exists(file_path):
                 counter = 1
                 while os.path.exists(file_path):
-                    file_name = os.path.splitext(image_file)[0] + f"_{i+1}_{counter}.png"
+                    file_name = (
+                        os.path.splitext(image_file)[0] + f"_{i+1}_{counter}.png"
+                    )
                     file_path = os.path.join(base_dir, file_name)
                     counter += 1
 
             # download the image and save it to the specified file path
-            urllib.request.urlretrieve(image_url, file_path)
+            parsed_url = urlparse(image_url)
+            if parsed_url.scheme not in {"http", "https"}:
+                raise ValueError(f"Unsupported image URL scheme: {parsed_url.scheme}")
+            image_response = requests.get(image_url, timeout=REQUEST_TIMEOUT)
+            image_response.raise_for_status()
+            with open(file_path, "wb") as file:
+                file.write(image_response.content)
     else:
         print(f"Failed to generate images for {image_file}: {response.text}")

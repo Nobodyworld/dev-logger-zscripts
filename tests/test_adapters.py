@@ -13,11 +13,25 @@ from adapters import available_adapters, get_adapter
 from zscripts.schemas import load_normalized_schema
 
 try:  # pragma: no cover - optional dependency
-    import jsonschema
+    import jsonschema  # type: ignore[import-untyped]
 except ImportError:  # pragma: no cover - fallback when jsonschema missing
     jsonschema = None
 
 EXAMPLES = Path("examples")
+EXPECTED_ADAPTERS = {
+    "python",
+    "javascript",
+    "java",
+    "go",
+    "rust",
+    "dotnet",
+    "docker",
+    "ci",
+}
+
+
+def test_available_adapters_match_supported_set() -> None:
+    assert set(available_adapters()) == EXPECTED_ADAPTERS
 
 
 @pytest.mark.parametrize("adapter_key", available_adapters())
@@ -31,5 +45,8 @@ def test_adapter_parses_example_log(adapter_key: str) -> None:
     assert normalized.tool
     assert normalized.ecosystem
     assert normalized.summary
+    assert adapter.summarize(normalized)
     if jsonschema:
-        jsonschema.validate(instance=normalized.to_dict(), schema=load_normalized_schema())
+        jsonschema.validate(
+            instance=normalized.to_dict(), schema=load_normalized_schema()
+        )

@@ -18,15 +18,13 @@ def _normalize_labels(labels: Mapping[str, str] | None) -> LabelTuple:
 
 
 def _escape_label(value: str) -> str:
-    return value.replace("\\", "\\\\").replace('"', "\\\"")
+    return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def _format_labels(label_items: Sequence[tuple[str, str]]) -> str:
     if not label_items:
         return ""
-    encoded = ",".join(
-        f"{key}=\"{_escape_label(value)}\"" for key, value in label_items
-    )
+    encoded = ",".join(f'{key}="{_escape_label(value)}"' for key, value in label_items)
     return f"{{{encoded}}}"
 
 
@@ -39,7 +37,9 @@ class CounterMetric:
     _values: MutableMapping[LabelTuple, float] = field(default_factory=dict)
     _lock: RLock = field(default_factory=RLock, init=False, repr=False)
 
-    def inc(self, *, amount: float = 1.0, labels: Mapping[str, str] | None = None) -> None:
+    def inc(
+        self, *, amount: float = 1.0, labels: Mapping[str, str] | None = None
+    ) -> None:
         if amount < 0:
             raise ValueError("Counter increments must be non-negative.")
         key = _normalize_labels(labels)
@@ -65,12 +65,16 @@ class GaugeMetric:
         with self._lock:
             self._values[key] = float(value)
 
-    def inc(self, *, amount: float = 1.0, labels: Mapping[str, str] | None = None) -> None:
+    def inc(
+        self, *, amount: float = 1.0, labels: Mapping[str, str] | None = None
+    ) -> None:
         key = _normalize_labels(labels)
         with self._lock:
             self._values[key] = self._values.get(key, 0.0) + amount
 
-    def dec(self, *, amount: float = 1.0, labels: Mapping[str, str] | None = None) -> None:
+    def dec(
+        self, *, amount: float = 1.0, labels: Mapping[str, str] | None = None
+    ) -> None:
         key = _normalize_labels(labels)
         with self._lock:
             self._values[key] = self._values.get(key, 0.0) - amount
@@ -108,7 +112,8 @@ class HistogramMetric:
                     cumulative=[0 for _ in range(len(self.buckets))],
                 )
                 self._values[key] = series
-            assert series is not None
+            if series is None:
+                raise RuntimeError("Histogram series initialization failed")
             for index, upper in enumerate(self.buckets):
                 if value <= upper:
                     series.counts[index] += 1
@@ -194,7 +199,9 @@ class MetricsRegistry:
             for labels, value in gauge_metric.samples():
                 lines.append(f"{gauge_metric.name}{_format_labels(labels)} {value}")
         for histogram_metric in histograms:
-            lines.append(f"# HELP {histogram_metric.name} {histogram_metric.description}")
+            lines.append(
+                f"# HELP {histogram_metric.name} {histogram_metric.description}"
+            )
             lines.append(f"# TYPE {histogram_metric.name} histogram")
             for labels, series in histogram_metric.samples():
                 for index, upper in enumerate(histogram_metric.buckets):

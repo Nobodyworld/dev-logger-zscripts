@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import tomllib
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -28,9 +27,7 @@ def parse_override_pairs(raw: Sequence[str] | None) -> dict[str, str]:
     overrides: dict[str, str] = {}
     for entry in raw:
         if "=" not in entry:
-            raise ConfigurationError(
-                f"Override '{entry}' must be in KEY=VALUE format."
-            )
+            raise ConfigurationError(f"Override '{entry}' must be in KEY=VALUE format.")
         key, value = entry.split("=", 1)
         key = key.strip()
         value = value.strip()
@@ -80,7 +77,9 @@ def _load_file(path: Path) -> Mapping[str, object]:
                 "Unsupported configuration format. Use TOML or JSON files."
             )
     except (json.JSONDecodeError, tomllib.TOMLDecodeError) as exc:
-        raise ConfigurationError(f"Failed to parse configuration file '{path}': {exc}") from exc
+        raise ConfigurationError(
+            f"Failed to parse configuration file '{path}': {exc}"
+        ) from exc
     if not isinstance(data, Mapping):
         raise ConfigurationError(
             f"Configuration file '{path}' must contain a top-level mapping."
@@ -117,9 +116,7 @@ def _apply_config_values(  # noqa: PLR0912 - configuration fan-out requires expl
         return config
     for key, raw in values.items():
         if key not in _KNOWN_KEYS:
-            raise ConfigurationError(
-                f"Unknown configuration keys in {source}: {key}."
-            )
+            raise ConfigurationError(f"Unknown configuration keys in {source}: {key}.")
         if key == "allowed_paths":
             config.allowed_paths = _coerce_allowed_paths(raw, source)
         elif key == "timeout_seconds":
@@ -127,17 +124,23 @@ def _apply_config_values(  # noqa: PLR0912 - configuration fan-out requires expl
         elif key == "dangerous_mode":
             config.dangerous_mode = _coerce_bool(raw, source, field="dangerous_mode")
         elif key == "default_adapter":
-            config.default_adapter = _coerce_string(raw, source, field="default_adapter")
+            config.default_adapter = _coerce_string(
+                raw, source, field="default_adapter"
+            )
         elif key == "redact_patterns":
             config.redact_patterns = _coerce_patterns(raw, source)
         elif key == "examples_path":
             config.examples_path = _coerce_path(raw, source)
         elif key == "telemetry_enabled":
-            config.telemetry_enabled = _coerce_bool(raw, source, field="telemetry_enabled")
+            config.telemetry_enabled = _coerce_bool(
+                raw, source, field="telemetry_enabled"
+            )
         elif key == "telemetry_host":
             config.telemetry_host = _coerce_string(raw, source, field="telemetry_host")
         elif key == "telemetry_port":
-            config.telemetry_port = _coerce_positive_int(raw, source, field="telemetry_port")
+            config.telemetry_port = _coerce_positive_int(
+                raw, source, field="telemetry_port"
+            )
         elif key == "log_level":
             config.log_level = _coerce_string(raw, source, field="log_level").upper()
         elif key == "log_format":
@@ -168,11 +171,7 @@ def _coerce_allowed_paths(value: object, source: str) -> tuple[Path, ...]:
             raise ConfigurationError(
                 f"allowed_paths in {source} must contain at least one path."
             )
-        separators = {os.pathsep, ";", ","}
-        tokens: list[str] = [text]
-        for sep in separators:
-            tokens = [part for token in tokens for part in token.split(sep)]
-        paths = [token for token in (token.strip() for token in tokens) if token]
+        paths = _split_allowed_paths(text)
     else:
         raise ConfigurationError(
             f"allowed_paths in {source} must be a string or list of strings."
@@ -182,6 +181,34 @@ def _coerce_allowed_paths(value: object, source: str) -> tuple[Path, ...]:
             f"allowed_paths in {source} must contain at least one path."
         )
     return tuple(Path(item).expanduser() for item in paths)
+
+
+def _split_allowed_paths(text: str) -> list[str]:
+    tokens: list[str] = []
+    current: list[str] = []
+
+    def _flush() -> None:
+        candidate = "".join(current).strip()
+        if candidate:
+            tokens.append(candidate)
+        current.clear()
+
+    for index, char in enumerate(text):
+        if char in {";", ","}:
+            _flush()
+            continue
+        if char == ":":
+            # Preserve Windows drive prefixes such as C:\ or D:/.
+            next_char = text[index + 1] if index + 1 < len(text) else ""
+            if len(current) == 1 and current[0].isalpha() and next_char in {"\\", "/"}:
+                current.append(char)
+            else:
+                _flush()
+            continue
+        current.append(char)
+
+    _flush()
+    return tokens
 
 
 def _coerce_patterns(value: object, source: str) -> tuple[str, ...]:
@@ -211,18 +238,14 @@ def _coerce_bool(value: object, source: str, *, field: str) -> bool:
             return False
         if numeric == 1:
             return True
-        raise ConfigurationError(
-            f"{field} in {source} must be true/false or 0/1."
-        )
+        raise ConfigurationError(f"{field} in {source} must be true/false or 0/1.")
     if isinstance(value, str):
         normalized = value.strip().lower()
         if normalized in _STR_TRUE:
             return True
         if normalized in _STR_FALSE:
             return False
-        raise ConfigurationError(
-            f"{field} in {source} must be a boolean-like string."
-        )
+        raise ConfigurationError(f"{field} in {source} must be a boolean-like string.")
     raise ConfigurationError(
         f"{field} in {source} must be a boolean or boolean-like value."
     )
@@ -288,15 +311,21 @@ def _coerce_positive_int(value: object, source: str, *, field: str) -> int:
     return candidate
 
 
-def _coerce_string_sequence(value: object, source: str, *, field: str) -> tuple[str, ...]:
+def _coerce_string_sequence(
+    value: object, source: str, *, field: str
+) -> tuple[str, ...]:
     items: list[str]
     if isinstance(value, list | tuple):
         items = [str(item).strip() for item in value if str(item).strip()]
     elif isinstance(value, str):
         normalized = value.replace("\r", "\n").replace(";", "\n").replace(",", "\n")
-        items = [segment.strip() for segment in normalized.split("\n") if segment.strip()]
+        items = [
+            segment.strip() for segment in normalized.split("\n") if segment.strip()
+        ]
     else:
-        raise ConfigurationError(f"{field} in {source} must be a string or list of strings.")
+        raise ConfigurationError(
+            f"{field} in {source} must be a string or list of strings."
+        )
     return tuple(items)
 
 

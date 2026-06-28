@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import requests
 from dotenv import load_dotenv
@@ -11,6 +11,7 @@ load_dotenv()
 wordpress_username = os.getenv("WORDPRESS_USERNAME")
 wordpress_password = os.getenv("WORDPRESS_PASSWORD")
 base_url = "https://yayay.ai/wp-json/wp/v2"
+REQUEST_TIMEOUT = 30
 
 
 def get_wordpress_posts() -> Optional[list[dict[str, Any]]]:
@@ -19,10 +20,14 @@ def get_wordpress_posts() -> Optional[list[dict[str, Any]]]:
     try:
         headers = {"User-Agent": "python-requests/2.x"}
         response = requests.get(
-            url, auth=(wordpress_username or "", wordpress_password or ""), headers=headers
+            url,
+            auth=(wordpress_username or "", wordpress_password or ""),
+            headers=headers,
+            timeout=REQUEST_TIMEOUT,
         )
         if response.status_code == 200:
-            return response.json()
+            payload: list[dict[str, Any]] = cast(list[dict[str, Any]], response.json())
+            return payload
         print("Failed to get posts. Status code:", response.status_code)
         return None
     except requests.RequestException as e:
@@ -31,12 +36,19 @@ def get_wordpress_posts() -> Optional[list[dict[str, Any]]]:
 
 
 def create_wordpress_post(
-    title: str, content: str, categories: list[str], tags: list[str], status: str = "publish"
+    title: str,
+    content: str,
+    categories: list[str],
+    tags: list[str],
+    status: str = "publish",
 ) -> Optional[dict[str, Any]]:
     """Create a WordPress post with categories/tags; create tags if needed."""
     url = f"{base_url}/posts"
     try:
-        headers = {"User-Agent": "python-requests/2.x", "Content-Type": "application/json"}
+        headers = {
+            "User-Agent": "python-requests/2.x",
+            "Content-Type": "application/json",
+        }
 
         # Get category IDs from category names
         category_ids: list[int] = []
@@ -46,6 +58,7 @@ def create_wordpress_post(
                 category_url,
                 auth=(wordpress_username or "", wordpress_password or ""),
                 headers=headers,
+                timeout=REQUEST_TIMEOUT,
             )
             if category_response.status_code == 200:
                 category_data = category_response.json()
@@ -57,7 +70,10 @@ def create_wordpress_post(
         for tag_name in tags:
             tag_url = f"{base_url}/tags?slug={tag_name}"
             tag_response = requests.get(
-                tag_url, auth=(wordpress_username or "", wordpress_password or ""), headers=headers
+                tag_url,
+                auth=(wordpress_username or "", wordpress_password or ""),
+                headers=headers,
+                timeout=REQUEST_TIMEOUT,
             )
             if tag_response.status_code == 200:
                 tag_data = tag_response.json()
@@ -70,6 +86,7 @@ def create_wordpress_post(
                         auth=(wordpress_username or "", wordpress_password or ""),
                         headers=headers,
                         json=tag_data,
+                        timeout=REQUEST_TIMEOUT,
                     )
                     if tag_create_response.status_code == 201:
                         tag_data = tag_create_response.json()
@@ -88,9 +105,11 @@ def create_wordpress_post(
             auth=(wordpress_username or "", wordpress_password or ""),
             headers=headers,
             json=data,
+            timeout=REQUEST_TIMEOUT,
         )
         if response.status_code == 201:
-            return response.json()
+            payload: dict[str, Any] = cast(dict[str, Any], response.json())
+            return payload
         print("Failed to create post. Status code:", response.status_code)
         return None
     except requests.RequestException as e:

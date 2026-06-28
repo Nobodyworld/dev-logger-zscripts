@@ -5,11 +5,29 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "zscripts"
 version = "0.1.0"
-description = "Toolkit for aggregating and logging application code snippets."
+description = "Structured log collection, normalization, and reporting toolkit."
 readme = "README.md"
 requires-python = ">=3.11"
-authors = [{ name = "Zscripts Maintainers" }]
+authors = [{ name = "dev-logger-zscripts Maintainers" }]
+keywords = ["logs", "etl", "ci", "observability", "tooling"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: System :: Logging",
+]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/Nobodyworld/dev-logger-zscripts"
+Repository = "https://github.com/Nobodyworld/dev-logger-zscripts"
+Issues = "https://github.com/Nobodyworld/dev-logger-zscripts/issues"
+
+[project.scripts]
+zscripts = "zscripts.cli:main"
 
 [project.optional-dependencies]
 dev = [
@@ -17,6 +35,7 @@ dev = [
     "ruff>=0.6.9",
     "mypy>=1.11.2",
     "bandit>=1.7.10",
+    "pip-audit>=2.7.3",
     "coverage[toml]>=7.6.0",
 ]
 helpers = [

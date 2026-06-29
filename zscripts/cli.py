@@ -100,7 +100,7 @@ def _build_main_parser(
     argparse.ArgumentParser, argparse._SubParsersAction[argparse.ArgumentParser]
 ]:
     parser = argparse.ArgumentParser(
-        description="Automate log collection, parsing, reporting, and diagnostics for projects.",
+        description="Cross-language log normalization and diagnostic CLI.",
         parents=[_GLOBAL_PARSER],
     )
     subparsers = parser.add_subparsers(dest="command", required=True)

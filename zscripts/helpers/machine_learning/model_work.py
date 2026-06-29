@@ -223,9 +223,7 @@ class Seq2Seq(nn.Module):
             print("hidden:", hidden)
             print("cell:", cell)
             outputs[t] = output
-            teacher_force = (
-                random.random() < Configuration.TEACHER_FORCING_RATIO
-            )  # nosec B311
+            teacher_force = random.random() < Configuration.TEACHER_FORCING_RATIO  # nosec B311
             top1 = output.argmax(1)
             input = trg[t] if teacher_force else top1
         return outputs

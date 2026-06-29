@@ -1,9 +1,8 @@
-# Zscripts – Structured Log Toolkit
+# Cross-language log normalization and diagnostic CLI
 
-Zscripts collects, consolidates, and analyses project logs so that engineers and
-automation can reason about an entire codebase from a single command-line
-interface. The toolkit ships with adapters for multiple languages, a telemetry-
-aware runtime, and automation hooks for health checks and extension scaffolding.
+Zscripts is a cross-language log normalization and diagnostic CLI. It collects,
+parses, redacts, and reports logs so teams can investigate failures using one
+consistent schema and command surface.
 
 ## Highlights
 
@@ -63,16 +62,28 @@ Global flags such as `--config`, `--set`, `--adapter`, `--enable-telemetry`,
 `--log-level`, and `--log-format` are available to every command. See
 `agents/cli_adapter.py` for a machine-readable description of the surface area.
 
-## Helpers
+## Helpers (Legacy and Optional)
 
-Zscripts includes a collection of Python helpers organized by domain for common tasks:
+The helper collection under `zscripts/helpers` is not part of the strict core
+identity and is now treated as legacy/optional utility code. It remains
+available for compatibility, but the core project scope is adapter-driven log
+normalization and diagnostics.
+
+Helper modules are grouped by domain:
 
 - Image processing (`zscripts.helpers.pillow`)
 - Web crawling (`zscripts.helpers.web_crawl`)
 - Data manipulation (`zscripts.helpers.pandas`)
 - And more
 
-Install helpers extras: `pip install .[helpers]` or `pip install .[helpers-web]` for web-related.
+Install helpers extras only when needed:
+
+- `pip install .[helpers]`
+- `pip install .[helpers-web]`
+- `pip install .[helpers-ml]`
+
+Migration note: helper domains should be moved into a dedicated repository over
+time. Until migration is complete, they are explicitly optional.
 
 Use the registry system to call helpers by tag:
 
@@ -99,6 +110,12 @@ for deeper context.
 - `tests/` – Pytest suite mirroring the runtime modules.
 - `zscripts/` – Core package containing the CLI, runtime services, extensions,
   and observability infrastructure. Includes `helpers/` for domain-specific Python utilities.
+
+Support and usage references:
+
+- Adapter support matrix: `docs/adapters/SUPPORT_MATRIX.md`
+- Raw log to normalized/redacted walkthrough: `docs/guides/RAW_LOG_TO_REDACTED_REPORT.md`
+- GitHub Actions usage examples: `docs/guides/GITHUB_ACTIONS_USAGE.md`
 
 Additional governance documents live at the root:
 
@@ -169,6 +186,7 @@ check provider. Extension and health-check contributions must follow
 - `docs/architecture/ARCHITECTURE.md` – Component relationships, flows, and
   extension guidance.
 - `docs/guides/` – How-to guides for extending adapters and running automation.
+- `docs/helpers/LEGACY_OPTIONAL_HELPERS.md` – legacy helper policy and migration plan.
 - `docs/releases/RELEASE_NOTES.md` – Narrative release history.
 - `SUPPORT.md` / `SECURITY.md` – Support channels and vulnerability reporting.
 

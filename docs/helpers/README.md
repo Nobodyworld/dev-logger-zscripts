@@ -1,1 +1,4 @@
-Helper family notes moved here to keep helpers/ .py-only. Follow docs/references/style.md for contributions.
+Helper family notes moved here to keep helpers/ .py-only.
+
+- Legacy/optional policy and migration direction:
+	`docs/helpers/LEGACY_OPTIONAL_HELPERS.md`

@@ -4,6 +4,10 @@ This package bundles ready-to-use helpers across data processing, APIs, and
 automation domains. Modules are grouped by technology (for example `pandas/`,
 `numpy/`, `web_crawl/`) so they can be consumed independently.
 
+Status: legacy and optional. The strict project identity is
+cross-language log normalization and diagnostics; helper modules are retained
+for backwards compatibility and may move to a dedicated repository.
+
 ## Usage
 
 - Import helpers directly from the corresponding subpackage, e.g.

@@ -1,7 +1,6 @@
 # zscripts Toolkit Documentation
 
-Welcome to the universal build log and LLM operations toolkit. This index
-links to the core documentation required to use and extend the toolkit.
+Cross-language log normalization and diagnostic CLI documentation index.
 
 - [CLI Overview](../README.md)
 - [Architecture Deep-Dive](architecture/ARCHITECTURE.md)
@@ -22,12 +21,16 @@ links to the core documentation required to use and extend the toolkit.
   - [.NET](adapters/dotnet.md)
   - [Docker](adapters/docker.md)
   - [CI Pipelines](adapters/ci.md)
+- [Adapter Support Matrix](adapters/SUPPORT_MATRIX.md)
 - [Guardrails and Redaction](guardrails.md)
 - [Configuration & Overrides](configuration.md)
 - [Reporting Guide](reporting.md)
 - [Log ETL Case Study](guides/LOG_ETL_CASE_STUDY.md)
+- [Raw Log to Normalized and Redacted Report](guides/RAW_LOG_TO_REDACTED_REPORT.md)
+- [GitHub Actions Usage](guides/GITHUB_ACTIONS_USAGE.md)
 - [Public Release Audit](operations/PUBLIC_RELEASE_AUDIT.md)
 - [Clean-Clone Release Validation](operations/CLEAN_CLONE_RELEASE_VALIDATION.md)
 - [Extension Guide](guides/EXTENSION_GUIDE.md)
+- [Legacy and Optional Helpers](helpers/LEGACY_OPTIONAL_HELPERS.md)
 - [Future Roadmap](future_roadmap.md)
 - [Final Refinement Report](final_report.md)

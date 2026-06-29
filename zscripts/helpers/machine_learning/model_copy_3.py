@@ -212,9 +212,7 @@ class Seq2Seq(nn.Module):
         for t in range(1, trg_len):
             output, hidden, cell = self.decoder(input, hidden, cell)
             outputs[t] = output
-            teacher_force = (
-                random.random() < Configuration.TEACHER_FORCING_RATIO
-            )  # nosec B311
+            teacher_force = random.random() < Configuration.TEACHER_FORCING_RATIO  # nosec B311
             top1 = output.argmax(1)
             input = trg[t] if teacher_force else top1
         return outputs
@@ -228,9 +226,7 @@ def load_model(input_dim: int, output_dim: int) -> Seq2Seq:
     model = model.to(Configuration.DEVICE)
     if os.path.exists(Configuration.MODEL_SAVE_PATH):
         try:
-            model.load_state_dict(
-                torch.load(Configuration.MODEL_SAVE_PATH)
-            )  # nosec B614
+            model.load_state_dict(torch.load(Configuration.MODEL_SAVE_PATH))  # nosec B614
             print("Loaded saved model.")
         except Exception as e:
             print(f"Error loading the model: {e}")

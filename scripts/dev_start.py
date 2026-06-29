@@ -49,24 +49,27 @@ def main() -> None:
     QUALITY_DIR.mkdir(parents=True, exist_ok=True)
     summary: dict[str, dict[str, object]] = {}
     coverage_path = shutil.which("coverage")
-    if coverage_path:
-        _run_command((coverage_path, "erase"))
-    else:
-        summary["coverage"] = {"status": "skipped", "reason": "coverage-missing"}
+    if not coverage_path:
+        summary["coverage"] = {"status": "failed", "reason": "coverage-missing"}
+        _write_summary(summary, coverage=None)
+        print("Missing required tool: coverage", file=sys.stderr)
+        sys.exit(1)
+    _run_command((coverage_path, "erase"))
+
     for step in STEPS:
         if step.skip_env and os.environ.get(step.skip_env):
             summary[step.name] = {"status": "skipped"}
             continue
         command = step.command
-        if step.name == "tests" and not coverage_path:
-            command = (sys.executable, "-m", "pytest")
         executable = command[0]
         if shutil.which(executable) is None and not Path(executable).exists():
             summary[step.name] = {
-                "status": "skipped",
+                "status": "failed",
                 "reason": f"{executable}-missing",
             }
-            continue
+            _write_summary(summary, coverage=None)
+            print(f"Missing required tool: {executable}", file=sys.stderr)
+            sys.exit(1)
         start = time.perf_counter()
         result = _run_command(command)
         duration = time.perf_counter() - start
@@ -79,17 +82,14 @@ def main() -> None:
             _write_summary(summary, coverage=None)
             sys.exit(result)
 
-    if coverage_path:
-        coverage_summary = _build_coverage_summary(summary, coverage_path)
-        _write_summary(summary, coverage=coverage_summary)
-        if summary.get("tests", {}).get("status") != "skipped" and coverage_summary["percent"] < COVERAGE_THRESHOLD:
-            print(
-                f"Coverage {coverage_summary['percent']:.1f}% below threshold {COVERAGE_THRESHOLD:.1f}%",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-    else:
-        _write_summary(summary, coverage=None)
+    coverage_summary = _build_coverage_summary(summary, coverage_path)
+    _write_summary(summary, coverage=coverage_summary)
+    if summary.get("tests", {}).get("status") != "skipped" and coverage_summary["percent"] < COVERAGE_THRESHOLD:
+        print(
+            f"Coverage {coverage_summary['percent']:.1f}% below threshold {COVERAGE_THRESHOLD:.1f}%",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 def _build_coverage_summary(summary: dict[str, dict[str, object]], coverage_path: str) -> dict[str, float]:

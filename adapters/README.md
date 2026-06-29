@@ -12,3 +12,6 @@ platform has its own subpackage with adapter implementations and fixtures.
 
 See `docs/INDEX.md` for a full navigation map and `zscripts/infrastructure/adapters.py`
 for the runtime registry that consumes these helpers.
+
+Adapter compatibility, readiness, and sample coverage are published in
+`docs/adapters/SUPPORT_MATRIX.md`.

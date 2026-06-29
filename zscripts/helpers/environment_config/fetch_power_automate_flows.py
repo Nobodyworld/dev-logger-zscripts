@@ -32,8 +32,7 @@ access_token = response.json().get("access_token")
 
 # Define the Power Automate API endpoint (wrapped for readability)
 api_url = (
-    f"{organization_uri}/api/data/v9.2/workflows?"
-    "$filter=(category eq 5 or category eq 6) and statecode eq 1"
+    f"{organization_uri}/api/data/v9.2/workflows?$filter=(category eq 5 or category eq 6) and statecode eq 1"
 )
 
 

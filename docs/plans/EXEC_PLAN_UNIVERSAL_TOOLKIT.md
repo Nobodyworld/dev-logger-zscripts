@@ -1,10 +1,10 @@
-# Refactor zscripts into universal build log and LLM ops toolkit
+# Refactor zscripts into a structured log toolkit
 
 This ExecPlan is a living document. The sections `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work proceeds. Maintain this plan in accordance with `.agent/PLANS.md`.
 
 ## Purpose / Big Picture
 
-We will transform the existing zscripts project into a framework-agnostic toolkit for collecting, normalizing, and summarizing compile, build, and test logs across popular ecosystems. After completion a user can run a single `zscripts` CLI that collects logs from various build systems, parses them through adapters that emit a shared JSON schema, summarizes or explains the results with LLM helper utilities, and enforces safety guardrails such as sandboxed subprocesses and secret redaction. The repo will provide structured docs, examples, and smoke tests so newcomers can integrate the toolkit into their automation or CI.
+We will transform the existing zscripts project into a structured log toolkit for collecting, normalizing, and summarizing compile, build, and test logs across popular ecosystems. After completion a user can run a single `zscripts` CLI that collects logs from various build systems, parses them through adapters that emit a shared JSON schema, summarizes or explains the results, and enforces safety guardrails such as sandboxed subprocesses and secret redaction. The repo will provide structured docs, examples, and smoke tests so newcomers can integrate the toolkit into their automation or CI.
 
 ## Progress
 

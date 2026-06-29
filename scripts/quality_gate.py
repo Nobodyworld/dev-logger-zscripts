@@ -73,9 +73,7 @@ def collect_coverage() -> int:
     minimum = min(module["coverage"] for module in modules)
     print(f"Minimum helpers.web_crawl coverage: {minimum}%")
     if minimum < COVERAGE_THRESHOLD:
-        print(
-            f"Coverage threshold not met: required {COVERAGE_THRESHOLD}%, observed {minimum}%"
-        )
+        print(f"Coverage threshold not met: required {COVERAGE_THRESHOLD}%, observed {minimum}%")
         return 1
     return 0
 
@@ -86,28 +84,27 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     status = 0
-    status |= run_command(
-        [sys.executable, "-m", "ruff", "check", "helpers", "scripts", "tests"]
-    ) or 0
-    status |= run_command(
-        [
-            sys.executable,
-            "-m",
-            "mypy",
-            "helpers/web_crawl/crawler.py",
-            "helpers/web_crawl/extensions.py",
-            "helpers/web_crawl/telemetry.py",
-            "helpers/web_crawl/health.py",
-        ]
-    ) or 0
+    status |= run_command([sys.executable, "-m", "ruff", "check", "helpers", "scripts", "tests"]) or 0
+    status |= (
+        run_command(
+            [
+                sys.executable,
+                "-m",
+                "mypy",
+                "helpers/web_crawl/crawler.py",
+                "helpers/web_crawl/extensions.py",
+                "helpers/web_crawl/telemetry.py",
+                "helpers/web_crawl/health.py",
+            ]
+        )
+        or 0
+    )
     status |= run_command([sys.executable, "-m", "pytest", "-q"]) or 0
     if not args.skip_bandit:
         if importlib.util.find_spec("bandit") is None:
             print("Bandit not installed; skipping security scan")
         else:
-            status |= run_command(
-                [sys.executable, "-m", "bandit", "-q", "-r", "helpers/web_crawl"]
-            ) or 0
+            status |= run_command([sys.executable, "-m", "bandit", "-q", "-r", "helpers/web_crawl"]) or 0
     if status != 0:
         return status
     status |= collect_coverage() or 0
@@ -116,4 +113,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry point
     raise SystemExit(main(sys.argv[1:]))
-

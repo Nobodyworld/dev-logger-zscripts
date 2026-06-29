@@ -28,4 +28,3 @@ def run() -> None:
 if __name__ == "__main__":
     run()
     print("pandas concat_csvs smoke test passed")
-

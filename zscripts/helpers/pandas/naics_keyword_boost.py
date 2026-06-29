@@ -32,7 +32,7 @@ keyword_table = {
         "cabbages",
         "spinach",
         "artichokes",
-        "eggplants" "aubergines",
+        "eggplantsaubergines",
         "tomatoes",
         "garlic",
         "onions",
@@ -189,10 +189,7 @@ keyword_table = {
         "published applications software",
         "feature syndicates (i.e., advice columns, comic, news)",
         "pre-paid calling cards, telecommunications resellers",
-        (
-            "online access service providers, using client-supplied telecommunications "
-            "(e.g., dial-up isps)"
-        ),
+        ("online access service providers, using client-supplied telecommunications (e.g., dial-up isps)"),
         "voip service providers, using client-supplied telecommunications connections",
         "published system software",
         "internet advertising",
@@ -372,9 +369,7 @@ def compute_avg_similarity(matrix: Any) -> Any:
 
 
 # Function to compute similarities within a single system
-def compute_similarities(
-    df: pd.DataFrame, use_all_columns: bool, code: str | None = None
-) -> pd.DataFrame:
+def compute_similarities(df: pd.DataFrame, use_all_columns: bool, code: str | None = None) -> pd.DataFrame:
     """Compute TF–IDF similarities for either all columns or the 'item' column.
 
     Returns the original DataFrame with additional similarity columns.

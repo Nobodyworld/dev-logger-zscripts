@@ -123,9 +123,7 @@ class PrometheusCrawlerTelemetry:
         try:
             from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
         except ImportError as exc:  # pragma: no cover - optional dependency
-            raise RuntimeError(
-                "prometheus_client is required to use PrometheusCrawlerTelemetry"
-            ) from exc
+            raise RuntimeError("prometheus_client is required to use PrometheusCrawlerTelemetry") from exc
 
         if registry is None:
             registry = CollectorRegistry()
@@ -208,9 +206,7 @@ class OpenTelemetryCrawlerTelemetry:
 
     @contextlib.contextmanager
     def _span(self, name: str, **attributes: Any) -> Iterator[None]:
-        with self._tracer.start_as_current_span(
-            name, kind=self._span_kind.INTERNAL, attributes=attributes
-        ):
+        with self._tracer.start_as_current_span(name, kind=self._span_kind.INTERNAL, attributes=attributes):
             yield
 
     def record_queue_depth(self, depth: int) -> None:
@@ -253,4 +249,3 @@ __all__ = [
     "PrometheusCrawlerTelemetry",
     "combine_telemetry",
 ]
-

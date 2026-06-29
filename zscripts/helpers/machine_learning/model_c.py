@@ -86,9 +86,7 @@ class HtmlDataset(Dataset):
         self.trg_vocab = trg_vocab
         self.tokenizer = tokenizer
 
-    def __getitem__(
-        self, idx: int
-    ) -> Tuple[Tuple[List[int], int], Tuple[List[int], int]]:
+    def __getitem__(self, idx: int) -> Tuple[Tuple[List[int], int], Tuple[List[int], int]]:
         """Return tokenized source/target pair and their lengths."""
         before_html, after_html = self.html_pairs[idx]
         source = [self.src_vocab[token] for token in self.tokenizer(before_html)]
@@ -112,17 +110,13 @@ DEBUG = False
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 dataset = HtmlDataset(html_pairs, src_vocab, trg_vocab, tokenizer)
-data_iterator = DataLoader(
-    dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_batch
-)
+data_iterator = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_batch)
 
 
 class Encoder(nn.Module):
     """Token-level LSTM encoder with packing for variable lengths."""
 
-    def __init__(
-        self, input_dim: int, emb_dim: int, hid_dim: int, n_layers: int, dropout: float
-    ) -> None:
+    def __init__(self, input_dim: int, emb_dim: int, hid_dim: int, n_layers: int, dropout: float) -> None:
         """Initialize embeddings, LSTM, and dropout layers for the encoder."""
         super().__init__()
         self.hid_dim = hid_dim
@@ -149,9 +143,7 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     """Token-level LSTM decoder with projection to output vocab."""
 
-    def __init__(
-        self, output_dim: int, emb_dim: int, hid_dim: int, n_layers: int, dropout: float
-    ) -> None:
+    def __init__(self, output_dim: int, emb_dim: int, hid_dim: int, n_layers: int, dropout: float) -> None:
         """Initialize embeddings, LSTM, linear projection, and dropout layers."""
         super().__init__()
         self.output_dim = output_dim
@@ -179,9 +171,7 @@ class Decoder(nn.Module):
 class Seq2Seq(nn.Module):
     """Encoder-decoder wrapper with teacher forcing support."""
 
-    def __init__(
-        self, encoder: Encoder, decoder: Decoder, device: torch.device
-    ) -> None:
+    def __init__(self, encoder: Encoder, decoder: Decoder, device: torch.device) -> None:
         """Wire encoder/decoder modules and training device."""
         super().__init__()
         self.encoder: Encoder = encoder

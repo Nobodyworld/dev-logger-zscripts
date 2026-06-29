@@ -32,4 +32,3 @@ def version(distribution: str | None = None) -> str:
 
 
 __all__ = ["PackageNotFoundError", "distribution_name", "version"]
-

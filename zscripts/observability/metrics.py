@@ -37,9 +37,7 @@ class CounterMetric:
     _values: MutableMapping[LabelTuple, float] = field(default_factory=dict)
     _lock: RLock = field(default_factory=RLock, init=False, repr=False)
 
-    def inc(
-        self, *, amount: float = 1.0, labels: Mapping[str, str] | None = None
-    ) -> None:
+    def inc(self, *, amount: float = 1.0, labels: Mapping[str, str] | None = None) -> None:
         if amount < 0:
             raise ValueError("Counter increments must be non-negative.")
         key = _normalize_labels(labels)
@@ -65,16 +63,12 @@ class GaugeMetric:
         with self._lock:
             self._values[key] = float(value)
 
-    def inc(
-        self, *, amount: float = 1.0, labels: Mapping[str, str] | None = None
-    ) -> None:
+    def inc(self, *, amount: float = 1.0, labels: Mapping[str, str] | None = None) -> None:
         key = _normalize_labels(labels)
         with self._lock:
             self._values[key] = self._values.get(key, 0.0) + amount
 
-    def dec(
-        self, *, amount: float = 1.0, labels: Mapping[str, str] | None = None
-    ) -> None:
+    def dec(self, *, amount: float = 1.0, labels: Mapping[str, str] | None = None) -> None:
         key = _normalize_labels(labels)
         with self._lock:
             self._values[key] = self._values.get(key, 0.0) - amount
@@ -199,9 +193,7 @@ class MetricsRegistry:
             for labels, value in gauge_metric.samples():
                 lines.append(f"{gauge_metric.name}{_format_labels(labels)} {value}")
         for histogram_metric in histograms:
-            lines.append(
-                f"# HELP {histogram_metric.name} {histogram_metric.description}"
-            )
+            lines.append(f"# HELP {histogram_metric.name} {histogram_metric.description}")
             lines.append(f"# TYPE {histogram_metric.name} histogram")
             for labels, series in histogram_metric.samples():
                 for index, upper in enumerate(histogram_metric.buckets):
@@ -214,12 +206,8 @@ class MetricsRegistry:
                 lines.append(
                     f"{histogram_metric.name}_bucket{_format_labels(inf_labels)} {series.total_count}"
                 )
-                lines.append(
-                    f"{histogram_metric.name}_sum{_format_labels(labels)} {series.total_sum}"
-                )
-                lines.append(
-                    f"{histogram_metric.name}_count{_format_labels(labels)} {series.total_count}"
-                )
+                lines.append(f"{histogram_metric.name}_sum{_format_labels(labels)} {series.total_sum}")
+                lines.append(f"{histogram_metric.name}_count{_format_labels(labels)} {series.total_count}")
         return "\n".join(lines) + ("\n" if lines else "")
 
 

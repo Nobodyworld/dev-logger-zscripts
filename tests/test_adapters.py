@@ -47,6 +47,4 @@ def test_adapter_parses_example_log(adapter_key: str) -> None:
     assert normalized.summary
     assert adapter.summarize(normalized)
     if jsonschema:
-        jsonschema.validate(
-            instance=normalized.to_dict(), schema=load_normalized_schema()
-        )
+        jsonschema.validate(instance=normalized.to_dict(), schema=load_normalized_schema())

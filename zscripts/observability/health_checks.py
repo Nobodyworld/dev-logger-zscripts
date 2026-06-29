@@ -18,6 +18,7 @@ class HealthSnapshot(TypedDict):
     summary: dict[str, int]
     checks: dict[str, dict[str, object]]
 
+
 _OK_STATUSES = {"ok", "pass", "ready", "live", "available"}
 _DEGRADED_STATUSES = {"warn", "warning", "degraded", "maintenance"}
 

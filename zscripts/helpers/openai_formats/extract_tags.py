@@ -7,9 +7,7 @@ from helpers.utilities.paths import org_path
 output_dir = str(org_path("Revenue Streams", "Blogs", "format_ai", "text_folder"))
 
 # Load JSON file
-with open(
-    org_path("Revenue Streams", "Blogs", "format_ai", "all_posts.json"), "r", encoding="utf-8"
-) as f:
+with open(org_path("Revenue Streams", "Blogs", "format_ai", "all_posts.json"), "r", encoding="utf-8") as f:
     data = json.load(f)
 
 # Initialize two empty lists to separately store h2 and strong tags

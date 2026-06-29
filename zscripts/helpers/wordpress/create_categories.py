@@ -41,9 +41,7 @@ def create_wordpress_category(
     existing_categories = get_wordpress_categories() or []
     for category in existing_categories:
         if category.get("name") == name and category.get("parent") == parent:
-            print(
-                f"Category '{name}' with parent ID '{parent}' already exists. Skipping."
-            )
+            print(f"Category '{name}' with parent ID '{parent}' already exists. Skipping.")
             return category
 
     url = f"{base_url}/categories"
@@ -70,9 +68,7 @@ def create_wordpress_category(
         return None
 
 
-def create_categories_recursive(
-    data: Dict[str, Dict[str, Any]], parent_id: Optional[int] = None
-) -> None:
+def create_categories_recursive(data: Dict[str, Dict[str, Any]], parent_id: Optional[int] = None) -> None:
     """Recursively create categories from a nested mapping."""
     if not data:
         return None

@@ -35,10 +35,10 @@ for image_file in image_files:
     if response.status_code == 200:
         image_urls = [image["url"] for image in response.json()["data"]]
         for i, image_url in enumerate(image_urls):
-            print(f"Image {i+1} generated successfully: {image_url}")
+            print(f"Image {i + 1} generated successfully: {image_url}")
 
             # construct the file name
-            file_name = os.path.splitext(image_file)[0] + f"_{i+1}.png"
+            file_name = os.path.splitext(image_file)[0] + f"_{i + 1}.png"
             base_dir = org_path("Revenue Streams", "Etsy Shops", "Images (Unedited)")
             file_path = os.path.join(base_dir, file_name)
 
@@ -46,9 +46,7 @@ for image_file in image_files:
             if os.path.exists(file_path):
                 counter = 1
                 while os.path.exists(file_path):
-                    file_name = (
-                        os.path.splitext(image_file)[0] + f"_{i+1}_{counter}.png"
-                    )
+                    file_name = os.path.splitext(image_file)[0] + f"_{i + 1}_{counter}.png"
                     file_path = os.path.join(base_dir, file_name)
                     counter += 1
 

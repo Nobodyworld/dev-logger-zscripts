@@ -6,9 +6,7 @@ import re
 
 from zscripts.schemas import LogIssue, TestCaseResult, TestSummary
 
-_KEY_VALUE_PATTERN = re.compile(
-    r"(?P<key>[A-Za-z0-9_]+)=(\"(?P<quoted>[^\"]+)\"|(?P<bare>[^\s]+))"
-)
+_KEY_VALUE_PATTERN = re.compile(r"(?P<key>[A-Za-z0-9_]+)=(\"(?P<quoted>[^\"]+)\"|(?P<bare>[^\s]+))")
 
 
 def parse_key_value_pairs(text: str) -> dict[str, str]:

@@ -86,9 +86,7 @@ class DirectoryStorage:
         text_path.write_text(document.text, encoding="utf-8")
         metadata = document.to_metadata()
         metadata["text_path"] = str(text_path)
-        metadata_path.write_text(
-            json.dumps(metadata, indent=2, sort_keys=True), encoding="utf-8"
-        )
+        metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True), encoding="utf-8")
 
         if self._index_path is not None:
             serialised = json.dumps(metadata, sort_keys=True)

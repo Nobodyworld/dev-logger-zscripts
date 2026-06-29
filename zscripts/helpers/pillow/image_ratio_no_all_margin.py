@@ -25,9 +25,7 @@ def _add_vertical_margins(image: Image.Image, margin_pixels: int) -> Image.Image
     return canvas
 
 
-def process_folder(
-    source_dir: Path, destination_root: Path, margin_inches: float = MARGIN_INCHES
-) -> None:
+def process_folder(source_dir: Path, destination_root: Path, margin_inches: float = MARGIN_INCHES) -> None:
     """Resize PNGs, adding a uniform vertical margin before scaling."""
     if not source_dir.exists():
         raise FileNotFoundError(f"Input directory not found: {source_dir}")

@@ -218,4 +218,3 @@ __all__.extend(
         "FILE_TYPE_PRESETS",
     ]
 )
-

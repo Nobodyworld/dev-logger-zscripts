@@ -25,9 +25,7 @@ def count_tags(html_files: Iterable[Tuple[str, str]]):
     return dict(tag_count)
 
 
-def find_files_with_any_tags(
-    html_files: Iterable[Tuple[str, str]], tags: Iterable[str]
-) -> List[str]:
+def find_files_with_any_tags(html_files: Iterable[Tuple[str, str]], tags: Iterable[str]) -> List[str]:
     files_with_tags: List[str] = []
     for filename, html in html_files:
         soup = BeautifulSoup(html, "html.parser")

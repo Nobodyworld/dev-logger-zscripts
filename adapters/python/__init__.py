@@ -35,4 +35,3 @@ class PythonAdapter(LogAdapter):
 
 
 ADAPTER = PythonAdapter()
-

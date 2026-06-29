@@ -30,4 +30,3 @@ def run() -> None:
 if __name__ == "__main__":
     run()
     print("pandas excel_to_json_posts smoke test passed")
-

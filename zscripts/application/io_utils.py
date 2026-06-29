@@ -125,4 +125,3 @@ def atomic_write_bytes(path: Path, payload: bytes) -> None:
         open_kwargs={"mode": "wb"},
         write_payload=_writer,
     )
-

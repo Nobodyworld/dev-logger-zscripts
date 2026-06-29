@@ -59,8 +59,7 @@ def _summarize_extensions(
     if isinstance(extensions, ExtensionManager):
         names = extensions.names()
         manifests: dict[str, dict[str, object]] = {
-            name: manifest.to_dict()
-            for name, manifest in extensions.manifests().items()
+            name: manifest.to_dict() for name, manifest in extensions.manifests().items()
         }
         hooks = extensions.hook_summary()
         return {

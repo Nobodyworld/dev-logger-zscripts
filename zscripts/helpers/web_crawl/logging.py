@@ -62,4 +62,3 @@ def configure_structured_logging(level: str = "INFO") -> None:
 
 
 __all__ = ["JsonLogFormatter", "configure_structured_logging"]
-

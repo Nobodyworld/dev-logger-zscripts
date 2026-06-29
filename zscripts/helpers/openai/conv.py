@@ -30,7 +30,6 @@ texts: list[tuple[str, str]] = []
 
 # Get all the text files in the text directory
 for file in os.listdir("text/"):
-
     # Open the file and read the text
     # TODO - add global path function
     with open(os.path.join("text", file), "r", encoding="UTF-8") as f:
@@ -73,7 +72,6 @@ max_tokens = 500
 
 # Function to split the text into chunks of a maximum number of tokens
 def split_into_many(text: str, max_tokens: int = max_tokens) -> list[str]:
-
     # Split the text into sentences
     sentences = text.split(". ")
 
@@ -86,7 +84,6 @@ def split_into_many(text: str, max_tokens: int = max_tokens) -> list[str]:
 
     # Loop through the sentences and tokens joined together in a tuple
     for sentence, token in zip(sentences, n_tokens, strict=False):
-
         # If current sentence would exceed the max tokens, finalize current chunk
         if tokens_so_far + token > max_tokens:
             chunks.append(". ".join(chunk) + ".")
@@ -109,7 +106,6 @@ shortened = []
 
 # Loop through the dataframe
 for row in df.iterrows():
-
     # If the text is None, go to the next row
     if row[1]["text"] is None:
         continue
@@ -138,9 +134,7 @@ df.n_tokens.hist()
 # Please check out our rate limit guide to learn more on how to handle this: https://platform.openai.com/docs/guides/rate-limits
 
 df["embeddings"] = df.text.apply(
-    lambda x: openai.Embedding.create(input=x, engine="text-embedding-ada-002")["data"][0][
-        "embedding"
-    ]
+    lambda x: openai.Embedding.create(input=x, engine="text-embedding-ada-002")["data"][0]["embedding"]
 )
 df.to_csv("processed/embeddings.csv")
 df.head()

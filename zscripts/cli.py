@@ -48,18 +48,14 @@ from zscripts.observability.telemetry import TelemetryManager, TelemetrySettings
 _EXTENSIONS_COMMAND = "ex" + "tensions"
 
 _GLOBAL_PARSER = argparse.ArgumentParser(add_help=False)
-_GLOBAL_PARSER.add_argument(
-    "--config", metavar="PATH", help="Path to a TOML or JSON configuration file."
-)
+_GLOBAL_PARSER.add_argument("--config", metavar="PATH", help="Path to a TOML or JSON configuration file.")
 _GLOBAL_PARSER.add_argument(
     "--set",
     dest="raw_overrides",
     action="append",
     help="Override configuration values using KEY=VALUE pairs (may be repeated).",
 )
-_GLOBAL_PARSER.add_argument(
-    "--adapter", help="Preferred adapter identifier for the current command run."
-)
+_GLOBAL_PARSER.add_argument("--adapter", help="Preferred adapter identifier for the current command run.")
 _GLOBAL_PARSER.add_argument(
     "--enable-telemetry",
     dest="enable_telemetry",
@@ -96,9 +92,7 @@ def _build_main_parser(
     *,
     extensions: ExtensionManager,
     context: ExtensionContext,
-) -> tuple[
-    argparse.ArgumentParser, argparse._SubParsersAction[argparse.ArgumentParser]
-]:
+) -> tuple[argparse.ArgumentParser, argparse._SubParsersAction[argparse.ArgumentParser]]:
     parser = argparse.ArgumentParser(
         description="Cross-language log normalization and diagnostic CLI.",
         parents=[_GLOBAL_PARSER],
@@ -109,9 +103,7 @@ def _build_main_parser(
         "collect",
         help="Collect raw logs from a file, command, or STDIN.",
     )
-    collect_parser.add_argument(
-        "--input", metavar="PATH", help="Path to a log file to collect."
-    )
+    collect_parser.add_argument("--input", metavar="PATH", help="Path to a log file to collect.")
     collect_parser.add_argument(
         "--command",
         nargs="+",
@@ -130,9 +122,7 @@ def _build_main_parser(
         "parse",
         help="Parse logs into the normalized schema and emit JSON.",
     )
-    parse_parser.add_argument(
-        "--input", metavar="PATH", help="Path to a log file to parse."
-    )
+    parse_parser.add_argument("--input", metavar="PATH", help="Path to a log file to parse.")
     parse_parser.add_argument(
         "--command",
         nargs="+",
@@ -151,9 +141,7 @@ def _build_main_parser(
         "report",
         help="Generate a summarized report for build or test logs.",
     )
-    report_parser.add_argument(
-        "--input", metavar="PATH", help="Path to a log file to report on."
-    )
+    report_parser.add_argument("--input", metavar="PATH", help="Path to a log file to report on.")
     report_parser.add_argument(
         "--command",
         nargs="+",
@@ -186,9 +174,7 @@ def _build_main_parser(
         "summarize",
         help="Produce a concise summary for collected logs.",
     )
-    summarize_parser.add_argument(
-        "--input", metavar="PATH", help="Path to a log file to summarize."
-    )
+    summarize_parser.add_argument("--input", metavar="PATH", help="Path to a log file to summarize.")
     summarize_parser.add_argument(
         "--command",
         nargs="+",
@@ -207,9 +193,7 @@ def _build_main_parser(
         "explain",
         help="Generate a detailed explanation for collected logs.",
     )
-    explain_parser.add_argument(
-        "--input", metavar="PATH", help="Path to a log file to explain."
-    )
+    explain_parser.add_argument("--input", metavar="PATH", help="Path to a log file to explain.")
     explain_parser.add_argument(
         "--command",
         nargs="+",
@@ -228,9 +212,7 @@ def _build_main_parser(
         "redact",
         help="Redact sensitive data from log content.",
     )
-    redact_parser.add_argument(
-        "--input", metavar="PATH", help="Path to a log file to redact."
-    )
+    redact_parser.add_argument("--input", metavar="PATH", help="Path to a log file to redact.")
     redact_parser.add_argument(
         "--command",
         nargs="+",
@@ -290,9 +272,7 @@ def _build_main_parser(
         "scaffold",
         help="Create a starter extension module in the target directory.",
     )
-    scaffold_parser.add_argument(
-        "name", help="Module name for the generated extension."
-    )
+    scaffold_parser.add_argument("name", help="Module name for the generated extension.")
     scaffold_parser.add_argument(
         "--directory",
         metavar="PATH",
@@ -307,11 +287,7 @@ def _build_main_parser(
         except Exception:  # pragma: no cover - defensive against misbehaving extensions
             context.logger.exception(
                 "extension.cli.registration_failed",
-                extra={
-                    "extension": getattr(
-                        extension, "name", extension.__class__.__name__
-                    )
-                },
+                extra={"extension": getattr(extension, "name", extension.__class__.__name__)},
             )
 
     return parser, subparsers
@@ -329,9 +305,7 @@ def _compose_config(args: argparse.Namespace) -> ToolkitConfig:
     return config
 
 
-def _create_telemetry(
-    config: ToolkitConfig, enabled: bool | None
-) -> TelemetryManager | None:
+def _create_telemetry(config: ToolkitConfig, enabled: bool | None) -> TelemetryManager | None:
     telemetry_enabled = enabled if enabled is not None else config.telemetry_enabled
     settings = TelemetrySettings(
         enabled=telemetry_enabled,
@@ -361,18 +335,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     telemetry = _create_telemetry(config, global_args.enable_telemetry)
     metrics = telemetry.metrics if telemetry is not None else default_registry
-    cli_instrumentation = InstrumentationManager(
-        telemetry=telemetry, metrics=metrics, component="cli"
-    )
+    cli_instrumentation = InstrumentationManager(telemetry=telemetry, metrics=metrics, component="cli")
     extensions_instrumentation = InstrumentationManager(
         telemetry=telemetry, metrics=metrics, component="extensions"
     )
     hook_registry = ExtensionHookRegistry(extensions_instrumentation)
     adapter_registry = AdapterRegistry()
     extensions_logger = get_logger("extensions")
-    health_registry = (
-        telemetry.health_checks if telemetry is not None else HealthCheckRegistry()
-    )
+    health_registry = telemetry.health_checks if telemetry is not None else HealthCheckRegistry()
     extension_context = ExtensionContext(
         config=clone_config(config),
         adapter_registry=adapter_registry,
@@ -384,9 +354,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     extension_manager = load_extensions(config.extensions, context=extension_context)
 
-    parser, subparsers = _build_main_parser(
-        extensions=extension_manager, context=extension_context
-    )
+    parser, subparsers = _build_main_parser(extensions=extension_manager, context=extension_context)
     command_choices = set(subparsers.choices.keys())
     inferred_command = _infer_command_label(argv, command_choices)
 
@@ -405,9 +373,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if telemetry is not None:
             telemetry.stop()
         counter.inc(labels={"command": inferred_command or "<none>", "status": "error"})
-        histogram.observe(
-            0.0, labels={"command": inferred_command or "<none>", "status": "error"}
-        )
+        histogram.observe(0.0, labels={"command": inferred_command or "<none>", "status": "error"})
         raise
 
     service_instrumentation = InstrumentationManager(
@@ -425,11 +391,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         except Exception:  # pragma: no cover - extension safety net
             extensions_logger.exception(
                 "extension.service_ready.failed",
-                extra={
-                    "extension": getattr(
-                        extension, "name", extension.__class__.__name__
-                    )
-                },
+                extra={"extension": getattr(extension, "name", extension.__class__.__name__)},
             )
     extension_manager.emit("service_ready", service=service, context=extension_context)
 
@@ -466,20 +428,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         status = "error"
         exit_code = 2
         print(exc, file=sys.stderr)
-    except (
-        Exception
-    ):  # pragma: no cover - ensures telemetry cleanup on unexpected errors
+    except Exception:  # pragma: no cover - ensures telemetry cleanup on unexpected errors
         status = "error"
-        runtime.logger.exception(
-            "cli.command.failure", extra={"command": command_label}
-        )
+        runtime.logger.exception("cli.command.failure", extra={"command": command_label})
         raise
     finally:
         duration = time.perf_counter() - start_time
         counter.inc(labels={"command": command_label or "<none>", "status": status})
-        histogram.observe(
-            duration, labels={"command": command_label or "<none>", "status": status}
-        )
+        histogram.observe(duration, labels={"command": command_label or "<none>", "status": status})
         if telemetry is not None:
             telemetry.stop()
 
@@ -522,8 +478,7 @@ def _handler_accepts_service(callback: Callable[..., Any]) -> bool:
     positional = [
         parameter
         for parameter in signature.parameters.values()
-        if parameter.kind
-        in (parameter.POSITIONAL_ONLY, parameter.POSITIONAL_OR_KEYWORD)
+        if parameter.kind in (parameter.POSITIONAL_ONLY, parameter.POSITIONAL_OR_KEYWORD)
     ]
     return len(positional) >= 2
 
@@ -536,16 +491,12 @@ def _handle_collect(args: argparse.Namespace, runtime: RuntimeState) -> int:
 
 def _handle_parse(args: argparse.Namespace, runtime: RuntimeState) -> int:
     raw_text = _collect_raw_logs(args, runtime, redact=False)
-    normalized = runtime.service.parse_logs(
-        adapter_key=runtime.adapter_override, raw_text=raw_text
-    )
+    normalized = runtime.service.parse_logs(adapter_key=runtime.adapter_override, raw_text=raw_text)
     print(json.dumps(normalized.to_dict(), indent=2, sort_keys=True))
     return 0
 
 
-def _handle_guardrails(
-    args: argparse.Namespace, runtime: RuntimeState
-) -> int:  # noqa: ARG001 - interface parity
+def _handle_guardrails(args: argparse.Namespace, runtime: RuntimeState) -> int:  # noqa: ARG001 - interface parity
     snapshot = runtime.service.guardrails_snapshot()
     print(json.dumps(snapshot, indent=2, sort_keys=True))
     return 0
@@ -638,9 +589,7 @@ def _handle_extensions(args: argparse.Namespace, runtime: RuntimeState) -> int:
     for manifest in manifests.values():
         version = manifest.version or "0.0.0"
         capabilities = ", ".join(sorted(manifest.capabilities)) or "-"
-        lines.append(
-            f"{manifest.name} (v{version}) [{manifest.module}] capabilities: {capabilities}"
-        )
+        lines.append(f"{manifest.name} (v{version}) [{manifest.module}] capabilities: {capabilities}")
     print("\n".join(lines) if lines else "No extensions loaded.")
     return 0
 
@@ -668,13 +617,9 @@ def _handle_diagnostics(args: argparse.Namespace, runtime: RuntimeState) -> int:
 def _format_diagnostics_text(snapshot: DiagnosticsSnapshot) -> str:
     payload = snapshot.to_dict()
     telemetry = payload.get("telemetry")
-    telemetry_mapping: Mapping[str, object] | None = (
-        telemetry if isinstance(telemetry, Mapping) else None
-    )
+    telemetry_mapping: Mapping[str, object] | None = telemetry if isinstance(telemetry, Mapping) else None
     extensions = payload.get("extensions")
-    extensions_mapping: Mapping[str, object] | None = (
-        extensions if isinstance(extensions, Mapping) else None
-    )
+    extensions_mapping: Mapping[str, object] | None = extensions if isinstance(extensions, Mapping) else None
     lines = [
         f"Generated: {payload.get('generated_at', 'unknown')}",
         f"Status: {telemetry_mapping.get('status', 'unknown') if telemetry_mapping else 'unknown'}",

@@ -14,9 +14,7 @@ def load_data(excel_file: str) -> Dict[str, Dict[str, str]]:
     return df.set_index("words").to_dict("index")
 
 
-def process_file(
-    input_file: str, words_dict: Dict[str, Dict[str, str]], max_ads: int
-) -> Tuple[str, int]:
+def process_file(input_file: str, words_dict: Dict[str, Dict[str, str]], max_ads: int) -> Tuple[str, int]:
     with open(input_file, "r", encoding="utf-8") as f:
         html = f.read()
 
@@ -29,9 +27,7 @@ def process_file(
         is_lower = keyword.islower()
         # find the keyword in new_word and replace it according to the case
         # TODO - add global path function
-        return re.sub(
-            rf"\b{word_escaped}\b", keyword if is_lower else keyword.title(), new_word, flags=re.I
-        )
+        return re.sub(rf"\b{word_escaped}\b", keyword if is_lower else keyword.title(), new_word, flags=re.I)
 
     for word, data in words_dict.items():
         if ads_count >= max_ads:

@@ -13,17 +13,14 @@ def compare_files(before_folder: str, after_folder: str, output_file: str) -> No
 
     # Open the output file for writing
     with open(output_file, "w", encoding="utf-8") as out:
-
         # Iterate over each file in the before folder
         for before_file in before_files:
             if before_file.endswith(".html"):
-
                 # Construct the matching file name in the after folder
                 after_file = before_file.replace("_before", "_after")
 
                 # Check if the after file exists
                 if after_file in after_files:
-
                     # Read and parse the before file
                     with open(os.path.join(before_folder, before_file), "r", encoding="utf-8") as f:
                         before_html = f.read()

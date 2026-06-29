@@ -141,9 +141,7 @@ def configure_tracing(service_name: str) -> OpenTelemetryCrawlerTelemetry | None
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
     except ImportError:  # pragma: no cover - optional dependency
-        logging.getLogger(__name__).warning(
-            "OpenTelemetry SDK not installed; skipping tracing configuration"
-        )
+        logging.getLogger(__name__).warning("OpenTelemetry SDK not installed; skipping tracing configuration")
         return None
 
     provider = TracerProvider(resource=Resource.create({"service.name": service_name}))
@@ -216,9 +214,7 @@ def main(argv: list[str] | None = None) -> int:
         observability = ObservabilityService(health, metrics_app=metrics_wsgi)
     elif args.health_port is not None:
         health_thread = start_health_server(health, args.health_host, args.health_port)
-        logging.info(
-            "Health endpoint listening on http://%s:%s", args.health_host, args.health_port
-        )
+        logging.info("Health endpoint listening on http://%s:%s", args.health_host, args.health_port)
 
     registry = ExtensionRegistry()
     registry.register("sitemap", SitemapExtension)
@@ -261,27 +257,16 @@ def main(argv: list[str] | None = None) -> int:
         )
         storage_dir = None
 
-    if (
-        args.max_requests_per_second is not None
-        and args.min_request_interval is not None
-    ):
+    if args.max_requests_per_second is not None and args.min_request_interval is not None:
         raise SystemExit("Choose either --max-requests-per-second or --min-request-interval")
 
     rate_limiter = None
     if args.max_requests_per_second is not None:
-        rate_limiter = FixedWindowRateLimiter(
-            requests_per_second=args.max_requests_per_second
-        )
-        logging.info(
-            "Applying rate limit: ≤ %.2f requests/s", args.max_requests_per_second
-        )
+        rate_limiter = FixedWindowRateLimiter(requests_per_second=args.max_requests_per_second)
+        logging.info("Applying rate limit: ≤ %.2f requests/s", args.max_requests_per_second)
     elif args.min_request_interval is not None:
-        rate_limiter = FixedWindowRateLimiter(
-            min_interval=args.min_request_interval
-        )
-        logging.info(
-            "Applying rate limit: ≥ %.2fs between requests", args.min_request_interval
-        )
+        rate_limiter = FixedWindowRateLimiter(min_interval=args.min_request_interval)
+        logging.info("Applying rate limit: ≥ %.2fs between requests", args.min_request_interval)
 
     crawler = Crawler(
         args.root_url,
@@ -304,9 +289,7 @@ def main(argv: list[str] | None = None) -> int:
 
     for extension in extensions:
         if isinstance(extension, SitemapExtension) and args.sitemap_output:
-            args.sitemap_output.write_text(
-                json.dumps(extension.graph, indent=2), encoding="utf-8"
-            )
+            args.sitemap_output.write_text(json.dumps(extension.graph, indent=2), encoding="utf-8")
             logging.info("Site map written to %s", args.sitemap_output)
         elif isinstance(extension, SitemapExtension) and args.sitemap_output is None:
             print(json.dumps(extension.graph, indent=2))
@@ -322,4 +305,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry point
     raise SystemExit(main(sys.argv[1:]))
-

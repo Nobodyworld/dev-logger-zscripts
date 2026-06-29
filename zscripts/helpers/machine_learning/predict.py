@@ -16,9 +16,7 @@ def sample_model(
         model.eval()
 
         tokens = list(HtmlDataPreprocessor.TOKENIZER(text))
-        tokens = (
-            [src_vocab["<sos>"]] + [src_vocab[token] for token in tokens] + [src_vocab["<eos>"]]
-        )
+        tokens = [src_vocab["<sos>"]] + [src_vocab[token] for token in tokens] + [src_vocab["<eos>"]]
         src_tensor = torch.LongTensor(tokens).unsqueeze(1).to(Configuration.DEVICE)
         print("src_tensor:", src_tensor)
         print("src_tensor shape:", src_tensor.shape)
@@ -28,9 +26,7 @@ def sample_model(
         src_tensor = torch.cat(
             (
                 src_tensor,
-                torch.zeros(max_seq_len - len(tokens), 1, dtype=torch.long).to(
-                    Configuration.DEVICE
-                ),
+                torch.zeros(max_seq_len - len(tokens), 1, dtype=torch.long).to(Configuration.DEVICE),
             )
         )
 
@@ -82,9 +78,7 @@ def main() -> None:
         try:
             print("Processing file:", file_path)
             # Sample the model
-            predicted_tokens = sample_model(
-                model, dataset.src_vocab, dataset.trg_vocab, content, max_seq_len
-            )
+            predicted_tokens = sample_model(model, dataset.src_vocab, dataset.trg_vocab, content, max_seq_len)
 
             if predicted_tokens is None:
                 print("Prediction failed for file:", file_path)

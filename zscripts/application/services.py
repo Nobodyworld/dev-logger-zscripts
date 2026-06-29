@@ -57,9 +57,7 @@ class ToolkitService:
         self._telemetry = telemetry
         self._instrumentation = instrumentation
         if self._instrumentation is None and telemetry is not None:
-            self._instrumentation = telemetry.create_instrumentation(
-                component="service"
-            )
+            self._instrumentation = telemetry.create_instrumentation(component="service")
 
     def collect_logs(
         self,
@@ -179,9 +177,7 @@ class ToolkitService:
 
         with self._instrument("guardrails_snapshot", None):
             return {
-                "allowed_paths": [
-                    str(path) for path in self._sandbox_options.allowed_paths
-                ],
+                "allowed_paths": [str(path) for path in self._sandbox_options.allowed_paths],
                 "timeout_seconds": self._sandbox_options.timeout_seconds,
                 "dangerous_mode": self._sandbox_options.dangerous_mode,
             }
@@ -239,9 +235,7 @@ class ToolkitService:
             payload += f"Command exited with {result.returncode}"
         return payload
 
-    def _parse_with_adapter(
-        self, adapter: LogAdapterProtocol, raw_text: str
-    ) -> NormalizedLog:
+    def _parse_with_adapter(self, adapter: LogAdapterProtocol, raw_text: str) -> NormalizedLog:
         """Delegate parsing and ensure the resulting payload is validated."""
 
         normalized = adapter.parse(raw_text)
@@ -268,19 +262,14 @@ class ToolkitService:
         if input_path:
             if input_path.suffix.lower() not in _ALLOWED_LOG_INPUT_SUFFIXES:
                 raise ValueError(
-                    "Input path must point to a supported log artifact "
-                    f"({_ALLOWED_LOG_INPUT_SUFFIXES})."
+                    f"Input path must point to a supported log artifact ({_ALLOWED_LOG_INPUT_SUFFIXES})."
                 )
             return adapter.collect(input_path, self._sandbox_options)
         if stdin_fallback is not None:
             if stdin_fallback.strip():
                 return stdin_fallback
-            raise ValueError(
-                "STDIN data was empty; provide a command or --input path instead."
-            )
-        raise ValueError(
-            "No log source provided. Supply --command, --input, or pipe log data via STDIN."
-        )
+            raise ValueError("STDIN data was empty; provide a command or --input path instead.")
+        raise ValueError("No log source provided. Supply --command, --input, or pipe log data via STDIN.")
 
     def _get_sandbox_runner(self) -> SandboxRunnerProtocol:
         """Instantiate and cache the sandbox runner for reuse."""
@@ -295,15 +284,11 @@ class ToolkitService:
 
         sanitized = tuple(command)
         if not sanitized or not sanitized[0].strip():
-            raise ValueError(
-                "Command must include an executable before passing to the sandbox."
-            )
+            raise ValueError("Command must include an executable before passing to the sandbox.")
         return sanitized
 
     @contextmanager
-    def _instrument(
-        self, operation: str, attributes: Mapping[str, str] | None
-    ) -> Iterator[None]:
+    def _instrument(self, operation: str, attributes: Mapping[str, str] | None) -> Iterator[None]:
         payload = {str(key): str(value) for key, value in (attributes or {}).items()}
         if self._instrumentation is not None:
             with self._instrumentation.operation(

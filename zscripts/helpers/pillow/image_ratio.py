@@ -33,9 +33,7 @@ def process_folder(source_dir: Path, destination_root: Path) -> None:
 
             for profile in DEFAULT_PROFILES:
                 resized = (
-                    _add_vertical_margins(img, int(profile.margin_inches * DPI[0])).resize(
-                        profile.size
-                    )
+                    _add_vertical_margins(img, int(profile.margin_inches * DPI[0])).resize(profile.size)
                     if profile.margin_inches
                     else img.resize(profile.size)
                 )

@@ -44,6 +44,7 @@ _HEALTH_TEMPLATE = Template(
     )
 )
 
+
 def _scaffold_extension(args: argparse.Namespace) -> int:
     target_dir = Path(args.directory).expanduser()
     target_dir.mkdir(parents=True, exist_ok=True)

@@ -39,8 +39,7 @@ def generate_urls_from_file(input_file: str) -> List[str]:
             analysis = analysis.replace("\n", " ")  # Remove newline characters
 
             details = (
-                f"Blog Name: {blog_name} ~ Post Title: {post_title} ~ Labels: {labels} ~ "
-                f"Content: {content}"
+                f"Blog Name: {blog_name} ~ Post Title: {post_title} ~ Labels: {labels} ~ Content: {content}"
             )
             urls.append(f"{details} ~ {url} ~ {ads_str} ~ {analysis}")
 

@@ -35,4 +35,3 @@ class DockerAdapter(LogAdapter):
 
 
 ADAPTER = DockerAdapter()
-

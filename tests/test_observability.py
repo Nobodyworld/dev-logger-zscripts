@@ -26,7 +26,7 @@ def test_metrics_registry_prometheus_format() -> None:
         0.25, labels={"operation": "parse", "status": "success"}
     )
     payload = registry.collect_prometheus()
-    assert "zscripts_requests_total{operation=\"parse\",status=\"success\"} 1.0" in payload
+    assert 'zscripts_requests_total{operation="parse",status="success"} 1.0' in payload
     assert "zscripts_request_duration_seconds_bucket" in payload
 
 
@@ -37,7 +37,7 @@ def test_metrics_registry_gauge_support() -> None:
     gauge.dec(labels={"component": "loader"})
     payload = registry.collect_prometheus()
     assert "# TYPE zscripts_extensions_active gauge" in payload
-    assert "zscripts_extensions_active{component=\"loader\"} 1.0" in payload
+    assert 'zscripts_extensions_active{component="loader"} 1.0' in payload
 
 
 def test_start_span_records_success_and_error_metrics() -> None:
@@ -48,8 +48,8 @@ def test_start_span_records_success_and_error_metrics() -> None:
         with start_span("demo", metrics=registry):
             raise ValueError("boom")
     payload = registry.collect_prometheus()
-    assert "status=\"success\"" in payload
-    assert "status=\"error\"" in payload
+    assert 'status="success"' in payload
+    assert 'status="error"' in payload
 
 
 def test_health_server_serves_health_and_metrics() -> None:
@@ -73,7 +73,7 @@ def test_health_server_serves_health_and_metrics() -> None:
         metrics = request.urlopen(f"http://127.0.0.1:{port}/metrics", timeout=2).read()
         assert b"test_metric" in metrics
         assert b"zscripts_health_http_requests_total" in metrics
-        assert b"endpoint=\"healthz\"" in metrics
+        assert b'endpoint="healthz"' in metrics
         assert b"zscripts_health_http_request_duration_seconds_bucket" in metrics
     finally:
         server.stop()
@@ -89,8 +89,8 @@ def test_instrumentation_manager_tracks_success_and_failure() -> None:
             raise RuntimeError("boom")
     metrics_text = telemetry.metrics.collect_prometheus()
     assert "zscripts_operations_total" in metrics_text
-    assert "operation=\"success\"" in metrics_text
-    assert "operation=\"failure\"" in metrics_text
+    assert 'operation="success"' in metrics_text
+    assert 'operation="failure"' in metrics_text
 
 
 def test_telemetry_manager_starts_health_server() -> None:

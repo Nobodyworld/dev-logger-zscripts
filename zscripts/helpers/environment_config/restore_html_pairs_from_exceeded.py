@@ -16,9 +16,7 @@ def move_files_to_original_folders(folder_path: str, before_folder: str, after_f
 
 
 # Specify the folder paths via org_path
-exceeded_folder = str(
-    org_path("project_user", "projects", "format_ai", "data", "exceeded_max_length")
-)
+exceeded_folder = str(org_path("project_user", "projects", "format_ai", "data", "exceeded_max_length"))
 before_folder = str(org_path("project_user", "projects", "format_ai", "data", "before_mst"))
 after_folder = str(org_path("project_user", "projects", "format_ai", "data", "after_mst"))
 

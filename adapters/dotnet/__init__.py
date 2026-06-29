@@ -35,4 +35,3 @@ class DotNetAdapter(LogAdapter):
 
 
 ADAPTER = DotNetAdapter()
-

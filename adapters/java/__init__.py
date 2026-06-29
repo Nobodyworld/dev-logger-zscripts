@@ -35,4 +35,3 @@ class JavaAdapter(LogAdapter):
 
 
 ADAPTER = JavaAdapter()
-

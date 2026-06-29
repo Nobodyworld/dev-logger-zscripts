@@ -35,4 +35,3 @@ class CIAdapter(LogAdapter):
 
 
 ADAPTER = CIAdapter()
-

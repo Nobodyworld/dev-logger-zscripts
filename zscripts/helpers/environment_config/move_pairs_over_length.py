@@ -21,19 +21,14 @@ def move_files_over_max_length(
         before_file_path = os.path.join(before_folder, before_file)
 
         if os.path.exists(before_file_path) and (
-            check_file_length(after_file_path, max_length)
-            or check_file_length(before_file_path, max_length)
+            check_file_length(after_file_path, max_length) or check_file_length(before_file_path, max_length)
         ):
             shutil.move(after_file_path, os.path.join(dest_folder, after_file))
             shutil.move(before_file_path, os.path.join(dest_folder, before_file))
 
 
-AFTER_FOLDER: Final[str] = str(
-    org_path("project_user", "projects", "format_ai", "data", "after_mst")
-)
-BEFORE_FOLDER: Final[str] = str(
-    org_path("project_user", "projects", "format_ai", "data", "before_mst")
-)
+AFTER_FOLDER: Final[str] = str(org_path("project_user", "projects", "format_ai", "data", "after_mst"))
+BEFORE_FOLDER: Final[str] = str(org_path("project_user", "projects", "format_ai", "data", "before_mst"))
 DEST_FOLDER: Final[str] = str(
     org_path("project_user", "projects", "format_ai", "data", "exceeded_max_length")
 )

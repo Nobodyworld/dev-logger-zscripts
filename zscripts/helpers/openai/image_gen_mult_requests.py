@@ -31,7 +31,7 @@ for description in descriptions:
     if response.status_code == 200:
         image_urls = [image["url"] for image in response.json()["data"]]
         for i, image_url in enumerate(image_urls):
-            print(f"Image {i+1} generated successfully: {image_url}")
+            print(f"Image {i + 1} generated successfully: {image_url}")
 
             # construct the file name
             file_name = description.replace(" ", "_") + ".png"

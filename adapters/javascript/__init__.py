@@ -36,4 +36,3 @@ class JavaScriptAdapter(LogAdapter):
 
 
 ADAPTER = JavaScriptAdapter()
-

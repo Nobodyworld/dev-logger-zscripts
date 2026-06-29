@@ -11,6 +11,9 @@ This guide shows a full pipeline from raw CI-style log text to:
 - Example normalized output: `examples/raw_to_report/normalized.json`
 - Example redacted report: `examples/raw_to_report/redacted_report.md`
 
+`examples/raw_to_report/normalized.json` is an intentionally maintained,
+deterministic example fixture used by documentation and contract tests.
+
 ## CLI Walkthrough
 
 ```sh

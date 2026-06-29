@@ -35,4 +35,3 @@ class RustAdapter(LogAdapter):
 
 
 ADAPTER = RustAdapter()
-

@@ -35,4 +35,3 @@ class GoAdapter(LogAdapter):
 
 
 ADAPTER = GoAdapter()
-

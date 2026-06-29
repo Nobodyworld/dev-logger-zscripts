@@ -1,7 +1,8 @@
 # Adapter Support Matrix
 
-This matrix is the canonical support contract for the core
-cross-language log normalization and diagnostic CLI.
+Zscripts is a structured log collection, normalization, redaction, diagnostics, and reporting toolkit for developers and automation systems.
+
+This matrix is the canonical support contract for adapter coverage.
 
 | Adapter | Identifier | Status | Example Log | Notes |
 | --- | --- | --- | --- | --- |

@@ -53,9 +53,9 @@ def build_json_from_excel(excel_file: str, sheet_name: str) -> None:
             # Append the National Industry under the corresponding Industry
             if "National Industry" not in hierarchy[sector][subsector][industry_group][industry]:
                 hierarchy[sector][subsector][industry_group][industry]["National Industry"] = {}
-            hierarchy[sector][subsector][industry_group][industry]["National Industry"][
-                national_industry
-            ] = {"slug": national_industry_slug}
+            hierarchy[sector][subsector][industry_group][industry]["National Industry"][national_industry] = {
+                "slug": national_industry_slug
+            }
 
     # Convert the hierarchy dictionary to JSON
     json_data = json.dumps(hierarchy, indent=2)

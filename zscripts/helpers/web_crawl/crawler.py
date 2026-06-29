@@ -61,9 +61,7 @@ BeautifulSoupFactory = Callable[..., _BeautifulSoupProtocol]
 if importlib_util.find_spec("bs4") is not None:
     from bs4 import BeautifulSoup as _BeautifulSoupClass
 
-    BeautifulSoup: BeautifulSoupFactory | None = cast(
-        BeautifulSoupFactory, _BeautifulSoupClass
-    )
+    BeautifulSoup: BeautifulSoupFactory | None = cast(BeautifulSoupFactory, _BeautifulSoupClass)
 else:  # pragma: no cover - optional dependency path
     BeautifulSoup = None
 
@@ -115,9 +113,7 @@ class HyperlinkParser(HTMLParser):
         super().__init__()
         self.links: list[str] = []
 
-    def handle_starttag(
-        self, tag: str, attrs: list[tuple[str, str | None]]
-    ) -> None:  # noqa: D401
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:  # noqa: D401
         """Collect the ``href`` attribute when parsing anchor tags."""
         if tag != "a":
             return
@@ -167,9 +163,7 @@ SleepCallable = Callable[[float], None]
 TextExtractor = Callable[[str], str]
 
 
-def default_fetch(
-    url: str, *, user_agent: str, timeout: float = DEFAULT_TIMEOUT
-) -> FetchResult:
+def default_fetch(url: str, *, user_agent: str, timeout: float = DEFAULT_TIMEOUT) -> FetchResult:
     """Fetch a URL using :mod:`urllib`.
 
     Parameters
@@ -284,9 +278,7 @@ class RobotsGate:
             try:
                 robots_parser.set_url(robots_url)
                 robots_parser.read()
-            except (
-                Exception
-            ) as exc:  # pragma: no cover - network failures depend on environment
+            except Exception as exc:  # pragma: no cover - network failures depend on environment
                 logger.debug("Failed to read robots.txt for %s: %s", domain, exc)
                 self._cache[domain] = None
             else:
@@ -358,10 +350,7 @@ class Crawler:
         self.retry_base_delay = retry_base_delay
         self.retry_backoff = retry_backoff
         self.retry_jitter = retry_jitter
-        self.crawl_id = (
-            crawl_id
-            or hashlib.blake2s(self.root_url.encode("utf-8"), digest_size=8).hexdigest()
-        )
+        self.crawl_id = crawl_id or hashlib.blake2s(self.root_url.encode("utf-8"), digest_size=8).hexdigest()
         self._log_extra = {"crawl_id": self.crawl_id, "root_url": self.root_url}
         self.telemetry = telemetry or NullCrawlerTelemetry()
         self.extensions = ExtensionManager(extensions or [])
@@ -407,9 +396,7 @@ class Crawler:
                 seen.add(url)
 
                 if not self.robots.allows(url):
-                    logger.debug(
-                        "Skipping disallowed URL %s", url, extra=self._log_extra
-                    )
+                    logger.debug("Skipping disallowed URL %s", url, extra=self._log_extra)
                     self.extensions.on_skip(event, "robots")
                     self.health.record_skip(url, "robots")
                     continue
@@ -434,9 +421,7 @@ class Crawler:
                     continue
 
                 text = self.text_extractor(response.content)
-                content_hash = hashlib.blake2s(
-                    text.encode("utf-8"), digest_size=16
-                ).hexdigest()
+                content_hash = hashlib.blake2s(text.encode("utf-8"), digest_size=16).hexdigest()
                 if self.deduplicate_content and content_hash in self._seen_hashes:
                     reason = "duplicate-content"
                     logger.debug(
@@ -562,9 +547,7 @@ class Crawler:
                         now=time.time(),
                     )
                     if retry_after_delay is not None and self.rate_limiter is not None:
-                        self.rate_limiter.register_retry_after(
-                            event.url, retry_after_delay
-                        )
+                        self.rate_limiter.register_retry_after(event.url, retry_after_delay)
                         logger.debug(
                             "Honouring Retry-After %.2fs for %s",
                             retry_after_delay,
@@ -637,9 +620,7 @@ class Crawler:
             self.health.record_error(url, exc)
             return None
         except Exception as exc:  # pragma: no cover - defensive guardrail
-            logger.exception(
-                "Unexpected storage failure for %s", url, extra=self._log_extra
-            )
+            logger.exception("Unexpected storage failure for %s", url, extra=self._log_extra)
             self.telemetry.record_error(url, exc)
             self.health.record_error(url, exc)
             return None

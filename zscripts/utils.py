@@ -79,6 +79,7 @@ def file_matches_any_pattern(file_path: Path, patterns: Sequence[str]) -> bool:
             return True
     return False
 
+
 def create_app_logs(
     root_dir: Path,
     log_dir: Path,
@@ -132,7 +133,9 @@ def consolidate_files(
             dirs[:] = [d for d in dirs if not file_matches_any_pattern(Path(root) / d, ignore_patterns)]
             for file in files:
                 file_path = Path(root) / file
-                if Path(file).suffix in file_types and not file_matches_any_pattern(file_path, ignore_patterns):
+                if Path(file).suffix in file_types and not file_matches_any_pattern(
+                    file_path, ignore_patterns
+                ):
                     relative_path = file_path.relative_to(root_dir)
                     log_file.write(f"\n\n# File: {relative_path}\n")
                     with open(file_path, "r", encoding="utf-8") as content_file:
@@ -160,7 +163,8 @@ def create_filtered_tree(
             files = [
                 f
                 for f in files
-                if Path(f).suffix in file_types and not file_matches_any_pattern(Path(root) / f, ignore_patterns)
+                if Path(f).suffix in file_types
+                and not file_matches_any_pattern(Path(root) / f, ignore_patterns)
             ]
 
             if files:
@@ -182,6 +186,7 @@ def process_file(file_path: Path, file_type_key: str, content_dict: MutableMappi
         content = file.read()
     content_dict[file_type_key] += f"\n\n# File: {file_path.relative_to(file_path.parent.parent)}\n{content}"
 
+
 def write_files(content_dict: Mapping[str, str], dest_dir: Path) -> None:
     """Write aggregated ``content_dict`` payloads into ``dest_dir``."""
 
@@ -190,6 +195,7 @@ def write_files(content_dict: Mapping[str, str], dest_dir: Path) -> None:
         with open(dest_file_path, "w", encoding="utf-8") as file:
             file.write(content)
         print(f"Written content to {dest_file_path}")
+
 
 def extract_definitions(file_path: Path, analysis_dir: Path) -> None:
     """Write a summary of definitions discovered in ``file_path`` to ``analysis_dir``."""
@@ -213,4 +219,3 @@ def extract_definitions(file_path: Path, analysis_dir: Path) -> None:
             analysis_file.writelines(f"{func}\n" for func in functions)
 
     print(f"Analysis for {base_name} written to {analysis_file_name}")
-

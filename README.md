@@ -1,8 +1,6 @@
-# Cross-language log normalization and diagnostic CLI
+# Zscripts
 
-Zscripts is a cross-language log normalization and diagnostic CLI. It collects,
-parses, redacts, and reports logs so teams can investigate failures using one
-consistent schema and command surface.
+Zscripts is a structured log collection, normalization, redaction, diagnostics, and reporting toolkit for developers and automation systems.
 
 ## Highlights
 
@@ -65,7 +63,7 @@ Global flags such as `--config`, `--set`, `--adapter`, `--enable-telemetry`,
 ## Helpers (Legacy and Optional)
 
 The helper collection under `zscripts/helpers` is not part of the strict core
-identity and is now treated as legacy/optional utility code. It remains
+identity and is treated as legacy/optional utility code. It remains
 available for compatibility, but the core project scope is adapter-driven log
 normalization and diagnostics.
 

@@ -44,14 +44,10 @@ def resize_images_by_aspect_ratio(image_path: str, output_folder: str, filename:
         # Calculate the new dimensions for the aspect ratio based on the longest edge of the image
         longest_edge = max(width, height)
         new_width = (
-            round(longest_edge * width_ratio / height_ratio)
-            if width_ratio > height_ratio
-            else longest_edge
+            round(longest_edge * width_ratio / height_ratio) if width_ratio > height_ratio else longest_edge
         )
         new_height = (
-            round(longest_edge * height_ratio / width_ratio)
-            if width_ratio < height_ratio
-            else longest_edge
+            round(longest_edge * height_ratio / width_ratio) if width_ratio < height_ratio else longest_edge
         )
 
         # Resize the image to the new dimensions

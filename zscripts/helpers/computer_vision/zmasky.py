@@ -32,9 +32,7 @@ for filename in os.listdir(input_dir):
         mask = cv2.threshold(diff, threshold, 255, cv2.THRESH_BINARY)[1]
 
         # Apply postprocessing to refine mask (e.g., fill small holes)
-        mask = cv2.morphologyEx(
-            mask, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-        )
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
 
         # Save mask to output directory using naming convention
         mask_filename = filename.replace("_before.jpg", "_mask.jpg")

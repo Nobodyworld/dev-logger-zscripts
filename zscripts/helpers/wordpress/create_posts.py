@@ -34,9 +34,7 @@ def get_wordpress_posts() -> Optional[list[dict[str, Any]]]:
         return None
 
 
-def create_wordpress_post(
-    title: str, content: str, status: str = "publish"
-) -> Optional[dict[str, Any]]:
+def create_wordpress_post(title: str, content: str, status: str = "publish") -> Optional[dict[str, Any]]:
     """Create a WordPress post with the given title/content/status."""
     url = f"{base_url}/posts"
     try:

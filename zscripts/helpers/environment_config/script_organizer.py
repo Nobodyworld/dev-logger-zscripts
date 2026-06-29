@@ -21,9 +21,7 @@ def categorize_script(file_path: Path, categories: Dict[str, Iterable[str]]) -> 
     """Return the category labels that match the import statements found in `file_path`."""
     content = file_path.read_text(encoding="utf-8")
     matches = [
-        category
-        for category, modules in categories.items()
-        if any(module in content for module in modules)
+        category for category, modules in categories.items() if any(module in content for module in modules)
     ]
     return matches or ["Uncategorized"]
 
@@ -48,12 +46,8 @@ def organize_scripts(directory: Path, categories: Dict[str, Iterable[str]]) -> N
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Group Python scripts into category subdirectories."
-    )
-    parser.add_argument(
-        "directory", type=Path, help="Root directory containing scripts to organise."
-    )
+    parser = argparse.ArgumentParser(description="Group Python scripts into category subdirectories.")
+    parser.add_argument("directory", type=Path, help="Root directory containing scripts to organise.")
     return parser.parse_args()
 
 

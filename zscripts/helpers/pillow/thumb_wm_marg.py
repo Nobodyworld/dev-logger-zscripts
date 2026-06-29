@@ -34,9 +34,7 @@ for root, _dirs, files in os.walk(input_dir):
                 new_img = Image.new("RGB", new_size, (255, 255, 255))
                 new_img.paste(img, (margin_size, 0))
                 output_file = os.path.splitext(file)[0] + "W.jpg"
-                output_path = os.path.join(
-                    output_dir, root.split(input_dir)[1].lstrip("\\"), output_file
-                )
+                output_path = os.path.join(output_dir, root.split(input_dir)[1].lstrip("\\"), output_file)
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
                 new_img.save(output_path, quality=90)
 

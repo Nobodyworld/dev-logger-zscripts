@@ -8,7 +8,6 @@ pdf_dir = str(org_path("project_user", "notes", "data", "wiki", "test"))
 
 # Loop through each file in the directory
 for filename in os.listdir(pdf_dir):
-
     # Check if the file is a PDF
     if filename.endswith(".pdf"):
         try:

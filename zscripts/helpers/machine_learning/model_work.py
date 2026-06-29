@@ -76,33 +76,23 @@ class HtmlDataPreprocessor:
 class HtmlDataset(Dataset):
     """Dataset of tokenized HTML before/after pairs."""
 
-    def __init__(
-        self, html_pairs: Sequence[Tuple[str, str]], src_vocab: Vocab, trg_vocab: Vocab
-    ) -> None:
+    def __init__(self, html_pairs: Sequence[Tuple[str, str]], src_vocab: Vocab, trg_vocab: Vocab) -> None:
         """Store pairs and vocabularies for tokenization."""
         self.html_pairs = list(html_pairs)
         self.src_vocab = src_vocab
         self.trg_vocab = trg_vocab
 
-    def __getitem__(
-        self, idx: int
-    ) -> Tuple[Tuple[List[int], int], Tuple[List[int], int]]:
+    def __getitem__(self, idx: int) -> Tuple[Tuple[List[int], int], Tuple[List[int], int]]:
         """Return tokenized source/target sequences and their lengths for index."""
         before_html, after_html = self.html_pairs[idx]
         source = (
             [self.src_vocab["<sos>"]]
-            + [
-                self.src_vocab[token]
-                for token in HtmlDataPreprocessor.TOKENIZER(before_html)
-            ]
+            + [self.src_vocab[token] for token in HtmlDataPreprocessor.TOKENIZER(before_html)]
             + [self.src_vocab["<eos>"]]
         )
         target = (
             [self.trg_vocab["<sos>"]]
-            + [
-                self.trg_vocab[token]
-                for token in HtmlDataPreprocessor.TOKENIZER(after_html)
-            ]
+            + [self.trg_vocab[token] for token in HtmlDataPreprocessor.TOKENIZER(after_html)]
             + [self.trg_vocab["<eos>"]]
         )
         return (source, len(source)), (target, len(target))
@@ -209,9 +199,7 @@ class Seq2Seq(nn.Module):
         batch_size = src.shape[1]
         t_len = trg.shape[0]
         trg_vocab_size = self.decoder.fc_out.out_features
-        outputs = torch.zeros(
-            t_len, batch_size, trg_vocab_size, device=Configuration.DEVICE
-        )
+        outputs = torch.zeros(t_len, batch_size, trg_vocab_size, device=Configuration.DEVICE)
         output, hidden, cell = self.encoder(src, src_len)
         hidden = hidden[:, :batch_size, :]
         cell = cell[:, :batch_size, :]
@@ -265,9 +253,7 @@ def load_model(
     return model, src_vocab, trg_vocab
 
 
-def train_model(
-    model: Seq2Seq, data_iterator: DataLoader, src_vocab: Vocab, trg_vocab: Vocab
-) -> None:
+def train_model(model: Seq2Seq, data_iterator: DataLoader, src_vocab: Vocab, trg_vocab: Vocab) -> None:
     """Train the model for configured epochs and save checkpoints."""
     optimizer = Adam(model.parameters())
     PAD_IDX = src_vocab["<pad>"] if "<pad>" in src_vocab else None
@@ -280,9 +266,7 @@ def train_model(
         model.train()
         epoch_loss = 0
 
-        with tqdm(
-            total=len(data_iterator), desc=f"Epoch {epoch + 1}", unit="batch"
-        ) as pbar:
+        with tqdm(total=len(data_iterator), desc=f"Epoch {epoch + 1}", unit="batch") as pbar:
             for _, batch in enumerate(data_iterator):
                 src, trg, src_len, trg_len = batch
                 src = src.to(Configuration.DEVICE)

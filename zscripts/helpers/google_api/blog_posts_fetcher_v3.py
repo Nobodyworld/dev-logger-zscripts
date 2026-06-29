@@ -9,9 +9,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # Scopes required by the application
 # TODO - add global path function
@@ -47,9 +45,7 @@ def service_setup() -> Any:
     return build("blogger", "v3", credentials=creds)
 
 
-def create_post(
-    service: Any, blog_id: str, body: Dict[str, Any]
-) -> Optional[Dict[str, Any]]:
+def create_post(service: Any, blog_id: str, body: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     posts = service.posts()
     try:
         response = posts.insert(blogId=blog_id, body=body, isDraft=False).execute()
@@ -59,9 +55,7 @@ def create_post(
         return None
 
 
-def update_post(
-    service: Any, blog_id: str, post_id: str, body: Dict[str, Any]
-) -> Optional[Dict[str, Any]]:
+def update_post(service: Any, blog_id: str, post_id: str, body: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     posts = service.posts()
     try:
         response = posts.update(blogId=blog_id, postId=post_id, body=body).execute()

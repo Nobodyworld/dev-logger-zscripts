@@ -51,10 +51,7 @@ def get_hyperlinks(url: str) -> List[str]:
     # Try to open the URL and read the HTML
     try:
         # Open the URL and read the HTML
-        with urllib.request.urlopen(
-            url, timeout=REQUEST_TIMEOUT
-        ) as response:  # nosec B310
-
+        with urllib.request.urlopen(url, timeout=REQUEST_TIMEOUT) as response:  # nosec B310
             # If the response is not HTML or is a PDF, return an empty list
             content_type = response.info().get("Content-Type")
             if not content_type or not content_type.startswith("text/html"):
@@ -148,7 +145,6 @@ def crawl(url: str) -> None:
 
     # While the queue is not empty, continue crawling
     while queue:
-
         # Get the next URL from the queue
         url = queue.pop()
         print(url)
@@ -156,10 +152,7 @@ def crawl(url: str) -> None:
         # Save text from the url to a <url>.txt file
         # TODO - add global path function
         filename = unquote(url.split("?")[0].split("/")[-1].replace("=", "_"))
-        with open(
-            os.path.join("text", local_domain, f"{filename}.txt"), "w", encoding="UTF-8"
-        ) as f:
-
+        with open(os.path.join("text", local_domain, f"{filename}.txt"), "w", encoding="UTF-8") as f:
             # Get the text from the URL using BeautifulSoup
             soup = BeautifulSoup(
                 requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT).text,

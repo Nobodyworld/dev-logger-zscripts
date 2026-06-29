@@ -1,5 +1,7 @@
 # Support
 
+Zscripts is a structured log collection, normalization, redaction, diagnostics, and reporting toolkit for developers and automation systems.
+
 ## Community Channels
 - **Discussions**: Use GitHub Discussions for questions, feature ideas, and community tips.
 - **Issues**: Report bugs via the Bug Report template; include CLI command, configuration snippet, and logs.

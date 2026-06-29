@@ -100,11 +100,7 @@ class CrawlerHealth:
             path = environ.get("PATH_INFO", "")
             snapshot = self.snapshot()
             if path in {"/healthz", "/readyz"}:
-                status = (
-                    HTTPStatus.OK
-                    if snapshot["status"] != "degraded"
-                    else HTTPStatus.SERVICE_UNAVAILABLE
-                )
+                status = HTTPStatus.OK if snapshot["status"] != "degraded" else HTTPStatus.SERVICE_UNAVAILABLE
             elif path in {"/livez", "/metrics/health"}:
                 status = HTTPStatus.OK
             else:
@@ -120,4 +116,3 @@ class CrawlerHealth:
 
 
 __all__ = ["CrawlerHealth"]
-

@@ -25,8 +25,7 @@ def extract_image_details(image_path: Path):
                 for warning in w:
                     if issubclass(warning.category, Image.DecompressionBombWarning):
                         print(
-                            f"Warning: Image '{os.path.basename(image_path)}' "
-                            f"might be a potential DOS bomb."
+                            f"Warning: Image '{os.path.basename(image_path)}' might be a potential DOS bomb."
                         )
 
                 # Return the details as a tuple
@@ -66,9 +65,7 @@ def create_excel(dir_path: Path, output_file: Path) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Generate an Excel summary of JPEG dimensions and DPI."
-    )
+    parser = argparse.ArgumentParser(description="Generate an Excel summary of JPEG dimensions and DPI.")
     parser.add_argument("input_dir", type=Path, help="Directory containing JPEG images.")
     parser.add_argument(
         "-o",

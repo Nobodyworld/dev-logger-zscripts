@@ -33,4 +33,3 @@ def EXTENSION_FACTORY() -> SampleExtension:
     """Factory used by `ExtensionRegistry.discover_directory`."""
 
     return SampleExtension()
-

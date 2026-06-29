@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "zscripts"
 version = "0.1.0"
-description = "Cross-language log normalization and diagnostic CLI"
+description = "Zscripts is a structured log collection, normalization, redaction, diagnostics, and reporting toolkit for developers and automation systems."
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "dev-logger-zscripts Maintainers" }]

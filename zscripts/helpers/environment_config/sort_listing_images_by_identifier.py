@@ -56,9 +56,7 @@ def sort_listings(main_dir: Path) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Organise listing JPEGs into variant subfolders.")
-    parser.add_argument(
-        "directory", type=Path, help="Root directory containing per-listing folders."
-    )
+    parser.add_argument("directory", type=Path, help="Root directory containing per-listing folders.")
     return parser.parse_args()
 
 

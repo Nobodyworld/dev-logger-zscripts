@@ -47,9 +47,7 @@ class EchoExtension(ToolkitExtension):
         super().after_service_ready(service, context)
         manifest = self.manifest
         if manifest is not None:
-            context.logger.debug(
-                "extension.echo.manifest", extra={"manifest": manifest.to_dict()}
-            )
+            context.logger.debug("extension.echo.manifest", extra={"manifest": manifest.to_dict()})
 
 
 def get_extension() -> EchoExtension:

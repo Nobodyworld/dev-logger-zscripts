@@ -3,9 +3,7 @@ from graph_tool.all import Graph, graph_draw, radial_tree_layout  # noqa: F401
 from helpers.utilities.paths import org_path
 
 # Read data from Excel sheet via org_path
-df = pd.read_excel(
-    str(org_path("Revenue Streams", "Blogs", "format_ai", "livs_test", "proffessions .xlsx"))
-)
+df = pd.read_excel(str(org_path("Revenue Streams", "Blogs", "format_ai", "livs_test", "proffessions .xlsx")))
 
 # Create a dictionary to store vertices
 vertices = {}

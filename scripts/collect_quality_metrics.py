@@ -295,7 +295,9 @@ def collect_metrics(package: Path, coverage_path: Path) -> dict[str, object]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path, default=DEFAULT_PACKAGE, help="Root package to analyse")
-    parser.add_argument("--coverage", type=Path, default=DEFAULT_COVERAGE, help="Path to coverage JSON output")
+    parser.add_argument(
+        "--coverage", type=Path, default=DEFAULT_COVERAGE, help="Path to coverage JSON output"
+    )
     parser.add_argument("--output", type=Path, help="Optional file to write JSON metrics")
     args = parser.parse_args()
 

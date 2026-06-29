@@ -15,7 +15,9 @@ from zscripts.operations import convert_work_directory  # noqa: E402
 def main() -> None:
     written_files = convert_work_directory()
     if not written_files:
-        print(f"No files to process in {WORK_DIR}. Ensure the directory exists and contains the necessary files.")
+        print(
+            f"No files to process in {WORK_DIR}. Ensure the directory exists and contains the necessary files."
+        )
         return
 
     print("Converted and moved the following files:")

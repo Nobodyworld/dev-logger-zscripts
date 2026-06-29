@@ -1,6 +1,6 @@
 # zscripts Toolkit Documentation
 
-Cross-language log normalization and diagnostic CLI documentation index.
+Zscripts is a structured log collection, normalization, redaction, diagnostics, and reporting toolkit for developers and automation systems.
 
 - [CLI Overview](../README.md)
 - [Architecture Deep-Dive](architecture/ARCHITECTURE.md)

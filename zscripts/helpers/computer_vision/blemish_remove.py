@@ -46,9 +46,7 @@ for filename in os.listdir(script_dir):
 
         # Find contours in thresholded image
         try:
-            contours, _ = cv2.findContours(
-                thresh_masked, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-            )
+            contours, _ = cv2.findContours(thresh_masked, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         except Exception as e:
             print(f"Error finding contours in image file {img_file}: {str(e)}")
             continue

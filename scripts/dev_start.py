@@ -99,9 +99,7 @@ def main() -> None:
         sys.exit(1)
 
 
-def _build_coverage_summary(
-    summary: dict[str, dict[str, object]], coverage_path: str
-) -> dict[str, float]:
+def _build_coverage_summary(summary: dict[str, dict[str, object]], coverage_path: str) -> dict[str, float]:
     if summary.get("tests", {}).get("status") != "passed":
         summary["coverage"] = {"status": "skipped"}
         return {"percent": 0.0}
@@ -117,9 +115,7 @@ def _run_command(command: Sequence[str]) -> int:
     return process.returncode
 
 
-def _write_summary(
-    summary: dict[str, dict[str, object]], *, coverage: dict[str, float] | None
-) -> None:
+def _write_summary(summary: dict[str, dict[str, object]], *, coverage: dict[str, float] | None) -> None:
     payload = {
         "steps": summary,
         "coverage": coverage,

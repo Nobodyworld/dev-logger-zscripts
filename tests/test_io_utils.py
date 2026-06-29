@@ -29,7 +29,9 @@ def test_prepare_output_path_rejects_directory(tmp_path: Path) -> None:
     assert "is a directory" in str(excinfo.value)
 
 
-def test_prepare_output_path_detects_unwritable_parent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_prepare_output_path_detects_unwritable_parent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     directory = tmp_path / "protected"
     directory.mkdir()
 
@@ -84,9 +86,7 @@ def test_prepare_output_path_reports_parent_creation_error(
     assert excinfo.value.cause is not None
 
 
-def test_prepare_output_path_parent_not_directory(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_prepare_output_path_parent_not_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     parent = tmp_path / "artifact"
     parent.write_text("file", encoding="utf-8")
     target = parent / "report.txt"

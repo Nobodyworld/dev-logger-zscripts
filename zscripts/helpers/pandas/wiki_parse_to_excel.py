@@ -1,4 +1,4 @@
-﻿import os
+import os
 from typing import List, Optional, Tuple
 
 from helpers.utilities.paths import org_path

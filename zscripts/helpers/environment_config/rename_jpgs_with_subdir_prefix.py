@@ -15,8 +15,6 @@ for subdir in os.listdir(input_dir):
             # Rename file with format <subdirectory>_<number>_after.jpg
             if filename.endswith(".jpg"):
                 new_filename = f"{subdir}_{file_count}_after.jpg"
-                os.rename(
-                    os.path.join(subdir_path, filename), os.path.join(subdir_path, new_filename)
-                )
+                os.rename(os.path.join(subdir_path, filename), os.path.join(subdir_path, new_filename))
                 file_count += 1
                 print(f"Renamed {filename} to {new_filename}")

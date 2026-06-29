@@ -20,9 +20,7 @@ def check_format(post: str) -> bool:
     # Check if post starts with <p> and ends with <p> or <iframe>
     if not str(soup.contents[0]).startswith("<p>"):
         return False
-    if not str(soup.contents[-1]).startswith("<p>") and not str(soup.contents[-1]).startswith(
-        "<iframe"
-    ):
+    if not str(soup.contents[-1]).startswith("<p>") and not str(soup.contents[-1]).startswith("<iframe"):
         return False
 
     # Check for presence of headers

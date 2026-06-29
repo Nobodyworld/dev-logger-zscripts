@@ -1,5 +1,7 @@
 # Public Release Audit
 
+Zscripts is a structured log collection, normalization, redaction, diagnostics, and reporting toolkit for developers and automation systems.
+
 This document tracks release-readiness checks for external/public distribution.
 
 ## Canonical Audit Source
@@ -15,7 +17,7 @@ it through `docs/INDEX.md` and operations runbooks.
 
 The following follow-up actions were completed after the initial baseline audit:
 
-- Package metadata aligned to product identity as a structured log toolkit.
+- Package metadata aligned to the canonical product identity.
 - Installed console command added via project entry points (`zscripts`).
 - CI hardened to run strict lint/type/test and security scans (`bandit`,
   `pip-audit`, binary-file check).

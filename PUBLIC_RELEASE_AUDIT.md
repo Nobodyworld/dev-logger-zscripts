@@ -1,5 +1,7 @@
 # Public Release Audit
 
+Zscripts is a structured log collection, normalization, redaction, diagnostics, and reporting toolkit for developers and automation systems.
+
 - Repository: dev-logger-zscripts
 - Audit date: 2026-06-23
 - Branch audited: main
@@ -139,8 +141,8 @@ Completed remediation work from phases 2-5:
 
 - CI now enforces strict tools and scans directly in workflow steps
   (ruff format check, ruff lint, mypy, bandit, pip-audit, binary-file scan, pytest).
-- Package metadata now reflects the structured log ETL product identity and
-  includes an installed `zscripts` console command.
+- Package metadata now reflects the canonical product identity and includes an
+  installed `zscripts` console command.
 - Core log collection scope was narrowed to log-like input artifacts when using
   `--input` (`.log`, `.txt`, `.out`, `.json`, `.jsonl`).
 - Tests now verify adapter inventory, redaction ordering, and packaged zipapp

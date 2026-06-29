@@ -203,9 +203,7 @@ class EventStreamExtension(BaseCrawlerExtension):
 
     def on_page_crawled(self, event: CrawlEvent, page: "CrawledPage") -> None:
         """Record the storage location of successfully crawled pages."""
-        self._record(
-            "page", url=event.url, storage=str(page.storage_path) if page.storage_path else None
-        )
+        self._record("page", url=event.url, storage=str(page.storage_path) if page.storage_path else None)
 
     def on_finish(self, pages: Sequence["CrawledPage"], success: bool) -> None:
         """Emit a final summary once the crawl terminates."""
@@ -213,10 +211,7 @@ class EventStreamExtension(BaseCrawlerExtension):
 
     def snapshot(self) -> list[dict[str, object]]:
         """Return the buffered events as JSON serialisable dictionaries."""
-        return [
-            {"timestamp": evt.timestamp, "event": evt.name, **evt.payload}
-            for evt in list(self._events)
-        ]
+        return [{"timestamp": evt.timestamp, "event": evt.name, **evt.payload} for evt in list(self._events)]
 
 
 ExtensionFactory = Callable[[], BaseCrawlerExtension]
@@ -224,6 +219,7 @@ ExtensionFactory = Callable[[], BaseCrawlerExtension]
 
 def _wrap_instance(instance: BaseCrawlerExtension) -> ExtensionFactory:
     """Create a factory that always returns ``instance``."""
+
     def factory() -> BaseCrawlerExtension:
         return instance
 
@@ -265,10 +261,7 @@ class ExtensionRegistry:
             elif callable(factory_obj):
                 self.register(entry_point.name, cast(ExtensionFactory, factory_obj))
             else:  # pragma: no cover - defensive branch
-                message = (
-                    "Entry point '%s' must provide an extension factory or instance"
-                    % entry_point.name
-                )
+                message = "Entry point '%s' must provide an extension factory or instance" % entry_point.name
                 raise TypeError(message)
 
     def discover_directory(self, path: Path) -> None:
@@ -297,4 +290,3 @@ __all__ = [
     "ExtensionRegistry",
     "SitemapExtension",
 ]
-

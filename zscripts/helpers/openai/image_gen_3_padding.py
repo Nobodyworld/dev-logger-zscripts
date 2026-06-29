@@ -8,8 +8,7 @@ from zscripts.helpers.utilities.paths import org_path
 
 api_key = os.environ["YOUR_API_KEY"]
 description = (
-    "A Disco oil painting of an army of ducks, all marching in uniform, "
-    "and formation on a hillside."
+    "A Disco oil painting of an army of ducks, all marching in uniform, and formation on a hillside."
 )
 REQUEST_TIMEOUT = 30
 

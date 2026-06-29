@@ -280,9 +280,7 @@ def word_analysis():
     words = get_words(posts)
     words = [word for word in words if word not in stop_words]
     counter = collections.Counter(words)
-    most_common_words = counter.most_common(
-        50
-    )  # You can change the number to get more or less words
+    most_common_words = counter.most_common(50)  # You can change the number to get more or less words
     return most_common_words
 
 

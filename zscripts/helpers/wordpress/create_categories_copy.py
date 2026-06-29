@@ -43,9 +43,7 @@ def create_wordpress_category(
     existing_categories = get_wordpress_categories() or []
     for category in existing_categories:
         if category.get("name") == name and category.get("parent") == parent:
-            print(
-                f"Category '{name}' with parent '{parent_name}' (ID: {parent}) already exists."
-            )
+            print(f"Category '{name}' with parent '{parent_name}' (ID: {parent}) already exists.")
             return category
 
     url = f"{base_url}/categories"
@@ -65,9 +63,7 @@ def create_wordpress_category(
         if response.status_code == 201:
             return response.json()
         if response.status_code == 400:
-            print(
-                f"Category '{name}' with parent '{parent_name}' (ID: {parent}) already exists."
-            )
+            print(f"Category '{name}' with parent '{parent_name}' (ID: {parent}) already exists.")
             return None
         print(f"Failed to create category '{name}'. Status code:", response.status_code)
         print(response.content)
@@ -88,24 +84,16 @@ def create_categories_recursive(
 
     for name, item_data in data.items():
         slug = item_data.get("slug", "")
-        category = create_wordpress_category(
-            name, slug=slug, parent=parent_id, parent_name=parent_name
-        )
+        category = create_wordpress_category(name, slug=slug, parent=parent_id, parent_name=parent_name)
         if category:
             print(f"Created category: {name} (ID: {category['id']})")
             nind = item_data.get("National Industry")
             if isinstance(nind, dict) and nind:
                 nind_name = list(nind.keys())[0]
                 nind_slug = nind[nind_name].get("slug", "")
-                create_wordpress_category(
-                    nind_name, slug=nind_slug, parent=category["id"], parent_name=name
-                )
-                print(
-                    f"  - Created National Industry category for: {name} (ID: {category['id']})"
-                )
-            create_categories_recursive(
-                item_data, parent_id=category["id"], parent_name=name
-            )
+                create_wordpress_category(nind_name, slug=nind_slug, parent=category["id"], parent_name=name)
+                print(f"  - Created National Industry category for: {name} (ID: {category['id']})")
+            create_categories_recursive(item_data, parent_id=category["id"], parent_name=name)
 
 
 def main() -> None:

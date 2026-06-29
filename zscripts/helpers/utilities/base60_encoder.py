@@ -136,12 +136,8 @@ while running:
                     shapes.append({"type": "circle", "center": start_pos, "radius": radius})
                 elif shape_type == "line":
                     length = int(math.hypot(end_pos[0] - start_pos[0], end_pos[1] - start_pos[1]))
-                    angle = math.degrees(
-                        math.atan2(end_pos[1] - start_pos[1], end_pos[0] - start_pos[0])
-                    )
-                    shapes.append(
-                        {"type": "line", "start": start_pos, "length": length, "angle": angle}
-                    )
+                    angle = math.degrees(math.atan2(end_pos[1] - start_pos[1], end_pos[0] - start_pos[0]))
+                    shapes.append({"type": "line", "start": start_pos, "length": length, "angle": angle})
                 drawing = False
 
     screen.fill(WHITE)

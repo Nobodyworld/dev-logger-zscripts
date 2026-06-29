@@ -65,6 +65,4 @@ with open("all_posts.json", "w") as f:
     json.dump(data, f, indent=4)
 
 print(f"Total analyses added: {count}")  # print the total count
-print(
-    f"Titles not found in JSON data: {titles_not_found}"
-)  # print the titles not found in the json data
+print(f"Titles not found in JSON data: {titles_not_found}")  # print the titles not found in the json data

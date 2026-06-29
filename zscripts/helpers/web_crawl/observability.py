@@ -27,9 +27,7 @@ StartResponse = Callable[[str, list[tuple[str, str]], Any | None], Any]
 WSGIApp = Callable[[dict[str, Any], StartResponse], Iterable[bytes]]
 
 
-def _json_response(
-    payload: Any, status: str = "200 OK"
-) -> tuple[str, list[tuple[str, str]], bytes]:
+def _json_response(payload: Any, status: str = "200 OK") -> tuple[str, list[tuple[str, str]], bytes]:
     """Serialise ``payload`` to JSON and produce WSGI response metadata."""
     body = json.dumps(payload, default=float).encode("utf-8")
     headers = [("Content-Type", "application/json"), ("Content-Length", str(len(body)))]
@@ -180,4 +178,3 @@ __all__ = [
     "ObservabilityService",
     "prometheus_wsgi_app",
 ]
-

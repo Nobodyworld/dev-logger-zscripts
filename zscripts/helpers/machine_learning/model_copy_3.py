@@ -57,16 +57,12 @@ class HtmlDataPreprocessor:
 class HtmlDataset(Dataset):
     """Dataset producing token index sequences with <sos>/<eos> markers."""
 
-    def __init__(
-        self, html_pairs: Sequence[Tuple[str, str]], token2index: dict[str, int]
-    ) -> None:
+    def __init__(self, html_pairs: Sequence[Tuple[str, str]], token2index: dict[str, int]) -> None:
         """Initialize dataset with HTML pairs and a token-to-index mapping."""
         self.html_pairs = list(html_pairs)
         self.token2index = token2index
 
-    def __getitem__(
-        self, idx: int
-    ) -> Tuple[Tuple[List[int], int], Tuple[List[int], int]]:
+    def __getitem__(self, idx: int) -> Tuple[Tuple[List[int], int], Tuple[List[int], int]]:
         """Return tokenized source/target sequences with their lengths for index."""
         before_html, after_html = self.html_pairs[idx]
         source = (
@@ -202,9 +198,7 @@ class Seq2Seq(nn.Module):
         batch_size = src.shape[1]
         trg_len = trg.shape[0]
         trg_vocab_size = self.decoder.fc_out.out_features
-        outputs = torch.zeros(
-            trg_len, batch_size, trg_vocab_size, device=Configuration.DEVICE
-        )
+        outputs = torch.zeros(trg_len, batch_size, trg_vocab_size, device=Configuration.DEVICE)
         output, hidden, cell = self.encoder(src, src_len)
         hidden = hidden[:, :batch_size, :]
         cell = cell[:, :batch_size, :]
@@ -235,9 +229,7 @@ def load_model(input_dim: int, output_dim: int) -> Seq2Seq:
     return model
 
 
-def train_model(
-    model: Seq2Seq, data_iterator: DataLoader, src_vocab: dict[str, int]
-) -> None:
+def train_model(model: Seq2Seq, data_iterator: DataLoader, src_vocab: dict[str, int]) -> None:
     """Train the model for configured epochs and persist checkpoints."""
     optimizer = Adam(model.parameters())
     PAD_IDX = src_vocab["<pad>"] if "<pad>" in src_vocab else None
@@ -247,9 +239,7 @@ def train_model(
     for epoch in range(Configuration.EPOCHS):
         model.train()
         epoch_loss = 0
-        with tqdm(
-            total=len(data_iterator), desc=f"Epoch {epoch + 1}", unit="batch"
-        ) as pbar:
+        with tqdm(total=len(data_iterator), desc=f"Epoch {epoch + 1}", unit="batch") as pbar:
             for _i, batch in enumerate(data_iterator):
                 src, trg, src_len = batch
                 src = src.to(Configuration.DEVICE)

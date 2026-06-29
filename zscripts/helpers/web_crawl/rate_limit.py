@@ -43,9 +43,7 @@ class FixedWindowRateLimiter:
             :func:`time.monotonic`.
         """
         if (min_interval is None) == (requests_per_second is None):
-            raise ValueError(
-                "Provide exactly one of min_interval or requests_per_second"
-            )
+            raise ValueError("Provide exactly one of min_interval or requests_per_second")
         if requests_per_second is not None:
             if requests_per_second <= 0:
                 raise ValueError("requests_per_second must be > 0")

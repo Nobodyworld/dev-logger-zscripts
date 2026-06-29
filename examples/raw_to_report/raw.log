@@ -1,0 +1,6 @@
+##[group]Run tests
+[warning] Deprecated API: datetime.utcnow() used in tests/test_services.py:49
+ERROR tests/test_services.py::test_generate_report_applies_redaction - AssertionError: API_KEY=sk-live-1234567890abcdef leaked
+FAILED tests/test_services.py::test_generate_report_applies_redaction - AssertionError
+##[endgroup]
+Process completed with exit code 1

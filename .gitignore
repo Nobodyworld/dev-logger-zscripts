@@ -712,3 +712,7 @@ runs/
 
 
 z-nobo-reports/
+
+# Keep release documentation fixtures tracked.
+!examples/raw_to_report/raw.log
+!examples/raw_to_report/normalized.json

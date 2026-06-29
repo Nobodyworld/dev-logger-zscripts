@@ -1,47 +1,47 @@
 {
-  "tool": "pytest",
-  "ecosystem": "ci",
-  "command": "pytest",
-  "status": "failed",
-  "summary": "1 test failed during CI run; redaction-sensitive token detected in output.",
-  "timestamp": "2026-06-28T00:00:00Z",
-  "errors": [
-    {
-      "message": "tests/test_services.py::test_generate_report_applies_redaction failed",
-      "file": "tests/test_services.py",
-      "line": 49,
-      "column": null,
-      "code": "AssertionError"
-    }
-  ],
-  "warnings": [
-    {
-      "message": "Deprecated API: datetime.utcnow() used",
-      "file": "tests/test_services.py",
-      "line": 49,
-      "column": null,
-      "code": null
-    }
-  ],
-  "tests": {
-    "passed": 0,
-    "failed": 1,
-    "skipped": 0,
-    "duration": 2.71,
-    "cases": [
-      {
-        "name": "tests/test_services.py::test_generate_report_applies_redaction",
-        "status": "failed",
+    "tool": "pytest",
+    "ecosystem": "ci",
+    "command": "pytest",
+    "status": "failed",
+    "summary": "1 test failed during CI run; redaction-sensitive token detected in output.",
+    "timestamp": "2026-06-28T00:00:00Z",
+    "errors": [
+        {
+            "message": "tests/test_services.py::test_generate_report_applies_redaction failed",
+            "file": "tests/test_services.py",
+            "line": 49,
+            "column": null,
+            "code": "AssertionError"
+        }
+    ],
+    "warnings": [
+        {
+            "message": "Deprecated API: datetime.utcnow() used",
+            "file": "tests/test_services.py",
+            "line": 49,
+            "column": null,
+            "code": null
+        }
+    ],
+    "tests": {
+        "passed": 0,
+        "failed": 1,
+        "skipped": 0,
         "duration": 2.71,
-        "message": "AssertionError"
-      }
-    ]
-  },
-  "artifacts": [
-    "artifacts/quality/coverage.json"
-  ],
-  "metadata": {
-    "runner": "github-actions",
-    "workflow": "ci"
-  }
+        "cases": [
+            {
+                "name": "tests/test_services.py::test_generate_report_applies_redaction",
+                "status": "failed",
+                "duration": 2.71,
+                "message": "AssertionError"
+            }
+        ]
+    },
+    "artifacts": [
+        "artifacts/quality/coverage.json"
+    ],
+    "metadata": {
+        "runner": "github-actions",
+        "workflow": "ci"
+    }
 }

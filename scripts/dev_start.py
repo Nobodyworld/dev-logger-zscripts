@@ -40,7 +40,11 @@ class Step:
 STEPS: Sequence[Step] = (
     Step("lint", ("ruff", "check", "."), "ZSKIP_LINT"),
     Step("type", ("mypy", *MYPY_TARGETS), "ZSKIP_TYPE"),
-    Step("security", ("bandit", "-q", "-r", "zscripts", "examples/sample_project"), "ZSKIP_SECURITY"),
+    Step(
+        "security",
+        ("bandit", "-q", "-r", "zscripts", "examples/sample_project"),
+        "ZSKIP_SECURITY",
+    ),
     Step("tests", ("coverage", "run", "-m", "pytest"), "ZSKIP_TESTS"),
 )
 
@@ -84,7 +88,10 @@ def main() -> None:
 
     coverage_summary = _build_coverage_summary(summary, coverage_path)
     _write_summary(summary, coverage=coverage_summary)
-    if summary.get("tests", {}).get("status") != "skipped" and coverage_summary["percent"] < COVERAGE_THRESHOLD:
+    if (
+        summary.get("tests", {}).get("status") != "skipped"
+        and coverage_summary["percent"] < COVERAGE_THRESHOLD
+    ):
         print(
             f"Coverage {coverage_summary['percent']:.1f}% below threshold {COVERAGE_THRESHOLD:.1f}%",
             file=sys.stderr,
@@ -92,7 +99,9 @@ def main() -> None:
         sys.exit(1)
 
 
-def _build_coverage_summary(summary: dict[str, dict[str, object]], coverage_path: str) -> dict[str, float]:
+def _build_coverage_summary(
+    summary: dict[str, dict[str, object]], coverage_path: str
+) -> dict[str, float]:
     if summary.get("tests", {}).get("status") != "passed":
         summary["coverage"] = {"status": "skipped"}
         return {"percent": 0.0}
@@ -108,7 +117,9 @@ def _run_command(command: Sequence[str]) -> int:
     return process.returncode
 
 
-def _write_summary(summary: dict[str, dict[str, object]], *, coverage: dict[str, float] | None) -> None:
+def _write_summary(
+    summary: dict[str, dict[str, object]], *, coverage: dict[str, float] | None
+) -> None:
     payload = {
         "steps": summary,
         "coverage": coverage,

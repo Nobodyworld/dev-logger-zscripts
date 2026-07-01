@@ -224,6 +224,34 @@ def test_cli_examples_json_format() -> None:
     assert "examples/python/sample.log" in payload
 
 
+def test_cli_adapters_json_format() -> None:
+    result = _run_cli("adapters", "--format", "json")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    identifiers = {entry["identifier"] for entry in payload}
+    assert identifiers == {
+        "ci",
+        "docker",
+        "dotnet",
+        "go",
+        "java",
+        "javascript",
+        "python",
+        "rust",
+    }
+    python_entry = next(entry for entry in payload if entry["identifier"] == "python")
+    assert python_entry["examples"] == ["examples/python/sample.log"]
+
+
+def test_cli_adapters_respects_adapter_override() -> None:
+    result = _run_cli("--adapter", "python", "adapters", "--format", "json")
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert [entry["identifier"] for entry in payload] == ["python"]
+
+
 def test_cli_report_output_directory_error(tmp_path: Path) -> None:
     result = _run_cli(
         "report",

@@ -233,6 +233,18 @@ def _build_main_parser(
     )
     examples_parser.set_defaults(handler=_handle_examples)
 
+    adapters_parser = subparsers.add_parser(
+        "adapters",
+        help="Show supported log adapters, descriptions, and bundled examples.",
+    )
+    adapters_parser.add_argument(
+        "--format",
+        choices={"text", "json"},
+        default="text",
+        help="Output format for the adapter inventory (default: text).",
+    )
+    adapters_parser.set_defaults(handler=_handle_adapters)
+
     diagnostics_parser = subparsers.add_parser(
         "diagnostics",
         help="Collect runtime diagnostics including telemetry and extension metadata.",
@@ -562,6 +574,47 @@ def _handle_examples(args: argparse.Namespace, runtime: RuntimeState) -> int:
     else:
         print("No examples available.")
     return 0
+
+
+def _handle_adapters(args: argparse.Namespace, runtime: RuntimeState) -> int:
+    inventory = _build_adapter_inventory(runtime)
+    if args.format == "json":
+        print(json.dumps(inventory, indent=2, sort_keys=True))
+        return 0
+
+    lines: list[str] = []
+    for entry in inventory:
+        examples = entry["examples"]
+        examples_text = ", ".join(examples) if examples else "none"
+        lines.append(
+            f"{entry['identifier']} ({entry['ecosystem']}): {entry['description']}\n"
+            f"  examples: {examples_text}"
+        )
+    print("\n".join(lines) if lines else "No adapters available.")
+    return 0
+
+
+def _build_adapter_inventory(runtime: RuntimeState) -> list[dict[str, object]]:
+    registry = runtime.extension_context.adapter_registry
+    identifiers = sorted(registry.available())
+    if runtime.adapter_override:
+        if runtime.adapter_override not in identifiers:
+            msg = f"Unknown adapter: {runtime.adapter_override}"
+            raise ValueError(msg)
+        identifiers = [runtime.adapter_override]
+
+    inventory: list[dict[str, object]] = []
+    for identifier in identifiers:
+        adapter = registry.resolve(identifier)
+        inventory.append(
+            {
+                "identifier": adapter.identifier,
+                "ecosystem": adapter.ecosystem,
+                "description": adapter.description,
+                "examples": sorted(runtime.service.list_examples(adapter_filter=identifier)),
+            }
+        )
+    return inventory
 
 
 def _handle_extensions(args: argparse.Namespace, runtime: RuntimeState) -> int:

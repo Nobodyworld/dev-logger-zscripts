@@ -54,6 +54,9 @@ python cli.py extensions scaffold demo_extension --directory ./my_extensions
 
 # Discover bundled example logs for each adapter
 python cli.py examples --format json
+
+# Inspect supported adapters, descriptions, and sample logs
+python cli.py adapters --format json
 ```
 
 Global flags such as `--config`, `--set`, `--adapter`, `--enable-telemetry`,

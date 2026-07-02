@@ -23,9 +23,9 @@ Completion note (indented, one line):
 ## Tasks
 
 - [x] Add atomic_write_bytes helper for binary artifact support in io_utils — TK-20250215-001
-  - Completed: 2025-02-15T00:00Z — Report: [REPORT-0001](docs/reports/narratives/REPORTS/000_CONTEXT.md)
+  - Completed: 2025-02-15T00:00Z — Report: [REPORT-0001](reports/narratives/REPORTS/000_CONTEXT.md)
 - [x] Harden log snapshot writers with atomic filesystem handling — TK-20250215-002
-  - Completed: 2025-02-15T01:30Z — Report: [REPORT-0002](docs/reports/narratives/REPORTS/001_DIAGNOSIS.md)
+  - Completed: 2025-02-15T01:30Z — Report: [REPORT-0002](reports/narratives/REPORTS/001_DIAGNOSIS.md)
 - [x] Restructure repository layout for clarity and maintainability — TK-20250215-003
   - Completed: 2025-02-15 — PR: (internal) — Consolidated documentation, configs, and fixtures into dedicated directories.
 - [x] Align operations docs and task tracking with current metadata — TK-20251102-001

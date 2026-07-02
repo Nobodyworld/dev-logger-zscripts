@@ -14,7 +14,7 @@ for backwards compatibility and may move to a dedicated repository.
   `from helpers.numpy.linalg import stable_det`.
 - Extensions that register custom behaviours must be declared in
   `helpers/registry.py` and, when applicable, in `configs/registry.yaml`.
-- Each domain links to deep-dive notes in [`docs/helpers/`](../docs/helpers/).
+- Each domain links to deep-dive notes in [`docs/helpers/`](../../docs/helpers/).
 
 When introducing a new helper module, create a README inside its subdirectory if
 the usage is non-obvious and add regression coverage under `tests/`.

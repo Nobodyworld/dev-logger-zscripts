@@ -3,6 +3,7 @@
 Thanks for investing time in improving Zscripts! This guide explains how to get started, propose changes, and follow the project's engineering standards.
 
 ## Ground Rules
+
 - Follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 - Use [Conventional Commits](https://www.conventionalcommits.org/) for every commit message.
 - Open an issue before large or breaking work; share an execution plan for complex refactors.
@@ -14,37 +15,46 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
   automation can triage outstanding work.
 
 ## Development Environment
+
 1. **Clone & Bootstrap**
+
    ```bash
-   git clone https://github.com/zscripts/zscripts.git
-   cd zscripts
+   git clone https://github.com/Nobodyworld/dev-logger-zscripts.git
+   cd dev-logger-zscripts
    python -m venv .venv
    source .venv/bin/activate
    python scripts/bootstrap.py
    ```
+
    The bootstrap script installs runtime/dev dependencies and registers
    `pre-commit` hooks (including commit message validation).
 2. **One-Command Check**
+
    ```bash
    python scripts/agent_guard.py
    ```
+
    This runs lint, type checks, Bandit, and pytest. Use `--only`/`--skip` to
    tailor the workflow; `make quality` remains available for coverage-enforced
    pipelines and writes summaries to `artifacts/quality/quality_gate.json`.
 
 3. **Ops Health Probe**
+
    ```bash
    python scripts/ops_status.py --url http://127.0.0.1:9464
    ```
+
    Use this helper after enabling telemetry (`--enable-telemetry`) to verify the
    embedded health server responds with `status="ok"`. The script emits a JSON
    payload and non-zero exit codes when degraded, making it suitable for
    post-deploy smoke checks.
 
 4. **Module Scaffolding**
+
    ```bash
    python scripts/scaffold_module.py --help
    ```
+
    Use the `extension` subcommand to generate telemetry-aware plugins and the
    `health` subcommand to scaffold reusable registry providers. Both templates
    bind instrumentation, logging, and TODO placeholders so follow-up work is
@@ -63,11 +73,13 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
    - Review the diff to avoid allow-listing real credentials. CI also runs gitleaks with `.gitleaks.toml` for defense in depth.
 
 ## Testing
+
 - Write deterministic tests using pytest; prefer property-based tests for parser/config logic.
 - When adding fixtures, place reusable assets under `tests/data/` and reference them via helper functions.
 - Run `pytest` before opening a PR. For integration-heavy work, add coverage assertions or performance benchmarks when feasible.
 
 ## Documentation Standards
+
 - Update README.md, relevant docs, and changelog entries for new features.
 - Extensions must follow [AGENTS.md](zscripts/extensions/AGENTS.md) and be
   documented in [docs/guides/EXTENSION_GUIDE.md](docs/guides/EXTENSION_GUIDE.md).
@@ -76,6 +88,7 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
 - Capture architectural decisions as ADRs under `docs/adr/`.
 
 ## Pull Request Checklist
+
 - [ ] Conventional commit history present (squash if necessary).
 - [ ] `make check` succeeded locally.
 - [ ] Tests cover new behaviour or guard against regressions.
@@ -84,6 +97,7 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
 - [ ] Added observability metrics/logs if behaviour changes.
 
 ## Release Workflow
+
 - Releases are automated once semantic-release is enabled. Until then, maintainers tag versions manually after verifying CI.
 - Add release notes to CHANGELOG.md with context and migration steps.
 

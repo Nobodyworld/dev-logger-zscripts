@@ -2,18 +2,22 @@
 
 Zscripts is a structured log collection, normalization, redaction, diagnostics, and reporting toolkit for developers and automation systems.
 
-This document tracks release-readiness checks for external/public distribution.
+This document is a historical operations-facing mirror.
 
 ## Canonical Audit Source
 
-The primary audit record is maintained at repository root:
+The authoritative current record is:
+
+- `docs/operations/PUBLIC_RELEASE_FINAL_VERDICT.md`
+
+Historical index at repository root:
 
 - `PUBLIC_RELEASE_AUDIT.md`
 
 This copy exists in the documentation tree so release workstreams can reference
 it through `docs/INDEX.md` and operations runbooks.
 
-## 2026-06-27 Delta
+## Historical Delta (2026-06-27)
 
 The following follow-up actions were completed after the initial baseline audit:
 

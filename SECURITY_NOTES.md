@@ -1,14 +1,24 @@
 # Security Notes
 
 ## Vulnerability Scans
-- `make security` failed because `bandit` is not installed in the execution
-  environment. Install `bandit>=1.7.10` (included in `pyproject.toml` dev extras)
-  before running the scan.
+
+- Historical note: an older sandbox run failed because `bandit` was missing.
+- Current authoritative clean-clone validation (2026-07-01) confirms:
+  - `bandit -q -r zscripts examples/sample_project` passes.
+  - `pip-audit -r requirements.txt` reports no known vulnerabilities.
+  - `python scripts/no_binaries.py` passes.
 
 ## Secrets Handling
-- All configuration secrets are expected to flow through configuration files or
-  environment variables; no hard-coded secrets were detected during the audit.
+
+- Full-history equivalent secret scan (`detect-secrets` over git patch history)
+  found no results in repository history material.
+- HEAD tracked-file scan reported keyword hits in
+  `examples/sample_project/infra/docker-compose.yml`; these are example fixture
+  placeholders, not active credentials.
 
 ## Remediation Summary
-- Publish an internal mirror or pre-bundle wheels so the security scan can run in
-  network-restricted sandboxes.
+
+- Keep secret scanning focused on tracked repository files (exclude virtual
+  environments and caches in local scans).
+- Continue to route sensitive runtime values through environment variables or
+  secure external stores.

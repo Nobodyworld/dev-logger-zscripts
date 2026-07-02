@@ -18,7 +18,9 @@ PYTHON = sys.executable
 
 
 def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run([PYTHON, str(CLI), *args], check=False, text=True, capture_output=True)
+    return subprocess.run(
+        [PYTHON, str(CLI), *args], check=False, text=True, capture_output=True
+    )
 
 
 def _allocate_port() -> int:
@@ -229,8 +231,8 @@ def test_cli_adapters_json_format() -> None:
 
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
-    identifiers = {entry["identifier"] for entry in payload}
-    assert identifiers == {
+    identifiers = [entry["identifier"] for entry in payload]
+    assert identifiers == [
         "ci",
         "docker",
         "dotnet",
@@ -239,7 +241,7 @@ def test_cli_adapters_json_format() -> None:
         "javascript",
         "python",
         "rust",
-    }
+    ]
     python_entry = next(entry for entry in payload if entry["identifier"] == "python")
     assert python_entry["examples"] == ["examples/python/sample.log"]
 
@@ -250,6 +252,13 @@ def test_cli_adapters_respects_adapter_override() -> None:
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     assert [entry["identifier"] for entry in payload] == ["python"]
+
+
+def test_cli_adapters_unknown_adapter_exits_nonzero() -> None:
+    result = _run_cli("--adapter", "doesnotexist", "adapters", "--format", "json")
+
+    assert result.returncode == 2
+    assert "Unknown adapter: doesnotexist" in result.stderr
 
 
 def test_cli_report_output_directory_error(tmp_path: Path) -> None:
@@ -424,7 +433,9 @@ def telemetry_harness(
 
 def test_cli_records_success_metrics(
     tmp_path: Path,
-    telemetry_harness: tuple[metrics_module.MetricsRegistry, type[cli_module.TelemetryManager]],
+    telemetry_harness: tuple[
+        metrics_module.MetricsRegistry, type[cli_module.TelemetryManager]
+    ],
 ) -> None:
     registry, manager_cls = telemetry_harness
     config_path = tmp_path / "settings.toml"
@@ -444,7 +455,9 @@ def test_cli_records_success_metrics(
 
 def test_cli_records_failure_metrics(
     tmp_path: Path,
-    telemetry_harness: tuple[metrics_module.MetricsRegistry, type[cli_module.TelemetryManager]],
+    telemetry_harness: tuple[
+        metrics_module.MetricsRegistry, type[cli_module.TelemetryManager]
+    ],
 ) -> None:
     registry, _ = telemetry_harness
     config_path = tmp_path / "settings.toml"

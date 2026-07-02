@@ -29,6 +29,7 @@ Zscripts is a structured log collection, normalization, redaction, diagnostics, 
 - [Raw Log to Normalized and Redacted Report](guides/RAW_LOG_TO_REDACTED_REPORT.md)
 - [GitHub Actions Usage](guides/GITHUB_ACTIONS_USAGE.md)
 - [Public Release Audit](operations/PUBLIC_RELEASE_AUDIT.md)
+- [Public Release Final Verdict](operations/PUBLIC_RELEASE_FINAL_VERDICT.md)
 - [Clean-Clone Release Validation](operations/CLEAN_CLONE_RELEASE_VALIDATION.md)
 - [Extension Guide](guides/EXTENSION_GUIDE.md)
 - [Legacy and Optional Helpers](helpers/LEGACY_OPTIONAL_HELPERS.md)

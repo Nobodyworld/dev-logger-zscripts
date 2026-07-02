@@ -2,6 +2,64 @@
 
 Zscripts is a structured log collection, normalization, redaction, diagnostics, and reporting toolkit for developers and automation systems.
 
+Public narrative:
+
+> Zscripts converts raw development and CI logs into normalized, redacted, diagnosable, and reportable output through a reusable Python CLI and adapter architecture.
+
+## End-to-End Demonstration
+
+Representative raw log input:
+
+```text
+============================= test session starts =============================
+FAILED tests/test_services.py::test_generate_report_applies_redaction - AssertionError: API_KEY=sk-live-1234567890abcdef leaked
+=========================== short test summary info ===========================
+1 failed, 24 passed
+```
+
+Normalized output (`python cli.py parse --adapter ci --input examples/raw_to_report/raw.log`):
+
+```json
+{
+  "tool": "pytest",
+  "ecosystem": "python",
+  "status": "failed",
+  "summary": "No summary provided.",
+  "errors": [
+    {
+      "message": "tests/test_services.py::test_generate_report_applies_redaction - AssertionError: API_KEY=sk-live-1234567890abcdef leaked"
+    }
+  ]
+}
+```
+
+Redacted output (`python cli.py redact --input examples/raw_to_report/raw.log`):
+
+```text
+... AssertionError: API_KEY=[REDACTED] leaked
+```
+
+Generated Markdown report (`python cli.py report --adapter ci --input examples/raw_to_report/raw.log --format markdown --redact --output report.md`):
+
+```markdown
+# pytest Report
+
+- **Status:** failed
+- **Severity:** error
+
+## Summary
+[FAILED] pytest run for python | No summary provided. | Errors: 1
+```
+
+```mermaid
+flowchart LR
+    A[Raw Log File or External Command] --> B[Adapter]
+    B --> C[Normalized Schema]
+    C --> D[Redaction Pipeline]
+    D --> E[Diagnostics Snapshot]
+    D --> F[Markdown or JSON Report]
+```
+
 ## Highlights
 
 - Unified CLI entry point (`python cli.py`) orchestrating collection, parsing,
@@ -189,7 +247,7 @@ check provider. Extension and health-check contributions must follow
 - `docs/guides/` – How-to guides for extending adapters and running automation.
 - `docs/helpers/LEGACY_OPTIONAL_HELPERS.md` – legacy helper policy and migration plan.
 - `docs/releases/RELEASE_NOTES.md` – Narrative release history.
-- `SUPPORT.md` / `SECURITY.md` – Support channels and vulnerability reporting.
+- `docs/SUPPORT.md` / `SECURITY.md` – Support channels and vulnerability reporting.
 
 Keep `TASKLIST.md` updated when work completes and log notable upgrades in
 `CHANGELOG.md`.

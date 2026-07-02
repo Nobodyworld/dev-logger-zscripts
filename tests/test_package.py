@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import runpy
 import subprocess
 import sys
@@ -64,3 +65,28 @@ def test_built_zipapp_runs_guardrails(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert "allowed_paths" in result.stdout
+
+
+def test_built_zipapp_lists_adapters_json(tmp_path: Path) -> None:
+    bundle_path = build_cli_bundle(tmp_path / "zscripts.pyz")
+
+    result = subprocess.run(
+        [sys.executable, str(bundle_path), "adapters", "--format", "json"],
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    identifiers = [entry["identifier"] for entry in payload]
+    assert identifiers == [
+        "ci",
+        "docker",
+        "dotnet",
+        "go",
+        "java",
+        "javascript",
+        "python",
+        "rust",
+    ]

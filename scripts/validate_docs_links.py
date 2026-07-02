@@ -42,9 +42,7 @@ def _is_ignored(path: Path) -> bool:
 
 
 def _iter_markdown_files() -> list[Path]:
-    return sorted(
-        path for path in ROOT.rglob("*.md") if not _is_ignored(path.relative_to(ROOT))
-    )
+    return sorted(path for path in ROOT.rglob("*.md") if not _is_ignored(path.relative_to(ROOT)))
 
 
 def _normalize_link(raw: str) -> str:
@@ -56,9 +54,7 @@ def _normalize_link(raw: str) -> str:
 
 
 def _check_external(url: str) -> str | None:
-    request = Request(
-        url, method="HEAD", headers={"User-Agent": "zscripts-link-check/1.0"}
-    )
+    request = Request(url, method="HEAD", headers={"User-Agent": "zscripts-link-check/1.0"})
     try:
         with urlopen(request, timeout=10) as response:
             status = getattr(response, "status", 200)
@@ -104,16 +100,12 @@ def validate_links() -> tuple[list[LinkFailure], dict[str, int]]:
                 counts["external"] += 1
                 reason = _check_external(link)
                 if reason:
-                    failures.append(
-                        LinkFailure(source=rel_source, link=link, reason=reason)
-                    )
+                    failures.append(LinkFailure(source=rel_source, link=link, reason=reason))
                 continue
             counts["internal"] += 1
             reason = _check_internal(file_path, link)
             if reason:
-                failures.append(
-                    LinkFailure(source=rel_source, link=link, reason=reason)
-                )
+                failures.append(LinkFailure(source=rel_source, link=link, reason=reason))
 
     return failures, counts
 
@@ -131,9 +123,7 @@ def main() -> int:
     quality_dir = ROOT / "artifacts" / "quality"
     quality_dir.mkdir(parents=True, exist_ok=True)
     output_path = quality_dir / "link_validation.json"
-    output_path.write_text(
-        json.dumps(report, indent=2, sort_keys=True), encoding="utf-8"
-    )
+    output_path.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
 
     if failures:
         print(json.dumps(report, indent=2, sort_keys=True))

@@ -18,9 +18,7 @@ PYTHON = sys.executable
 
 
 def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [PYTHON, str(CLI), *args], check=False, text=True, capture_output=True
-    )
+    return subprocess.run([PYTHON, str(CLI), *args], check=False, text=True, capture_output=True)
 
 
 def _allocate_port() -> int:
@@ -433,9 +431,7 @@ def telemetry_harness(
 
 def test_cli_records_success_metrics(
     tmp_path: Path,
-    telemetry_harness: tuple[
-        metrics_module.MetricsRegistry, type[cli_module.TelemetryManager]
-    ],
+    telemetry_harness: tuple[metrics_module.MetricsRegistry, type[cli_module.TelemetryManager]],
 ) -> None:
     registry, manager_cls = telemetry_harness
     config_path = tmp_path / "settings.toml"
@@ -455,9 +451,7 @@ def test_cli_records_success_metrics(
 
 def test_cli_records_failure_metrics(
     tmp_path: Path,
-    telemetry_harness: tuple[
-        metrics_module.MetricsRegistry, type[cli_module.TelemetryManager]
-    ],
+    telemetry_harness: tuple[metrics_module.MetricsRegistry, type[cli_module.TelemetryManager]],
 ) -> None:
     registry, _ = telemetry_harness
     config_path = tmp_path / "settings.toml"

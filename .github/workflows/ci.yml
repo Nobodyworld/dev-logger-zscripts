@@ -54,7 +54,7 @@ jobs:
           python scripts/diagnostics_probe.py --include-metrics --output reports/diagnostics_ci.json --fail-on-status degraded
       - name: Upload quality summary
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: quality-reports
           path: reports/

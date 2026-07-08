@@ -42,6 +42,28 @@ def test_cli_should_fail_threshold(policy: str, severity: str, expected: bool) -
     assert cli_module._should_fail(policy, severity) is expected
 
 
+def test_read_stdin_payload_ignores_unsupported_select(monkeypatch: pytest.MonkeyPatch) -> None:
+    class UnsupportedSelectStdin:
+        closed = False
+
+        def fileno(self) -> int:
+            return 0
+
+        def isatty(self) -> bool:
+            return False
+
+        def read(self) -> str:
+            raise AssertionError("stdin should not be read when select fails")
+
+    def raise_os_error(*_args: object, **_kwargs: object) -> tuple[list[object], list[object], list[object]]:
+        raise OSError("unsupported stdin handle")
+
+    monkeypatch.setattr(cli_module.sys, "stdin", UnsupportedSelectStdin())
+    monkeypatch.setattr(cli_module.select, "select", raise_os_error)
+
+    assert cli_module._read_stdin_payload() is None
+
+
 def test_cli_parse_produces_json() -> None:
     result = _run_cli(
         "--adapter",

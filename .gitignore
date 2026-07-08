@@ -712,6 +712,7 @@ runs/
 
 
 z-nobo-reports/
+.pytest-tmp/
 
 # Keep release documentation fixtures tracked.
 !examples/raw_to_report/raw.log

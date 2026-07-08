@@ -19,7 +19,7 @@ from zscripts.domain.interfaces import (
 from zscripts.domain.models import SandboxOptions, SandboxResult
 from zscripts.observability.instrumentation import InstrumentationManager
 from zscripts.observability.telemetry import TelemetryManager
-from zscripts.schemas import NormalizedLog
+from zscripts.schemas import LogIssue, NormalizedLog, TestCaseResult, TestSummary
 
 _ALLOWED_LOG_INPUT_SUFFIXES: tuple[str, ...] = (
     ".log",
@@ -152,20 +152,78 @@ class ToolkitService:
             explanation = self._build_explanation(normalized)
         guardrails = self.guardrails_snapshot()
         severity = evaluate_report_severity(normalized)
+        report_normalized = normalized
+        collected_text = raw_text
         redacted_text = None
         if redact:
+            report_normalized = self._redact_normalized_log(normalized)
             summary = self._redactor.redact(summary)
             explanation = self._redactor.redact(explanation)
             redacted_text = self._redactor.redact(raw_text)
+            collected_text = redacted_text
         return ReportBundle(
-            normalized=normalized,
+            normalized=report_normalized,
             summary=summary,
             explanation=explanation,
             guardrails=guardrails,
-            collected_text=raw_text,
+            collected_text=collected_text,
             redacted_text=redacted_text,
             severity=severity,
         )
+
+    def _redact_normalized_log(self, normalized: NormalizedLog) -> NormalizedLog:
+        return NormalizedLog(
+            tool=self._redactor.redact(normalized.tool),
+            ecosystem=self._redactor.redact(normalized.ecosystem),
+            command=self._redactor.redact(normalized.command),
+            status=self._redactor.redact(normalized.status),
+            summary=self._redactor.redact(normalized.summary),
+            timestamp=normalized.timestamp,
+            errors=[self._redact_issue(issue) for issue in normalized.errors],
+            warnings=[self._redact_issue(issue) for issue in normalized.warnings],
+            tests=self._redact_tests(normalized.tests),
+            artifacts=[self._redactor.redact(path) for path in normalized.artifacts],
+            metadata={key: self._redact_metadata_value(value) for key, value in normalized.metadata.items()},
+        )
+
+    def _redact_issue(self, issue: LogIssue) -> LogIssue:
+        return LogIssue(
+            message=self._redactor.redact(issue.message),
+            file=self._redactor.redact(issue.file) if issue.file else None,
+            line=issue.line,
+            column=issue.column,
+            code=self._redactor.redact(issue.code) if issue.code else None,
+        )
+
+    def _redact_tests(self, tests: TestSummary | None) -> TestSummary | None:
+        if tests is None:
+            return None
+        return TestSummary(
+            passed=tests.passed,
+            failed=tests.failed,
+            skipped=tests.skipped,
+            duration=tests.duration,
+            cases=[self._redact_case(case) for case in tests.cases],
+        )
+
+    def _redact_case(self, case: TestCaseResult) -> TestCaseResult:
+        return TestCaseResult(
+            name=self._redactor.redact(case.name),
+            status=self._redactor.redact(case.status),
+            duration=case.duration,
+            message=self._redactor.redact(case.message) if case.message else None,
+        )
+
+    def _redact_metadata_value(self, value: object) -> object:
+        if isinstance(value, str):
+            return self._redactor.redact(value)
+        if isinstance(value, dict):
+            return {key: self._redact_metadata_value(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [self._redact_metadata_value(item) for item in value]
+        if isinstance(value, tuple):
+            return tuple(self._redact_metadata_value(item) for item in value)
+        return value
 
     def guardrails_snapshot(self) -> dict[str, object]:
         """Expose sandbox configuration for inspection.

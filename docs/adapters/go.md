@@ -3,15 +3,17 @@
 Use the Go adapter to normalize `go test` output for multi-module projects.
 
 **Inputs**
+
 - Structured Go tooling output (see `examples/go/sample.log`).
 
 **Outputs**
+
 - Normalized JSON with package test counts, artifacts, and module metadata.
 
 **CLI Example**
 
 ```bash
-python cli.py summarize --adapter go --input examples/go/sample.log
+python cli.py --adapter go summarize --input examples/go/sample.log
 ```
 
 **Programmatic Example**

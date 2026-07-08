@@ -4,15 +4,17 @@ The Java adapter parses structured Maven or Gradle build logs, capturing
 compiler diagnostics and CI metadata.
 
 **Inputs**
+
 - Structured Maven/Gradle output (see `examples/java/sample.log`).
 
 **Outputs**
+
 - Normalized JSON with build errors, warnings, and artifact locations.
 
 **CLI Example**
 
 ```bash
-python cli.py parse --adapter java --input examples/java/sample.log
+python cli.py --adapter java parse --input examples/java/sample.log
 ```
 
 **Programmatic Example**

@@ -5,15 +5,17 @@ or GitLab CI. It captures workflow metadata, warnings about configuration, and
 error messages raised by child jobs.
 
 **Inputs**
+
 - Structured CI job logs (see `examples/ci/sample.log`).
 
 **Outputs**
+
 - Normalized JSON with error and warning summaries plus run identifiers.
 
 **CLI Example**
 
 ```bash
-python cli.py explain --adapter ci --input examples/ci/sample.log
+python cli.py --adapter ci explain --input examples/ci/sample.log
 ```
 
 **Programmatic Example**

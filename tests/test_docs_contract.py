@@ -51,3 +51,9 @@ def test_normalized_example_matches_schema_when_available() -> None:
     normalized_path = ROOT / "examples/raw_to_report/normalized.json"
     normalized = json.loads(normalized_path.read_text(encoding="utf-8"))
     jsonschema.validate(instance=normalized, schema=load_normalized_schema())
+
+
+def test_readme_raw_to_report_demo_uses_supported_adapter_order() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "python cli.py --adapter ci report --input examples/raw_to_report/raw.log" in readme
+    assert "python cli.py report --adapter ci --input examples/raw_to_report/raw.log" not in readme

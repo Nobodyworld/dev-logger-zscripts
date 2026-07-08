@@ -4,15 +4,17 @@ The Rust adapter consumes structured `cargo test` output and surfaces warnings
 and build metadata.
 
 **Inputs**
+
 - Structured Cargo logs (see `examples/rust/sample.log`).
 
 **Outputs**
+
 - Normalized JSON with artifact directories, warnings, and toolchain info.
 
 **CLI Example**
 
 ```bash
-python cli.py summarize --adapter rust --input examples/rust/sample.log
+python cli.py --adapter rust summarize --input examples/rust/sample.log
 ```
 
 **Programmatic Example**

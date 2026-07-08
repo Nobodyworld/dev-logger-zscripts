@@ -18,7 +18,7 @@ by dashboards and release checks.
 
 1. Transform
 
-- Command: `zscripts parse --adapter python --input examples/python/sample.log`
+- Command: `zscripts --adapter python parse --input examples/python/sample.log`
 - Adapter: `adapters/python` parses structured lines into `NormalizedLog`.
 
 1. Load
@@ -38,9 +38,9 @@ dotnet, docker, ci) emit data that can be queried consistently.
 ## Command Sequence
 
 ```sh
-zscripts parse --adapter python --input examples/python/sample.log
-zscripts summarize --adapter python --input examples/python/sample.log
-zscripts report --adapter python --input examples/python/sample.log --format markdown
+zscripts --adapter python parse --input examples/python/sample.log
+zscripts --adapter python summarize --input examples/python/sample.log
+zscripts --adapter python report --input examples/python/sample.log --format markdown
 ```
 
 ## Expected Outcome

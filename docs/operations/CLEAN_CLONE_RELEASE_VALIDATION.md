@@ -1,64 +1,84 @@
 # Clean-Clone Release Validation
 
-- Repository: dev-logger-zscripts
-- Validation date: 2026-07-01
-- Branch: main
-- Validated commit SHA: fd379e40907ed257640dfe5d0faa7cdd9d1cd88f
-- Environment: clean clone with Python 3.14.0
+- Repository: `Nobodyworld/dev-logger-zscripts`
+- Validation date: 2026-07-08
+- Branch context: PR #47 / merged showcase baseline
+- Merged `main` baseline: `7d6e03f4674c22401e8d15a57b02f856941fed55`
+- Clean-worktree validated source head: `124c1e4f85204aaec76d4f7feafdbd0912513bd7`
+- Environment: Windows clean worktree, Python 3.14.0
+- Status: `VALIDATED FOR PR #47 - FINAL MAIN VALIDATION STILL REQUIRED`
 
 ## Objective
 
 Verify that a fresh checkout can install tooling, pass strict quality and
-security checks, validate adapter inventory behavior, and execute packaged CLI
-smoke workflows.
+security checks, validate adapter inventory behavior, execute packaged CLI smoke
+workflows, and prove raw-log report redaction before public showcase use.
+
+## Validation Setup
+
+The authoritative PR #47 validation was run from a clean worktree with the pytest
+temp base outside the repository to avoid Windows ACL/stale-temp-directory
+artifacts.
+
+Representative setup:
+
+```powershell
+python -m pip install --upgrade pip
+python -m pip install -e .[dev,helpers]
+$base = Join-Path $env:TEMP "zscripts-pytest-$([guid]::NewGuid())"
+```
 
 ## Validation Steps
 
 ```sh
-git clone <repo-url>
-cd dev-logger-zscripts
-python -m pip install --upgrade pip
-python -m pip install -e .[dev,helpers]
 ruff format --check .
 ruff check .
-mypy zscripts/application zscripts/config.py zscripts/configuration.py zscripts/observability/logging.py zscripts/observability/metrics.py zscripts/observability/health.py zscripts/observability/instrumentation.py zscripts/extensions/scaffolding.py zscripts/schemas
-bandit -q -r zscripts examples/sample_project
-pip-audit -r requirements.txt
 python scripts/no_binaries.py
-python -m detect_secrets scan --force-use-all-plugins $(git ls-files)
+python -m pytest -q --basetemp="$base"
+python scripts/validate_docs_links.py
+git diff --check
+mypy zscripts/application zscripts/config.py zscripts/configuration.py zscripts/observability/logging.py zscripts/observability/metrics.py zscripts/observability/health.py zscripts/observability/instrumentation.py zscripts/extensions/scaffolding.py zscripts/schemas
 python -m coverage erase
-python -m coverage run -m pytest
+python -m coverage run -m pytest --basetemp="$base"
 python -m coverage report --fail-under=85
 python scripts/build_artifact.py
 python artifacts/build/zscripts.pyz guardrails
 python artifacts/build/zscripts.pyz adapters --format json
-python cli.py report --input examples/raw_to_report/raw.log --format markdown --redact --output artifacts/build/raw_to_report_demo.md
-python scripts/validate_docs_links.py
+python cli.py --adapter ci report --input examples/raw_to_report/raw.log --format markdown --redact --output artifacts/build/raw_to_report_demo.md
+python -m bandit -q -r zscripts examples/sample_project
+python -m pip_audit
+gitleaks detect --no-git --source . --redact --verbose
+gitleaks detect --source . --redact --verbose
 ```
 
 ## Validation Results
 
-- Installation: passed (`python -m pip install -e .[dev,helpers]`).
-- Formatting: passed (`ruff format --check .` -> 272 files already formatted).
-- Lint: passed (`ruff check .` -> all checks passed).
-- Type checks: passed (`mypy ...` -> success, no issues in 14 source files).
-- Bandit: passed (`bandit -q -r zscripts examples/sample_project`), with no failing findings; informational `nosec` warnings observed.
-- Dependency audit: passed (`pip-audit -r requirements.txt` -> no known vulnerabilities; local package `zscripts` skipped as non-PyPI dependency).
-- Binary scan: passed (`python scripts/no_binaries.py` -> no binary-like files detected).
-- Secret scan (HEAD tracked files): passed with no verified credentials; fixture placeholders flagged in example docker-compose sample.
-- Tests: passed (`pytest` and `python -m coverage run -m pytest` -> 168 collected, 168 passed, 0 failed, 0 skipped).
-- Coverage: passed (`python -m coverage report --fail-under=85` -> 92% total) against required threshold 85%.
-- Build: passed (`python scripts/build_artifact.py` -> `artifacts/build/zscripts.pyz`).
-- Packaged CLI smoke test: passed (`python artifacts/build/zscripts.pyz guardrails`) with JSON output including:
-  - `dangerous_mode: false`
-  - `timeout_seconds: 120`
-  - `allowed_paths` rooted at the clean-clone workspace.
-- Packaged adapter inventory smoke: passed (`python artifacts/build/zscripts.pyz adapters --format json`) with deterministic identifier order: `ci, docker, dotnet, go, java, javascript, python, rust`.
-- Raw-log-to-report demo: passed (`python cli.py report --input examples/raw_to_report/raw.log --format markdown --redact --output artifacts/build/raw_to_report_demo.md`).
-- Documentation-link validation: passed (`python scripts/validate_docs_links.py`).
+| Check | Result |
+| --- | --- |
+| Install | Pass (`python -m pip install -e .[dev,helpers]`) |
+| Format | Pass (`ruff format --check .`) |
+| Lint | Pass (`ruff check .`) |
+| Binary scan | Pass (`python scripts/no_binaries.py`) |
+| Tests | Pass (`176 passed, 13 warnings`) |
+| Documentation links | Pass (`python scripts/validate_docs_links.py`) |
+| Diff whitespace | Pass (`git diff --check`) |
+| Type checks | Pass (supported mypy surface) |
+| Coverage | Pass (92%, threshold 85%) |
+| Build | Pass (`python scripts/build_artifact.py`) |
+| Packaged guardrails smoke | Pass |
+| Packaged adapter inventory smoke | Pass |
+| Raw-log-to-report demo | Pass with supported `python cli.py --adapter ci report ...` order |
+| Report redaction scan | Pass; no unredacted fixture or common provider-token patterns |
+| Bandit | Pass under Python 3.14.0 |
+| Dependency audit | Pass (`python -m pip_audit`) |
+| Gitleaks tracked-file scan | Pass |
+| Gitleaks full-history scan | Pass |
 
 ## Notes
 
-- This validation is designed to mirror CI behavior for release confidence.
-- If GitHub Actions is disabled, this clean-clone run is the authoritative
-  release validation record.
+- This record replaces older 2026-07-01 counts and fixture notes.
+- PR #47 validation is strong product evidence, but it is not a final public
+  release gate for the repository after follow-up documentation/configuration
+  changes.
+- A final clean-worktree validation must be run against the exact final `main`
+  commit immediately before any visibility change.

@@ -3,16 +3,18 @@
 The JavaScript adapter is tuned for Jest logs and supports TypeScript projects.
 
 **Inputs**
+
 - Structured log text, typically collected from `npm test` or `yarn test`.
 
 **Outputs**
+
 - Normalized JSON capturing suite status, warnings, coverage artifacts, and
   metadata such as Node.js version and package manager.
 
 **CLI Example**
 
 ```bash
-python cli.py summarize --adapter javascript --input examples/javascript/sample.log
+python cli.py --adapter javascript summarize --input examples/javascript/sample.log
 ```
 
 **Programmatic Example**

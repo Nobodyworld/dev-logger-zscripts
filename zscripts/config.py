@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+DEFAULT_REDACT_PATTERNS: tuple[str, ...] = (r"(?i)(api[_-]?key|secret|token|password)\s*[:=]\s*[^\s\n]+",)
+
 # ---------------------------------------------------------------------------
 # Dataclass definitions
 # ---------------------------------------------------------------------------
@@ -39,7 +41,7 @@ class ToolkitConfig:
     timeout_seconds: int = 120
     dangerous_mode: bool = False
     default_adapter: str = "python"
-    redact_patterns: tuple[str, ...] = ()
+    redact_patterns: tuple[str, ...] = DEFAULT_REDACT_PATTERNS
     examples_path: Path = Path("examples")
     telemetry_enabled: bool = False
     telemetry_host: str = "127.0.0.1"
@@ -62,7 +64,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "timeout_seconds": 120,
     "dangerous_mode": False,
     "default_adapter": "python",
-    "redact_patterns": tuple(),
+    "redact_patterns": DEFAULT_REDACT_PATTERNS,
     "examples_path": Path("examples"),
     "telemetry_enabled": False,
     "telemetry_host": "127.0.0.1",

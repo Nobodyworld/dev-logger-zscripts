@@ -18,10 +18,10 @@ deterministic example fixture used by documentation and contract tests.
 
 ```sh
 # 1) Normalize a raw log
-python cli.py parse --adapter ci --input examples/raw_to_report/raw.log > normalized.json
+python cli.py --adapter ci parse --input examples/raw_to_report/raw.log > normalized.json
 
 # 2) Produce a redacted markdown report
-python cli.py report --adapter ci --input examples/raw_to_report/raw.log --format markdown --redact --output redacted_report.md
+python cli.py --adapter ci report --input examples/raw_to_report/raw.log --format markdown --redact --output redacted_report.md
 
 # 3) Optionally emit only redacted raw content
 python cli.py redact --input examples/raw_to_report/raw.log > redacted_raw.log

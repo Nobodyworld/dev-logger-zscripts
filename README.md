@@ -12,12 +12,12 @@ Representative raw log input:
 
 ```text
 ============================= test session starts =============================
-FAILED tests/test_services.py::test_generate_report_applies_redaction - AssertionError: API_KEY=sk-live-1234567890abcdef leaked
+FAILED tests/test_services.py::test_generate_report_applies_redaction - AssertionError: API_KEY=not-a-real-secret-redaction-fixture-1234567890abcdef leaked
 =========================== short test summary info ===========================
 1 failed, 24 passed
 ```
 
-Normalized output (`python cli.py parse --adapter ci --input examples/raw_to_report/raw.log`):
+Normalized output (`python cli.py --adapter ci parse --input examples/raw_to_report/raw.log`):
 
 ```json
 {
@@ -27,7 +27,7 @@ Normalized output (`python cli.py parse --adapter ci --input examples/raw_to_rep
   "summary": "No summary provided.",
   "errors": [
     {
-      "message": "tests/test_services.py::test_generate_report_applies_redaction - AssertionError: API_KEY=sk-live-1234567890abcdef leaked"
+      "message": "tests/test_services.py::test_generate_report_applies_redaction - AssertionError: API_KEY=not-a-real-secret-redaction-fixture-1234567890abcdef leaked"
     }
   ]
 }
@@ -39,7 +39,7 @@ Redacted output (`python cli.py redact --input examples/raw_to_report/raw.log`):
 ... AssertionError: API_KEY=[REDACTED] leaked
 ```
 
-Generated Markdown report (`python cli.py report --adapter ci --input examples/raw_to_report/raw.log --format markdown --redact --output report.md`):
+Generated Markdown report (`python cli.py --adapter ci report --input examples/raw_to_report/raw.log --format markdown --redact --output report.md`):
 
 ```markdown
 # pytest Report

@@ -42,6 +42,30 @@ def test_cli_should_fail_threshold(policy: str, severity: str, expected: bool) -
     assert cli_module._should_fail(policy, severity) is expected
 
 
+def test_read_stdin_payload_ignores_unsupported_select(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class UnsupportedSelectStdin:
+        closed = False
+
+        def fileno(self) -> int:
+            return 0
+
+        def isatty(self) -> bool:
+            return False
+
+        def read(self) -> str:
+            raise AssertionError("stdin should not be read when select fails")
+
+    def raise_os_error(*_args: object, **_kwargs: object) -> tuple[list[object], list[object], list[object]]:
+        raise OSError("unsupported stdin handle")
+
+    monkeypatch.setattr(cli_module.sys, "stdin", UnsupportedSelectStdin())
+    monkeypatch.setattr(cli_module.select, "select", raise_os_error)
+
+    assert cli_module._read_stdin_payload() is None
+
+
 def test_cli_parse_produces_json() -> None:
     result = _run_cli(
         "--adapter",
@@ -90,6 +114,66 @@ def test_cli_report_markdown_output() -> None:
     assert result.returncode == 0, result.stderr
     assert result.stdout.startswith("# pytest Report")
     assert "- **Severity:**" in result.stdout
+
+
+def test_cli_report_redact_markdown_redacts_normalized_content() -> None:
+    result = _run_cli(
+        "--adapter",
+        "ci",
+        "report",
+        "--input",
+        str(Path("examples/raw_to_report/raw.log")),
+        "--format",
+        "markdown",
+        "--redact",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "not-a-real-secret-redaction-fixture-1234567890abcdef" not in result.stdout
+    assert "[REDACTED]" in result.stdout
+
+
+def test_cli_report_redact_json_redacts_normalized_content() -> None:
+    result = _run_cli(
+        "--adapter",
+        "ci",
+        "report",
+        "--input",
+        str(Path("examples/raw_to_report/raw.log")),
+        "--format",
+        "json",
+        "--redact",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "not-a-real-secret-redaction-fixture-1234567890abcdef" not in result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["redacted_text"] is not None
+
+
+def test_cli_global_adapter_must_precede_subcommand() -> None:
+    invalid = _run_cli(
+        "report",
+        "--adapter",
+        "ci",
+        "--input",
+        str(Path("examples/raw_to_report/raw.log")),
+        "--format",
+        "json",
+    )
+    valid = _run_cli(
+        "--adapter",
+        "ci",
+        "report",
+        "--input",
+        str(Path("examples/raw_to_report/raw.log")),
+        "--format",
+        "json",
+    )
+
+    assert invalid.returncode == 2
+    assert "unrecognized arguments: --adapter ci" in invalid.stderr
+    assert valid.returncode == 0, valid.stderr
 
 
 def test_cli_report_respects_redact_toggle(tmp_path: Path) -> None:

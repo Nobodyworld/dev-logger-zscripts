@@ -17,7 +17,7 @@ from zscripts.domain.interfaces import (
 )
 from zscripts.domain.models import SandboxOptions, SandboxResult
 from zscripts.observability.telemetry import TelemetryManager, TelemetrySettings
-from zscripts.schemas import LogIssue, NormalizedLog, TestSummary
+from zscripts.schemas import LogIssue, NormalizedLog, TestCaseResult, TestSummary
 
 
 class FakeAdapter(LogAdapterProtocol):
@@ -391,9 +391,71 @@ def test_generate_report_applies_redaction(
     assert bundle.summary.startswith("redacted:")
     assert bundle.explanation.startswith("redacted:")
     assert bundle.redacted_text == "redacted:payload"
-    # Summary, explanation, and source payload should each be redacted once.
-    raw_explanation = bundle.explanation.removeprefix("redacted:")
-    assert redactor.calls == ["summary", raw_explanation, "payload"]
+    assert bundle.collected_text == "redacted:payload"
+    assert bundle.normalized.summary.startswith("redacted:")
+    assert bundle.normalized.errors[0].message.startswith("redacted:")
+    assert "summary" in redactor.calls
+    assert "payload" in redactor.calls
+
+
+def test_generate_report_redacts_normalized_report_surface(
+    service_components: dict[str, object],
+) -> None:
+    service: ToolkitService = service_components["service"]  # type: ignore[assignment]
+    adapter: FakeAdapter = service_components["adapter"]  # type: ignore[assignment]
+
+    adapter.next_normalized = NormalizedLog(
+        tool="pytest",
+        ecosystem="python",
+        command="pytest",
+        status="failed",
+        summary="token=not-a-real-secret-redaction-fixture-1234567890abcdef",
+        timestamp=datetime.utcnow(),
+        errors=[
+            LogIssue(
+                message="error token not-a-real-secret-redaction-fixture-1234567890abcdef",
+                file="tests/test_services.py",
+                line=49,
+            )
+        ],
+        warnings=[LogIssue(message="warning token not-a-real-secret-redaction-fixture-1234567890abcdef")],
+        tests=TestSummary(
+            passed=0,
+            failed=1,
+            skipped=0,
+            cases=[
+                TestCaseResult(
+                    name="test_redaction",
+                    status="failed",
+                    message="not-a-real-secret-redaction-fixture-1234567890abcdef",
+                )
+            ],
+        ),
+        artifacts=["artifact/not-a-real-secret-redaction-fixture-1234567890abcdef.log"],
+        metadata={
+            "token": "not-a-real-secret-redaction-fixture-1234567890abcdef",
+            "nested": {"value": "not-a-real-secret-redaction-fixture-1234567890abcdef"},
+        },
+    )
+
+    bundle = service.generate_report(
+        adapter_key=None,
+        raw_text="raw not-a-real-secret-redaction-fixture-1234567890abcdef",
+        redact=True,
+    )
+
+    assert bundle.normalized.summary.startswith("redacted:")
+    assert bundle.normalized.errors[0].message.startswith("redacted:")
+    assert bundle.normalized.warnings[0].message.startswith("redacted:")
+    assert bundle.normalized.tests is not None
+    assert bundle.normalized.tests.cases[0].message is not None
+    assert bundle.normalized.tests.cases[0].message.startswith("redacted:")
+    assert bundle.normalized.artifacts[0].startswith("redacted:")
+    assert str(bundle.normalized.metadata["token"]).startswith("redacted:")
+    nested = bundle.normalized.metadata["nested"]
+    assert isinstance(nested, dict)
+    assert str(nested["value"]).startswith("redacted:")
+    assert bundle.collected_text.startswith("redacted:")
 
 
 def test_generate_report_marks_error_severity(

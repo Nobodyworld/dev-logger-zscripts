@@ -709,7 +709,10 @@ def _read_stdin_payload() -> str | None:
         return None
     if sys.stdin.isatty():
         return None
-    readable, _, _ = select.select([sys.stdin], [], [], 0)
+    try:
+        readable, _, _ = select.select([sys.stdin], [], [], 0)
+    except OSError:
+        return None
     if not readable:
         return None
     data = sys.stdin.read()

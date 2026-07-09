@@ -6,21 +6,43 @@ import os
 import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-IGNORE_DIRS = {".git", "__pycache__", ".venv", "venv", ".pytest_cache", ".ruff_cache"}
+IGNORE_DIRS = {
+    ".git",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest-tmp",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "venv",
+}
+IGNORE_ROOT_DIRS = {"artifacts"}
+IGNORE_FILES = {".coverage"}
 
 
-def _should_skip(dirpath: str) -> bool:
+def _should_skip_dir(root: str, dirpath: str) -> bool:
     """Return True when ``dirpath`` belongs to one of the ignored directories."""
-    return any(part in IGNORE_DIRS for part in dirpath.split(os.sep))
+    parts = dirpath.split(os.sep)
+    if any(part in IGNORE_DIRS for part in parts):
+        return True
+    rel_parts = os.path.relpath(dirpath, root).split(os.sep)
+    return rel_parts[0] in IGNORE_ROOT_DIRS
+
+
+def _should_skip_file(filename: str) -> bool:
+    """Return True when ``filename`` is a generated local artifact."""
+    return filename in IGNORE_FILES
 
 
 def find_binaries(root: str) -> list[str]:
     """Return a list of files under ``root`` containing NUL bytes."""
     binaries: list[str] = []
     for dirpath, _dirs, files in os.walk(root):
-        if _should_skip(dirpath):
+        if _should_skip_dir(root, dirpath):
             continue
         for filename in files:
+            if _should_skip_file(filename):
+                continue
             candidate = os.path.join(dirpath, filename)
             try:
                 with open(candidate, "rb") as handle:

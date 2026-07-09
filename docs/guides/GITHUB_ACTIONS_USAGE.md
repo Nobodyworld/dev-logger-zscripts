@@ -26,10 +26,10 @@ jobs:
           python -m pip install -e .[dev]
       - name: Normalize sample CI log
         run: |
-          python cli.py parse --adapter ci --input examples/ci/sample.log > normalized_ci_log.json
+          python cli.py --adapter ci parse --input examples/ci/sample.log > normalized_ci_log.json
       - name: Build redacted markdown report
         run: |
-          python cli.py report --adapter ci --input examples/ci/sample.log --format markdown --redact --output report.md
+          python cli.py --adapter ci report --input examples/ci/sample.log --format markdown --redact --output report.md
       - name: Upload outputs
         uses: actions/upload-artifact@v5
         with:

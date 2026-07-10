@@ -1,11 +1,11 @@
 # Public Release Final Verdict
 
 - Repository: `Nobodyworld/dev-logger-zscripts`
-- Branch reviewed: `main`
+- Branch reviewed: PR #48, `chore/public-showcase-readiness-followup`
 - Current merged showcase baseline: `7d6e03f4674c22401e8d15a57b02f856941fed55`
 - Last clean-worktree product-validation source head: `124c1e4f85204aaec76d4f7feafdbd0912513bd7`
-- Evidence date: 2026-07-08
-- Authoritative status: `KEEP PRIVATE - FINAL PUBLIC SHOWCASE VALIDATION REQUIRED`
+- Evidence updated: 2026-07-10
+- Authoritative status: `KEEP PRIVATE - HOSTED CI REVALIDATION AND FINAL MAIN VALIDATION REQUIRED`
 
 ## Employer-Facing Product Identity
 
@@ -40,10 +40,23 @@ That merge:
   Markdown/JSON rendering;
 - added regression tests for report redaction and CLI argument order.
 
+PR #48 adds or updates:
+
+- least-privilege GitHub Actions permissions and immutable Action SHA pins;
+- disabled checkout credential persistence;
+- Dependabot grouping and lower open-PR limits;
+- removal of the broad Gitleaks path allowlist;
+- explicit setuptools package discovery for `zscripts*`;
+- deterministic full-environment bootstrap and contributor instructions;
+- editable-install, isolated-wheel, and zipapp smoke coverage in hosted CI;
+- hosted coverage enforcement and documentation-link validation;
+- corrected pre-commit Bandit paths and a non-mutating `make check`;
+- current release-status documentation.
+
 ## Latest Clean-Worktree Validation Evidence
 
-The merged PR was validated locally before merge from clean worktree head
-`124c1e4f85204aaec76d4f7feafdbd0912513bd7`.
+The merged PR #47 product baseline was validated locally before merge from clean
+worktree head `124c1e4f85204aaec76d4f7feafdbd0912513bd7`.
 
 Reported validation results:
 
@@ -65,14 +78,28 @@ Reported validation results:
 - Gitleaks tracked-file scan: pass
 - Gitleaks full-history scan: pass
 
+This is strong product evidence, but it predates the complete PR #48 branch and
+cannot serve as the final visibility-change gate.
+
 ## Current GitHub Actions Status
 
-Hosted GitHub Actions reported `startup_failure` for the PR #47 head SHA and
-created no job-level evidence. This appears to be a repository Actions
-policy/configuration issue rather than a product-code failure.
+GitHub Actions run #8 for PR #48 started successfully and passed installation,
+formatting, lint, type checks, Bandit, dependency audit, binary scanning, and all
+176 tests. It then failed when the diagnostics helper was invoked directly as
+`python scripts/diagnostics_probe.py`, producing
+`ModuleNotFoundError: No module named 'zscripts'`.
 
-Until hosted Actions is repaired, clean local validation remains the practical
-quality signal, but it is not enough to change repository visibility.
+PR #48 now addresses that failure by:
+
+- declaring package discovery explicitly;
+- testing editable imports and CLI entry points outside the repository root;
+- building and installing a wheel into an isolated virtual environment;
+- invoking the diagnostics helper as
+  `python -m scripts.diagnostics_probe`;
+- adding coverage, documentation-link, wheel, and zipapp gates.
+
+A successful hosted run against the latest PR #48 head is required before the PR
+can be marked ready or merged.
 
 ## CodeQL and Secret Protection Status
 
@@ -85,33 +112,37 @@ Current classifications:
 - GitHub Secret Protection: `DEFERRED UNTIL PUBLIC OR LICENSED`
 - Push protection: `DEFERRED UNTIL PUBLIC OR LICENSED`
 
-Do not enable CodeQL or Secret Protection while the repository remains private
-and unlicensed. Do not add an active CodeQL workflow for the private state.
+Do not add an active CodeQL workflow while the repository remains private and
+unlicensed. Enable the deferred GitHub security features immediately after the
+repository becomes public or qualifying coverage is available.
 
 ## Remaining Public-Showcase Blockers
 
-- Hosted Actions startup failure must be repaired or explicitly accepted as an
-  owner-policy limitation before publication.
-- The CI workflow hardening, Dependabot noise reduction, and Gitleaks allowlist
-  cleanup on the public-showcase follow-up branch must be locally validated and
-  merged.
-- A final clean-worktree validation must be run against the exact final `main`
-  commit after all follow-up docs/config changes are merged.
-- Repository visibility must remain private until the final validation evidence
-  is recorded.
+- Hosted CI must pass against the latest PR #48 head.
+- The complete PR #48 branch must pass the clean-worktree release gate locally.
+- PR #48 must be reviewed, marked ready, and merged only after those results are
+  green.
+- A final clean-worktree validation must be run against the exact merged `main`
+  commit after all follow-up changes are included.
+- The published security mailbox, PGP fingerprint, and response commitments must
+  be confirmed as operational before visibility changes.
+- Repository branch protection, required checks, visibility, and deferred
+  security-feature settings must be confirmed by the owner because those settings
+  are not fully exposed through the connector.
 
 ## Final Classification
 
-`KEEP PRIVATE - FINAL PUBLIC SHOWCASE VALIDATION REQUIRED`
+`KEEP PRIVATE - HOSTED CI REVALIDATION AND FINAL MAIN VALIDATION REQUIRED`
 
 ## Owner Steps Before Visibility Change
 
-1. Merge only reviewed public-readiness follow-up work.
-2. Run the full clean-worktree release gate on the final `main` commit.
-3. Repair or intentionally document the hosted Actions startup-failure state.
-4. Confirm no realistic provider-shaped secrets remain in tracked files or history.
-5. Confirm CodeQL / Secret Protection remain deferred until the repository is
-   public or licensed.
-6. Change repository visibility only after the final gate remains green.
-7. Immediately after publication or licensing, enable the deferred GitHub security
-   features from repository settings.
+1. Obtain a successful hosted CI run for the latest PR #48 head.
+2. Run the full clean-worktree release gate on the PR #48 head.
+3. Update this evidence with the exact validated PR head and results.
+4. Review and squash-merge PR #48 with an expected-head safety check.
+5. Run the full clean-worktree release gate again on the exact merged `main` SHA.
+6. Confirm no realistic provider-shaped secrets remain in tracked files or history.
+7. Confirm the security reporting contact and PGP information are functional.
+8. Confirm branch protection and required-check settings for the public state.
+9. Change visibility only after every preceding gate remains green.
+10. Immediately after publication or licensing, enable the deferred GitHub security features.

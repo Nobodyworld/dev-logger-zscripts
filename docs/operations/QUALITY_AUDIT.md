@@ -9,7 +9,7 @@
 
 Current classification:
 
-`KEEP PRIVATE - FINAL PUBLIC SHOWCASE VALIDATION REQUIRED`
+`KEEP PRIVATE - HOSTED CI REVALIDATION AND FINAL MAIN VALIDATION REQUIRED`
 
 ## Historical Snapshot (2026-06-23)
 
@@ -34,26 +34,48 @@ Merged showcase baseline: `7d6e03f4674c22401e8d15a57b02f856941fed55`
 | Tests | `python -m pytest -q --basetemp=<external-temp>` | Pass (`176 passed, 13 warnings`). |
 | Docs links | `python scripts/validate_docs_links.py` | Pass. |
 | Diff whitespace | `git diff --check` | Pass. |
-| Type | `mypy zscripts/application zscripts/config.py zscripts/configuration.py zscripts/observability/logging.py zscripts/observability/metrics.py zscripts/observability/health.py zscripts/observability/instrumentation.py zscripts/extensions/scaffolding.py zscripts/schemas` | Pass. |
+| Type | supported mypy release surface | Pass. |
 | Coverage | `coverage run -m pytest && coverage report --fail-under=85` | Pass (92% total). |
 | Build | `python scripts/build_artifact.py` | Pass. |
 | Packaged smoke | `python artifacts/build/zscripts.pyz guardrails` | Pass. |
 | Packaged adapters smoke | `python artifacts/build/zscripts.pyz adapters --format json` | Pass. |
-| Raw-log report demo | `python cli.py --adapter ci report --input examples/raw_to_report/raw.log --format markdown --redact --output artifacts/build/raw_to_report_demo.md` | Pass. |
+| Raw-log report demo | supported adapter-first CLI invocation | Pass. |
 | Report redaction scan | provider-token / fixture pattern scan against generated report | Pass. |
 | Security (Bandit) | `python -m bandit -q -r zscripts examples/sample_project` | Pass under Python 3.14.0. |
 | Dependency audit | `python -m pip_audit` | Pass. |
 | Secret scan (tracked) | `gitleaks detect --no-git --source . --redact --verbose` | Pass. |
 | Secret scan (history) | `gitleaks detect --source . --redact --verbose` | Pass. |
 
+## PR #48 Hosted CI Evidence
+
+GitHub Actions run #8 started normally and produced job-level evidence. The
+following checks passed under Ubuntu and Python 3.11:
+
+- editable installation with `.[dev,helpers]`;
+- Ruff formatting and lint;
+- supported mypy surface;
+- Bandit, `pip-audit`, and the binary-file scan;
+- all 176 pytest tests.
+
+The run then failed in the diagnostics snapshot step with
+`ModuleNotFoundError: No module named 'zscripts'` because the helper was invoked
+as a direct file path. PR #48 now remediates that failure and strengthens the
+hosted gate with explicit package discovery, editable and isolated-wheel
+installation smokes, module-based diagnostics invocation, coverage enforcement,
+documentation-link validation, and zipapp smokes.
+
+A fresh hosted run is required. The prior passing steps are useful evidence but
+do not make the latest branch green.
+
 ## Current Quality Risks
 
-- Hosted GitHub Actions reported `startup_failure` for the validated PR head and
-  produced no job-level evidence.
+- The latest PR #48 changes have not yet received a successful hosted CI result.
+- The full PR #48 branch still requires local clean-worktree validation because
+  the connector cannot execute the release commands.
 - CodeQL, GitHub Secret Protection, and push protection are deferred until the
   repository is public or the account has private-repository coverage.
-- Follow-up CI/Dependabot/Gitleaks configuration hardening must be locally
-  validated after merge.
+- Tracked-file and full-history Gitleaks scans remain part of the final local
+  release gate rather than the hosted workflow.
 - A final clean-worktree release gate is still required on the exact final
   `main` commit before repository visibility changes.
 

@@ -19,7 +19,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--requirements",
         default=str(DEFAULT_REQUIREMENTS),
-        help="Path to a pip requirements file to install before editable dependencies.",
+        help="Primary requirements file for the editable development environment.",
     )
     parser.add_argument(
         "--skip-install",
@@ -36,11 +36,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    commands: list[list[str]] = []
     requirements_path = Path(args.requirements)
     if requirements_path.exists():
-        commands.append([sys.executable, "-m", "pip", "install", "-r", str(requirements_path)])
-    commands.append([sys.executable, "-m", "pip", "install", "-e", ".[dev]"])
+        commands = [[sys.executable, "-m", "pip", "install", "-r", str(requirements_path)]]
+    else:
+        commands = [[sys.executable, "-m", "pip", "install", "-e", ".[dev,helpers]"]]
 
     for cmd in commands:
         print("$", " ".join(cmd))

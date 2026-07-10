@@ -74,8 +74,8 @@ helpers-optional = [
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["zscripts*"]
-exclude = ["artifacts*", "docs*", "examples*", "scripts*", "tests*"]
+include = ["zscripts*", "adapters*", "agents*", "scripts*"]
+exclude = ["artifacts*", "docs*", "examples*", "tests*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

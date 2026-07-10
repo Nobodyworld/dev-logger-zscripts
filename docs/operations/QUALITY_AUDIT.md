@@ -9,7 +9,7 @@
 
 Current classification:
 
-`KEEP PRIVATE - HOSTED CI REVALIDATION AND FINAL MAIN VALIDATION REQUIRED`
+`KEEP PRIVATE - LOCAL PR VALIDATION AND FINAL MAIN VALIDATION REQUIRED`
 
 ## Historical Snapshot (2026-06-23)
 
@@ -48,30 +48,32 @@ Merged showcase baseline: `7d6e03f4674c22401e8d15a57b02f856941fed55`
 
 ## PR #48 Hosted CI Evidence
 
-GitHub Actions run #8 started normally and produced job-level evidence. The
-following checks passed under Ubuntu and Python 3.11:
+GitHub Actions run #20 passed against head
+`8b80c74d974658ae6d6480c3c171bba6f7507e9d` under Ubuntu and Python 3.11.
 
-- editable installation with `.[dev,helpers]`;
+Passed hosted checks:
+
+- installation of `.[dev,helpers]`;
+- editable imports and CLI smokes outside the checkout;
 - Ruff formatting and lint;
 - supported mypy surface;
-- Bandit, `pip-audit`, and the binary-file scan;
-- all 176 pytest tests.
+- Bandit, `pip-audit`, and binary-file scan;
+- all 176 tests with the 85% coverage threshold enforced;
+- documentation-link validation;
+- isolated wheel build, installation, imports, and CLI smokes;
+- zipapp build and CLI smokes;
+- diagnostics snapshot generation;
+- quality-report artifact upload.
 
-The run then failed in the diagnostics snapshot step with
-`ModuleNotFoundError: No module named 'zscripts'` because the helper was invoked
-as a direct file path. PR #48 now remediates that failure and strengthens the
-hosted gate with explicit package discovery, editable and isolated-wheel
-installation smokes, module-based diagnostics invocation, coverage enforcement,
-documentation-link validation, and zipapp smokes.
-
-A fresh hosted run is required. The prior passing steps are useful evidence but
-do not make the latest branch green.
+This resolves the earlier run #8 failure, which occurred after all tests passed
+because the diagnostics helper was invoked as a direct file path. The workflow
+now uses module invocation and validates the installed distribution independently
+of pytest's repository-root path configuration.
 
 ## Current Quality Risks
 
-- The latest PR #48 changes have not yet received a successful hosted CI result.
-- The full PR #48 branch still requires local clean-worktree validation because
-  the connector cannot execute the release commands.
+- The complete latest PR #48 head still requires local clean-worktree validation
+  because the connector cannot execute the release commands.
 - CodeQL, GitHub Secret Protection, and push protection are deferred until the
   repository is public or the account has private-repository coverage.
 - Tracked-file and full-history Gitleaks scans remain part of the final local

@@ -5,7 +5,7 @@
 - Current merged showcase baseline: `7d6e03f4674c22401e8d15a57b02f856941fed55`
 - Last clean-worktree product-validation source head: `124c1e4f85204aaec76d4f7feafdbd0912513bd7`
 - Evidence updated: 2026-07-10
-- Authoritative status: `KEEP PRIVATE - HOSTED CI REVALIDATION AND FINAL MAIN VALIDATION REQUIRED`
+- Authoritative status: `KEEP PRIVATE - LOCAL PR VALIDATION AND FINAL MAIN VALIDATION REQUIRED`
 
 ## Employer-Facing Product Identity
 
@@ -46,12 +46,14 @@ PR #48 adds or updates:
 - disabled checkout credential persistence;
 - Dependabot grouping and lower open-PR limits;
 - removal of the broad Gitleaks path allowlist;
-- explicit setuptools package discovery for `zscripts*`;
+- explicit setuptools discovery for the runtime `zscripts`, `adapters`, `agents`,
+  and `scripts` package trees;
 - deterministic full-environment bootstrap and contributor instructions;
 - editable-install, isolated-wheel, and zipapp smoke coverage in hosted CI;
 - hosted coverage enforcement and documentation-link validation;
 - corrected pre-commit Bandit paths and a non-mutating `make check`;
-- current release-status documentation.
+- current release-status documentation and a historical banner on stale planning
+  material.
 
 ## Latest Clean-Worktree Validation Evidence
 
@@ -83,23 +85,26 @@ cannot serve as the final visibility-change gate.
 
 ## Current GitHub Actions Status
 
-GitHub Actions run #8 for PR #48 started successfully and passed installation,
-formatting, lint, type checks, Bandit, dependency audit, binary scanning, and all
-176 tests. It then failed when the diagnostics helper was invoked directly as
-`python scripts/diagnostics_probe.py`, producing
-`ModuleNotFoundError: No module named 'zscripts'`.
+GitHub Actions run #20 passed against PR #48 head
+`8b80c74d974658ae6d6480c3c171bba6f7507e9d` under Ubuntu and Python 3.11.
 
-PR #48 now addresses that failure by:
+The hosted gate passed:
 
-- declaring package discovery explicitly;
-- testing editable imports and CLI entry points outside the repository root;
-- building and installing a wheel into an isolated virtual environment;
-- invoking the diagnostics helper as
-  `python -m scripts.diagnostics_probe`;
-- adding coverage, documentation-link, wheel, and zipapp gates.
+- full editable installation with `.[dev,helpers]`;
+- editable imports and CLI smokes outside the repository root;
+- Ruff formatting and lint;
+- the supported mypy surface;
+- Bandit, dependency audit, and binary-file scanning;
+- all 176 tests with the 85% coverage threshold enforced;
+- documentation-link validation;
+- isolated wheel build, installation, imports, and CLI smokes;
+- zipapp build and CLI smokes;
+- diagnostics snapshot generation;
+- quality-report artifact upload.
 
-A successful hosted run against the latest PR #48 head is required before the PR
-can be marked ready or merged.
+This resolves the prior run #8 diagnostics failure. The branch now has hosted
+evidence that the source checkout, editable install, built wheel, and zipapp all
+execute through their supported entry points.
 
 ## CodeQL and Secret Protection Status
 
@@ -118,10 +123,11 @@ repository becomes public or qualifying coverage is available.
 
 ## Remaining Public-Showcase Blockers
 
-- Hosted CI must pass against the latest PR #48 head.
-- The complete PR #48 branch must pass the clean-worktree release gate locally.
-- PR #48 must be reviewed, marked ready, and merged only after those results are
-  green.
+- The complete latest PR #48 head must pass the clean-worktree release gate
+  locally.
+- The final PR head and local validation results must be recorded before the PR
+  is marked ready and merged.
+- PR #48 must be reviewed and squash-merged with an expected-head safety check.
 - A final clean-worktree validation must be run against the exact merged `main`
   commit after all follow-up changes are included.
 - The published security mailbox, PGP fingerprint, and response commitments must
@@ -132,14 +138,14 @@ repository becomes public or qualifying coverage is available.
 
 ## Final Classification
 
-`KEEP PRIVATE - HOSTED CI REVALIDATION AND FINAL MAIN VALIDATION REQUIRED`
+`KEEP PRIVATE - LOCAL PR VALIDATION AND FINAL MAIN VALIDATION REQUIRED`
 
 ## Owner Steps Before Visibility Change
 
-1. Obtain a successful hosted CI run for the latest PR #48 head.
-2. Run the full clean-worktree release gate on the PR #48 head.
-3. Update this evidence with the exact validated PR head and results.
-4. Review and squash-merge PR #48 with an expected-head safety check.
+1. Run the full clean-worktree release gate on the latest PR #48 head.
+2. Update this evidence with the exact validated PR head and results.
+3. Mark PR #48 ready and perform the final review.
+4. Squash-merge PR #48 with an expected-head safety check.
 5. Run the full clean-worktree release gate again on the exact merged `main` SHA.
 6. Confirm no realistic provider-shaped secrets remain in tracked files or history.
 7. Confirm the security reporting contact and PGP information are functional.

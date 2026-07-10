@@ -22,21 +22,25 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
    git clone https://github.com/Nobodyworld/dev-logger-zscripts.git
    cd dev-logger-zscripts
    python -m venv .venv
-   source .venv/bin/activate
+   source .venv/bin/activate  # Windows PowerShell: .venv\Scripts\Activate.ps1
    python scripts/bootstrap.py
    ```
 
-   The bootstrap script installs runtime/dev dependencies and registers
-   `pre-commit` hooks (including commit message validation).
+   The bootstrap script installs the editable package with the development and
+   helper extras declared in `requirements.txt`, including the build and
+   pre-commit tooling needed by the repository. It then registers the normal and
+   commit-message hooks.
+
 2. **One-Command Check**
 
    ```bash
-   python scripts/agent_guard.py
+   make check
    ```
 
-   This runs lint, type checks, Bandit, and pytest. Use `--only`/`--skip` to
-   tailor the workflow; `make quality` remains available for coverage-enforced
-   pipelines and writes summaries to `artifacts/quality/quality_gate.json`.
+   `make check` is non-mutating and runs the formatting check, Ruff lint, the
+   supported mypy surface, Bandit, and pytest. Use `make quality` for the
+   coverage-enforced workflow that writes
+   `artifacts/quality/quality_gate.json`.
 
 3. **Ops Health Probe**
 
@@ -61,22 +65,33 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
    traceable.
 
 5. **Pre-commit Hooks**
-   - `pre-commit run --all-files` runs Ruff (format + lint), mypy, Bandit, and detect-secrets using `.secrets.baseline`.
-   - Commit-msg hooks run `npx commitlint --edit "$1"`; ensure Node.js ≥18 is installed locally.
+
+   - `pre-commit run --all-files` runs Ruff (format + lint), mypy, Bandit, and
+     detect-secrets using `.secrets.baseline`.
+   - Commit-message hooks run `npx commitlint --edit "$1"`; ensure Node.js ≥18 is
+     installed locally.
 
 6. **Software Bill of Materials (SBOM)**
-   - Generate CycloneDX manifests with `make sbom`; artifacts are written to `artifacts/sbom/` and uploaded by CI for Python 3.11 runs.
-   - Ensure the directory stays in `.gitignore`. If the command fails, verify that `cyclonedx-bom` is installed from `requirements.txt`.
+
+   - `make sbom` writes local CycloneDX artifacts under `artifacts/sbom/` when
+     the `cyclonedx-bom` CLI is installed.
+   - SBOM generation is an explicit release-maintenance step; the current hosted
+     CI workflow does not publish SBOM artifacts.
 
 7. **Secrets Baseline Maintenance**
-   - Update `.secrets.baseline` when adding fixtures that intentionally include secret-like strings: `detect-secrets scan > .secrets.baseline`.
-   - Review the diff to avoid allow-listing real credentials. CI also runs gitleaks with `.gitleaks.toml` for defense in depth.
+
+   - Update `.secrets.baseline` when adding fixtures that intentionally include
+     secret-like strings: `detect-secrets scan > .secrets.baseline`.
+   - Review the diff to avoid allow-listing real credentials. The final public
+     release gate also runs tracked-file and full-history Gitleaks scans using
+     `.gitleaks.toml`.
 
 ## Testing
 
 - Write deterministic tests using pytest; prefer property-based tests for parser/config logic.
 - When adding fixtures, place reusable assets under `tests/data/` and reference them via helper functions.
 - Run `pytest` before opening a PR. For integration-heavy work, add coverage assertions or performance benchmarks when feasible.
+- Packaging changes must preserve the hosted editable-install and isolated wheel-install smoke tests.
 
 ## Documentation Standards
 
@@ -86,11 +101,15 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
 - Record dependency rationale updates in `docs/DEPENDENCIES.md` whenever packages change.
 - Include inline docstrings and type hints for new modules.
 - Capture architectural decisions as ADRs under `docs/adr/`.
+- Treat documents under `docs/plans/` as historical planning records unless they
+  explicitly identify themselves as current and authoritative.
 
 ## Pull Request Checklist
 
 - [ ] Conventional commit history present (squash if necessary).
 - [ ] `make check` succeeded locally.
+- [ ] Coverage-enforced quality gate succeeded when runtime code changed.
+- [ ] Editable and wheel installation smoke tests pass for packaging changes.
 - [ ] Tests cover new behaviour or guard against regressions.
 - [ ] Docs updated (README, CHANGELOG, STATUS, ADR as needed).
 - [ ] Added or updated configuration/schema files when introducing new env vars.
@@ -98,7 +117,10 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
 
 ## Release Workflow
 
-- Releases are automated once semantic-release is enabled. Until then, maintainers tag versions manually after verifying CI.
+- Releases remain manual until an automated release workflow is intentionally
+  enabled.
 - Add release notes to CHANGELOG.md with context and migration steps.
+- Do not tag or publish a release until hosted CI passes and the final
+  clean-worktree release gate has been recorded against the exact `main` SHA.
 
 We appreciate your contributions—thank you for helping build a reliable developer experience!

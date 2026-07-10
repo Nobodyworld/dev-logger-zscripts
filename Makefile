@@ -1,4 +1,4 @@
-.PHONY: setup dev fmt lint type security test coverage build deploy quality check sbom
+.PHONY: setup dev fmt format-check lint type security test coverage build deploy quality check sbom
 
 setup:
 	python scripts/bootstrap.py || python scripts/bootstrap.py --skip-install
@@ -7,18 +7,21 @@ dev:
 	python scripts/dev_start.py
 
 MYPY_TARGETS = \
-    zscripts/application \
-    zscripts/config.py \
-    zscripts/configuration.py \
-    zscripts/observability/logging.py \
-    zscripts/observability/metrics.py \
-    zscripts/observability/health.py \
-    zscripts/observability/instrumentation.py \
-    zscripts/extensions/scaffolding.py \
-    zscripts/schemas
+	zscripts/application \
+	zscripts/config.py \
+	zscripts/configuration.py \
+	zscripts/observability/logging.py \
+	zscripts/observability/metrics.py \
+	zscripts/observability/health.py \
+	zscripts/observability/instrumentation.py \
+	zscripts/extensions/scaffolding.py \
+	zscripts/schemas
 
 fmt:
 	ruff format .
+
+format-check:
+	ruff format --check .
 
 lint:
 	ruff check .
@@ -47,7 +50,7 @@ deploy: build
 quality:
 	python scripts/dev_start.py
 
-check: fmt lint type security test
+check: format-check lint type security test
 
 sbom:
 	mkdir -p artifacts/sbom

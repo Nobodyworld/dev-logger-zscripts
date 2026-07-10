@@ -1,5 +1,12 @@
 # Repo Intelligence Report
 
+> **Historical planning snapshot:** This report was last updated on 2025-10-19
+> and describes the repository before the current configuration, observability,
+> diagnostics, extension, and reporting architecture was implemented. It is not
+> an authoritative description of the current product. See `README.md`,
+> `docs/architecture/ARCHITECTURE.md`, and
+> `docs/operations/PUBLIC_RELEASE_FINAL_VERDICT.md` for current information.
+
 _Last updated: 2025-10-19_
 
 ## Executive Summary

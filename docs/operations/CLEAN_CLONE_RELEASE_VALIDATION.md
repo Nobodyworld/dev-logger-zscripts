@@ -6,7 +6,29 @@
 - Merged `main` baseline: `7d6e03f4674c22401e8d15a57b02f856941fed55`
 - Clean-worktree validated source head: `124c1e4f85204aaec76d4f7feafdbd0912513bd7`
 - Environment: Windows clean worktree, Python 3.14.0
-- Status: `VALIDATED FOR PR #47 - FINAL MAIN VALIDATION STILL REQUIRED`
+- Status: `VALIDATED FOR PR #47 - PR #48 AND FINAL MAIN VALIDATION STILL REQUIRED`
+
+## Current PR #48 Revalidation State
+
+GitHub Actions run #8 for PR #48 started successfully and completed the editable
+installation, formatting, lint, supported mypy surface, Bandit, dependency audit,
+binary scan, and all 176 tests. It then failed while invoking
+`scripts/diagnostics_probe.py` directly because the script directory, rather than
+the repository root, became Python's import root.
+
+PR #48 now includes the following remediation, which requires a fresh hosted CI
+result before merge:
+
+- explicit setuptools discovery for `zscripts*` packages;
+- editable-install imports and CLI smokes from outside the repository root;
+- isolated wheel build, installation, import, and CLI smokes;
+- module-based diagnostics invocation with
+  `python -m scripts.diagnostics_probe`;
+- hosted coverage enforcement at the existing 85% threshold;
+- documentation-link validation and zipapp smoke tests.
+
+This document records the earlier PR #47 clean-worktree evidence. It must not be
+used as final evidence for PR #48 or for a visibility change.
 
 ## Objective
 
@@ -78,7 +100,9 @@ gitleaks detect --source . --redact --verbose
 
 - This record replaces older 2026-07-01 counts and fixture notes.
 - PR #47 validation is strong product evidence, but it is not a final public
-  release gate for the repository after follow-up documentation/configuration
-  changes.
+  release gate for the repository after follow-up code, documentation, and
+  configuration changes.
+- PR #48 must receive a successful hosted CI result and branch-level local
+  validation before merge.
 - A final clean-worktree validation must be run against the exact final `main`
   commit immediately before any visibility change.

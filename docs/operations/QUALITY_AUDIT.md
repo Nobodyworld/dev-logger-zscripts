@@ -2,14 +2,15 @@
 
 ## Status Classification
 
-- Historical notes in this file are retained for traceability.
-- Authoritative current public-readiness status is recorded in:
-  - `docs/operations/PUBLIC_RELEASE_FINAL_VERDICT.md`
-  - `docs/operations/CLEAN_CLONE_RELEASE_VALIDATION.md`
+Historical notes in this file are retained for traceability. Authoritative
+current public-readiness status is recorded in:
+
+- `docs/operations/PUBLIC_RELEASE_FINAL_VERDICT.md`
+- `docs/operations/CLEAN_CLONE_RELEASE_VALIDATION.md`
 
 Current classification:
 
-`KEEP PRIVATE - LOCAL PR VALIDATION AND FINAL MAIN VALIDATION REQUIRED`
+`PUBLIC BETA CANDIDATE - LOCAL PR VALIDATION AND FINAL MAIN VALIDATION REQUIRED`
 
 ## Historical Snapshot (2026-06-23)
 
@@ -48,8 +49,8 @@ Merged showcase baseline: `7d6e03f4674c22401e8d15a57b02f856941fed55`
 
 ## PR #48 Hosted CI Evidence
 
-GitHub Actions run #20 passed against head
-`8b80c74d974658ae6d6480c3c171bba6f7507e9d` under Ubuntu and Python 3.11.
+GitHub Actions run #23 passed against head
+`14bcfb545c92fc196911ce4a0b8114f0c16e095b` under Ubuntu and Python 3.11.
 
 Passed hosted checks:
 
@@ -65,24 +66,43 @@ Passed hosted checks:
 - diagnostics snapshot generation;
 - quality-report artifact upload.
 
-This resolves the earlier run #8 failure, which occurred after all tests passed
-because the diagnostics helper was invoked as a direct file path. The workflow
-now uses module invocation and validates the installed distribution independently
-of pytest's repository-root path configuration.
+This resolves the earlier diagnostics and package-discovery failures. The
+workflow validates the installed distribution independently of pytest's
+repository-root path configuration.
+
+## Security Policy Correction (2026-07-14)
+
+The branch now removes unsupported publication claims from `SECURITY.md` and
+`CODE_OF_CONDUCT.md`:
+
+- unverified `security@zscripts.dev` contact removed;
+- unverified PGP fingerprint removed;
+- fixed response-time promises removed;
+- vulnerability reports directed to GitHub private vulnerability reporting;
+- no replacement mailbox published without owner confirmation;
+- public disclosure of sensitive vulnerability details remains prohibited.
+
+The README now carries the intended classification
+`PUBLIC BETA — ACTIVE DEVELOPMENT` and warns that format coverage and automated
+redaction are not guarantees.
+
+These documentation-only changes require hosted CI and local release-gate
+validation on the complete latest PR head.
 
 ## Current Quality Risks
 
 - The complete latest PR #48 head still requires local clean-worktree validation
-  because the connector cannot execute the release commands.
-- CodeQL, GitHub Secret Protection, and push protection are deferred until the
-  repository is public or the account has private-repository coverage.
-- Tracked-file and full-history Gitleaks scans remain part of the final local
+  because the connector cannot execute the local release commands.
+- Tracked-worktree and full-history Gitleaks scans remain part of the final local
   release gate rather than the hosted workflow.
-- A final clean-worktree release gate is still required on the exact final
-  `main` commit before repository visibility changes.
+- A final clean-worktree release gate is required on the exact merged `main`
+  commit before the visibility change.
+- GitHub private vulnerability reporting, CodeQL where eligible, secret scanning,
+  push protection, Dependabot alerts, and security updates must be enabled or
+  verified after publication.
 
 ## Profiling Note
 
-- `python -m cProfile -s cumulative cli.py summarize --input examples/python/sample.log`
-  remains useful for startup profiling; import-heavy startup is still an
-  optimization area, but not a public-release blocker.
+`python -m cProfile -s cumulative cli.py summarize --input examples/python/sample.log`
+remains useful for startup profiling. Import-heavy startup is an optimization
+area, not a public-release blocker.

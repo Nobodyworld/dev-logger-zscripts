@@ -2,6 +2,20 @@
 
 Zscripts is a structured log collection, normalization, redaction, diagnostics, and reporting toolkit for developers and automation systems.
 
+## PUBLIC BETA — ACTIVE DEVELOPMENT
+
+Zscripts is actively developed and is not guaranteed to parse every possible
+third-party log format. Adapter output, diagnostics, and generated reports should
+be reviewed before use in production or publication.
+
+Redaction is a defense-in-depth feature, not a substitute for reviewing sensitive
+output. Never assume automated redaction has identified every credential,
+personal record, proprietary value, or organization-specific secret.
+
+Public repository visibility is distinct from a tagged stable release. Until a
+stable release is explicitly published, the current `main` branch and any
+pre-1.0 artifacts should be treated as beta software.
+
 Public narrative:
 
 > Zscripts converts raw development and CI logs into normalized, redacted, diagnosable, and reportable output through a reusable Python CLI and adapter architecture.

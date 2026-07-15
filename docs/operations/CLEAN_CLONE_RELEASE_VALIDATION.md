@@ -7,7 +7,21 @@
 - Historical clean-worktree source head: `124c1e4f85204aaec76d4f7feafdbd0912513bd7`
 - Historical environment: Windows clean worktree, Python 3.14.0
 - Intended public status: `PUBLIC BETA — ACTIVE DEVELOPMENT`
-- Current status: `PR #48 LOCAL AND FINAL MAIN VALIDATION REQUIRED`
+- Current status: `PR #48 LOCALLY VALIDATED - READY FOR FINAL REVIEW - PUBLIC BETA CANDIDATE`
+
+## Current PR #48 Local Validation (2026-07-15)
+
+Validated source: `a36578d`, based on required PR head
+`989d32c38f7d4ba036e532ae7eda4ff141eae650`; `main` remained
+`7d6e03f4674c22401e8d15a57b02f856941fed55`. Windows 11 / Python 3.14.0
+validation passed all required local gates: source checks, supported mypy,
+176 tests, 92% coverage, Bandit, pip-audit, pre-commit, editable and wheel
+smokes, zipapp, diagnostics JSON, redaction, and both Gitleaks modes (109
+history commits, no leaks). Full command-level evidence is retained in the
+final verdict and quality audit.
+
+The exact squash-merged `main` SHA still requires this entire release gate
+before publication or a visibility change.
 
 ## PR #48 Hosted Revalidation
 

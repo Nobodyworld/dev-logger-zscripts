@@ -10,7 +10,26 @@ current public-readiness status is recorded in:
 
 Current classification:
 
-`PUBLIC BETA CANDIDATE - LOCAL PR VALIDATION AND FINAL MAIN VALIDATION REQUIRED`
+`PR #48 LOCALLY VALIDATED - READY FOR FINAL REVIEW - PUBLIC BETA CANDIDATE`
+
+## PR #48 Current Local Validation (2026-07-15)
+
+| Check | Result |
+| --- | --- |
+| Validated source | `a36578d` (required original PR head: `989d32c38f7d4ba036e532ae7eda4ff141eae650`) |
+| Environment | Windows 11 10.0.26200, Python 3.14.0 |
+| Formatting, lint, binaries, docs links | Pass; 52 links across 100 Markdown files |
+| Supported mypy / tests / coverage | Pass / 176 passed (13 warnings) / 92% |
+| Bandit / pip-audit / pre-commit | Pass; three reviewed `nosec` warnings / no known vulnerabilities / pass |
+| Packaging | Editable, isolated wheel, and zipapp smokes passed |
+| Diagnostics and redaction | Valid diagnostics JSON; fixture secret redacted in generated report |
+| Gitleaks | Worktree and history passed; 109 commits scanned; no leaks |
+
+Every gate was invoked with exit code 0 after the two configuration corrections:
+the pre-commit mypy hook now matches the documented supported surface, and the
+Detect Secrets baseline no longer contains an invalid obsolete filter. The
+pre-publication validation requirement against the exact merged `main` SHA
+remains unchanged.
 
 ## Historical Snapshot (2026-06-23)
 
@@ -24,7 +43,7 @@ is no longer authoritative for current HEAD.
 
 ## PR #47 Clean-Worktree Snapshot (2026-07-08)
 
-Validated source head: `124c1e4f85204aaec76d4f7feafdbd0912513bd7`  
+Validated source head: `124c1e4f85204aaec76d4f7feafdbd0912513bd7`
 Merged showcase baseline: `7d6e03f4674c22401e8d15a57b02f856941fed55`
 
 | Check | Command | Result |

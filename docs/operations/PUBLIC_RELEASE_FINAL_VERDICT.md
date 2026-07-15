@@ -7,7 +7,16 @@
 - Last clean-worktree product-validation source head: `124c1e4f85204aaec76d4f7feafdbd0912513bd7`
 - Evidence updated: 2026-07-14
 - Intended public status: `PUBLIC BETA — ACTIVE DEVELOPMENT`
-- Authoritative readiness status: `PUBLIC BETA CANDIDATE - LOCAL PR VALIDATION AND FINAL MAIN VALIDATION REQUIRED`
+- Authoritative readiness status: `PR #48 LOCALLY VALIDATED - READY FOR FINAL REVIEW - PUBLIC BETA CANDIDATE`
+
+## PR #48 Local Validation Record (2026-07-15)
+
+- Validated source SHA: `a36578d` (local validation-policy corrections atop required PR head `989d32c38f7d4ba036e532ae7eda4ff141eae650`)
+- Platform: Windows 11 10.0.26200; Python 3.14.0 (`C:\\Users\\Nobod\\.codex\\visualizations\\2026\\07\\15\\019f64ab-c7d0-74d2-859b-47950d704d07\\pr48-validation\\.venv\\Scripts\\python.exe`)
+- Passes: YAML/TOML parsing; pip check/bootstrap (one requirements-driven install); Ruff format/lint; binary scan; supported mypy; 176 tests; docs links (52); coverage 92%; Bandit (three reviewed `nosec` warnings); pip-audit (no known vulnerabilities); pre-commit; editable install; isolated wheel; zipapp; diagnostics JSON; redaction; Gitleaks worktree/history (109 commits, no leaks).
+- Security-policy greps found and corrected a live obsolete security mailbox in the issue-template contact link and an unsupported response guarantee in `docs/SUPPORT.md`; final greps have no live claims.
+
+Another complete release validation against the exact squash-merged `main` SHA remains mandatory before any visibility change.
 
 ## Employer-Facing Product Identity
 

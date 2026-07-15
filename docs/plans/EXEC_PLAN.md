@@ -53,7 +53,7 @@ Key files to touch:
 - `zscripts/config.py` and `zscripts/utils.py` for runtime behavior.
 - `zscripts/cli.py` plus legacy wrapper scripts under `zscripts/all/`, `zscripts/all_single/`, `zscripts/by_file/`, and `zscripts/create/`.
 - Repository docs (`README.md`, `docs/plans/PROJECT_STATUS_REPORT.md`) to present a professional narrative.
-- New tooling files (`pyproject.toml`, `ruff.toml`, `noxfile.py` or CI-friendly scripts) and test suite under `tests/`. 
+- New tooling files (`pyproject.toml`, `ruff.toml`, `noxfile.py` or CI-friendly scripts) and test suite under `tests/`.
 
 ## Plan of Work
 

@@ -29,4 +29,3 @@ def lint(session: nox.Session) -> None:
 
     session.install("ruff")
     session.run("ruff", "check", "--fix", "--exit-non-zero-on-fix")
-

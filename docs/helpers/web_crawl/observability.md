@@ -47,4 +47,3 @@ Agents can safely extend the surface by:
    lambda that returns your extension’s internal counters.
 3. Updating `docs/guides/automation.md` with any new endpoints or incident procedures so the
    next operator understands the telemetry narrative.
-

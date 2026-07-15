@@ -108,4 +108,3 @@ To be populated with key command outputs, Markdown/JSON snippets, and test trans
 - `ToolkitService.generate_report` signature: `def generate_report(self, *, adapter_key: str | None, raw_text: str, redact: bool, format: str) -> ReportBundle` (formatter selection may occur at CLI level; service returns bundle only).
 - CLI `report` handler will call `ToolkitService.generate_report` then pass bundle to formatter.
 - Configuration: `ToolkitConfig` adds `report_format: str` and `report_redact: bool` with validation in `zscripts/configuration.py`.
-

@@ -116,4 +116,3 @@ _To be populated with command outputs during implementation as needed._
         def summarize(self, normalized: NormalizedLog) -> str: ...
 
 - `NormalizedLog` dataclass fields include `tool`, `language`, `command`, `status`, `summary`, `errors`, `warnings`, `tests`, `artifacts`, and `metadata`. Provide serialization via `.to_dict()`.
-

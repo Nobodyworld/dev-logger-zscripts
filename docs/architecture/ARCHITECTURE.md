@@ -77,4 +77,3 @@
 - **Integrating automation:** Consume `export_cli_metadata()` to render rich
   prompts or UI. The payload includes example commands and parameter metadata to
   keep interactive shells and AI copilots aligned with the CLI.
-

@@ -138,4 +138,3 @@ Current issues include incomplete imports, missing metadata/config helpers, outd
 - `zscripts.application.report_formatters.get_report_formatter(name: str) -> Callable[[ReportBundle], str]`.
 - CLI metrics: `MetricsRegistry.counter("zscripts_cli_invocations_total", ...)`, histogram `MetricsRegistry.histogram("zscripts_cli_duration_seconds", ...)`.
 - Extension scaffolding template should define a subclass of `ToolkitExtension` with `get_extension()` factory.
-

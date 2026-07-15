@@ -11,4 +11,3 @@
 ## Type Checking
 
 - `mypy .` — strict type checking succeeded (see chunk 12512a†L1-L1).
-

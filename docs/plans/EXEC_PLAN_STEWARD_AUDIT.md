@@ -96,4 +96,3 @@ All commands are safe to rerun. Installing tooling with `pip` affects only the e
 - `zscripts.observability.telemetry.TelemetryManager`: used for spans and metrics; do not modify its public API.
 - `tests/test_cli.py`: integration tests for CLI behaviors; must remain green after simplification.
 - Markdown documentation files (`STEWARDS_REPORT.md`, `docs/automation/AUTOMATION_ROLES.md`, README, CHANGELOG, RELEASE_NOTES`).
-

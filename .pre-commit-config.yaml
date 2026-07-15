@@ -10,11 +10,22 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies: []
+        pass_filenames: false
+        args:
+          - zscripts/application
+          - zscripts/config.py
+          - zscripts/configuration.py
+          - zscripts/observability/logging.py
+          - zscripts/observability/metrics.py
+          - zscripts/observability/health.py
+          - zscripts/observability/instrumentation.py
+          - zscripts/extensions/scaffolding.py
+          - zscripts/schemas
   - repo: https://github.com/PyCQA/bandit
     rev: 1.7.10
     hooks:
       - id: bandit
-        args: [-q, -r, zscripts, sample_project]
+        args: [-q, -r, zscripts, examples/sample_project]
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:

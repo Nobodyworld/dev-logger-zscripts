@@ -1,64 +1,215 @@
 # Clean-Clone Release Validation
 
-- Repository: dev-logger-zscripts
-- Validation date: 2026-07-01
-- Branch: main
-- Validated commit SHA: fd379e40907ed257640dfe5d0faa7cdd9d1cd88f
-- Environment: clean clone with Python 3.14.0
+- Repository: `Nobodyworld/dev-logger-zscripts`
+- Historical validation date: 2026-07-08
+- Historical branch context: PR #47 / merged showcase baseline
+- Merged `main` baseline: `7d6e03f4674c22401e8d15a57b02f856941fed55`
+- Historical clean-worktree source head: `124c1e4f85204aaec76d4f7feafdbd0912513bd7`
+- Historical environment: Windows clean worktree, Python 3.14.0
+- Intended public status: `PUBLIC BETA — ACTIVE DEVELOPMENT`
+- Current status: `PR #48 LOCALLY VALIDATED - READY FOR FINAL REVIEW - PUBLIC BETA CANDIDATE`
+
+## Current PR #48 Local Validation (2026-07-15)
+
+Validated source: `a36578d`, based on required PR head
+`989d32c38f7d4ba036e532ae7eda4ff141eae650`; `main` remained
+`7d6e03f4674c22401e8d15a57b02f856941fed55`. Windows 11 / Python 3.14.0
+validation passed all required local gates: source checks, supported mypy,
+176 tests, 92% coverage, Bandit, pip-audit, pre-commit, editable and wheel
+smokes, zipapp, diagnostics JSON, redaction, and both Gitleaks modes (109
+history commits, no leaks). Full command-level evidence is retained in the
+final verdict and quality audit.
+
+The exact squash-merged `main` SHA still requires this entire release gate
+before publication or a visibility change.
+
+## PR #48 Hosted Revalidation
+
+GitHub Actions run #23 passed against PR #48 head
+`14bcfb545c92fc196911ce4a0b8114f0c16e095b` under Ubuntu and Python 3.11.
+
+The hosted gate completed successfully:
+
+- installation of `.[dev,helpers]`;
+- editable-package imports and CLI smokes outside the repository root;
+- Ruff formatting and lint;
+- the supported mypy surface;
+- Bandit, dependency audit, and binary-file scan;
+- all 176 tests with the 85% coverage threshold enforced;
+- documentation-link validation;
+- isolated wheel build, installation, imports, and CLI smokes;
+- zipapp build and CLI smokes;
+- diagnostics snapshot generation;
+- quality-report artifact upload.
+
+This resolves the earlier diagnostics and package-discovery failures. Package
+discovery explicitly includes the runtime `zscripts`, `adapters`, `agents`, and
+`scripts` package trees.
+
+Later documentation commits remove unverified security-contact claims and add the
+public-beta classification and limitations. The complete latest PR #48 head must
+receive both hosted and local validation before merge. The exact squash-merged
+`main` SHA must then receive the same local release gate before publication.
+
+## Security Reporting Disposition
+
+The branch now uses GitHub private vulnerability reporting through the Security
+tab. It no longer publishes an unverified mailbox, PGP fingerprint, or fixed
+response-time promise. Sensitive vulnerability details must not be posted in
+public issues, discussions, or pull requests.
 
 ## Objective
 
 Verify that a fresh checkout can install tooling, pass strict quality and
-security checks, validate adapter inventory behavior, and execute packaged CLI
-smoke workflows.
+security checks, validate adapter inventory behavior, execute packaged CLI smoke
+workflows, and prove raw-log report redaction before public-beta visibility.
 
-## Validation Steps
+## Required Validation Setup
+
+Use a clean disposable clone or worktree. On Windows, place pytest's temporary
+base outside the repository to avoid ACL and stale-directory artifacts.
+
+Representative setup:
+
+```powershell
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev,helpers]"
+python -m pip check
+$base = Join-Path $env:TEMP "zscripts-pytest-$([guid]::NewGuid())"
+```
+
+## Required Source-Tree Gate
 
 ```sh
-git clone <repo-url>
-cd dev-logger-zscripts
-python -m pip install --upgrade pip
-python -m pip install -e .[dev,helpers]
+python scripts/bootstrap.py --print-only
 ruff format --check .
 ruff check .
-mypy zscripts/application zscripts/config.py zscripts/configuration.py zscripts/observability/logging.py zscripts/observability/metrics.py zscripts/observability/health.py zscripts/observability/instrumentation.py zscripts/extensions/scaffolding.py zscripts/schemas
-bandit -q -r zscripts examples/sample_project
-pip-audit -r requirements.txt
 python scripts/no_binaries.py
-python -m detect_secrets scan --force-use-all-plugins $(git ls-files)
+python -m pytest -q --basetemp="$base"
+python scripts/validate_docs_links.py
+git diff --check
+mypy zscripts/application zscripts/config.py zscripts/configuration.py zscripts/observability/logging.py zscripts/observability/metrics.py zscripts/observability/health.py zscripts/observability/instrumentation.py zscripts/extensions/scaffolding.py zscripts/schemas
 python -m coverage erase
-python -m coverage run -m pytest
+python -m coverage run -m pytest --basetemp="$base"
 python -m coverage report --fail-under=85
+python -m coverage json -o reports/coverage.json
+python -m bandit -q -r zscripts examples/sample_project
+python -m pip_audit
+pre-commit run --all-files
+```
+
+If GNU Make is available, also run `make check`; the individual commands above
+remain authoritative.
+
+## Editable-Installation Smoke
+
+From a directory outside the repository checkout:
+
+```sh
+python -c "import zscripts; print(zscripts.__file__)"
+zscripts guardrails
+python -m zscripts guardrails
+zscripts adapters --format json
+```
+
+The adapter identifiers must be deterministic:
+
+```text
+ci
+docker
+dotnet
+go
+java
+javascript
+python
+rust
+```
+
+## Wheel Gate
+
+```sh
+python -m build --wheel --outdir dist
+```
+
+Create a separate clean virtual environment, install only the generated wheel,
+change to a directory outside the repository, and run:
+
+```sh
+python -c "import zscripts; print(zscripts.__file__)"
+zscripts guardrails
+python -m zscripts guardrails
+zscripts adapters --format json
+```
+
+The repository root and `PYTHONPATH=.` must not mask missing wheel content.
+
+## Zipapp, Diagnostics, and Redaction Gate
+
+```sh
 python scripts/build_artifact.py
 python artifacts/build/zscripts.pyz guardrails
 python artifacts/build/zscripts.pyz adapters --format json
-python cli.py report --input examples/raw_to_report/raw.log --format markdown --redact --output artifacts/build/raw_to_report_demo.md
-python scripts/validate_docs_links.py
+python -m scripts.diagnostics_probe --include-metrics --output reports/diagnostics_local.json --fail-on-status degraded
+python cli.py --adapter ci report --input examples/raw_to_report/raw.log --format markdown --redact --output artifacts/build/raw_to_report_demo.md
 ```
 
-## Validation Results
+Confirm that the diagnostics output is valid JSON and that the generated report
+does not expose the complete fixture value, common provider-token forms, API
+keys, passwords, bearer tokens, or organization-specific secrets.
 
-- Installation: passed (`python -m pip install -e .[dev,helpers]`).
-- Formatting: passed (`ruff format --check .` -> 272 files already formatted).
-- Lint: passed (`ruff check .` -> all checks passed).
-- Type checks: passed (`mypy ...` -> success, no issues in 14 source files).
-- Bandit: passed (`bandit -q -r zscripts examples/sample_project`), with no failing findings; informational `nosec` warnings observed.
-- Dependency audit: passed (`pip-audit -r requirements.txt` -> no known vulnerabilities; local package `zscripts` skipped as non-PyPI dependency).
-- Binary scan: passed (`python scripts/no_binaries.py` -> no binary-like files detected).
-- Secret scan (HEAD tracked files): passed with no verified credentials; fixture placeholders flagged in example docker-compose sample.
-- Tests: passed (`pytest` and `python -m coverage run -m pytest` -> 168 collected, 168 passed, 0 failed, 0 skipped).
-- Coverage: passed (`python -m coverage report --fail-under=85` -> 92% total) against required threshold 85%.
-- Build: passed (`python scripts/build_artifact.py` -> `artifacts/build/zscripts.pyz`).
-- Packaged CLI smoke test: passed (`python artifacts/build/zscripts.pyz guardrails`) with JSON output including:
-  - `dangerous_mode: false`
-  - `timeout_seconds: 120`
-  - `allowed_paths` rooted at the clean-clone workspace.
-- Packaged adapter inventory smoke: passed (`python artifacts/build/zscripts.pyz adapters --format json`) with deterministic identifier order: `ci, docker, dotnet, go, java, javascript, python, rust`.
-- Raw-log-to-report demo: passed (`python cli.py report --input examples/raw_to_report/raw.log --format markdown --redact --output artifacts/build/raw_to_report_demo.md`).
-- Documentation-link validation: passed (`python scripts/validate_docs_links.py`).
+## Secret-Scanning Gate
 
-## Notes
+```sh
+gitleaks detect --no-git --source . --redact --verbose
+gitleaks detect --source . --redact --verbose
+```
 
-- This validation is designed to mirror CI behavior for release confidence.
-- If GitHub Actions is disabled, this clean-clone run is the authoritative
-  release validation record.
+Both the tracked-worktree and full-history scans must execute successfully. Record
+the history commit count.
+
+## Configuration Parsing
+
+Use real parsers to validate at minimum:
+
+- `.github/workflows/ci.yml`
+- `.github/dependabot.yml`
+- `.pre-commit-config.yaml`
+- `.gitleaks.toml`
+- `pyproject.toml`
+
+## Historical PR #47 Results
+
+| Check | Result |
+| --- | --- |
+| Install | Pass (`python -m pip install -e .[dev,helpers]`) |
+| Format | Pass (`ruff format --check .`) |
+| Lint | Pass (`ruff check .`) |
+| Binary scan | Pass (`python scripts/no_binaries.py`) |
+| Tests | Pass (`176 passed, 13 warnings`) |
+| Documentation links | Pass (`python scripts/validate_docs_links.py`) |
+| Diff whitespace | Pass (`git diff --check`) |
+| Type checks | Pass (supported mypy surface) |
+| Coverage | Pass (92%, threshold 85%) |
+| Build | Pass (`python scripts/build_artifact.py`) |
+| Packaged guardrails smoke | Pass |
+| Packaged adapter inventory smoke | Pass |
+| Raw-log-to-report demo | Pass |
+| Report redaction scan | Pass |
+| Bandit | Pass under Python 3.14.0 |
+| Dependency audit | Pass (`python -m pip_audit`) |
+| Gitleaks tracked-file scan | Pass |
+| Gitleaks full-history scan | Pass |
+
+## Publication Sequence
+
+1. Validate the exact latest PR #48 head locally.
+2. Record the exact SHA, commands, exit codes, test count, coverage, packaging,
+   security, redaction, and Gitleaks results.
+3. Confirm hosted CI passes on the same final branch head.
+4. Mark PR #48 ready, review, and squash-merge with expected-head protection.
+5. Repeat the complete gate on the exact merged `main` SHA.
+6. Confirm a clean worktree.
+7. Change visibility to public.
+8. Rerun CI and enable or verify private vulnerability reporting, secret scanning,
+   push protection, Dependabot security features, and CodeQL where eligible.
+9. Review initial alerts before describing the repository as clean or stable.

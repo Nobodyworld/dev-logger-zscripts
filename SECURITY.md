@@ -1,34 +1,75 @@
 # Security Policy
 
 ## Supported Versions
+
+Zscripts is published as **PUBLIC BETA — ACTIVE DEVELOPMENT**. Security fixes are
+provided on a best-effort basis for the current `main` branch. No older release
+line is currently guaranteed support.
+
 | Version | Supported |
-|---------|-----------|
-| main    | ✅
-| Releases < 0.2.0 | ⚠️ Best-effort security fixes only |
+| --- | --- |
+| `main` | Best-effort security fixes |
+| Tagged pre-1.0 releases | Not independently supported unless stated in release notes |
 
 ## Reporting a Vulnerability
-- Email `security@zscripts.dev` with a clear description, reproduction steps, and impact analysis.
-- Encrypt sensitive details using our PGP key (`security@zscripts.dev`, fingerprint `B4C9 2EAF 2A92 91E1 78AC  114A 3AA0 45B9 5D5B 3E10`).
-- We acknowledge reports within **48 hours** and provide a remediation plan within **7 calendar days**.
-- Please do not open public issues for security reports.
+
+Use GitHub private vulnerability reporting through the repository **Security**
+tab. Include a clear description, reproduction steps, affected versions or
+commits, and the likely impact.
+
+- Do **not** disclose vulnerability details in a public issue, discussion, or pull
+  request.
+- If private vulnerability reporting is temporarily unavailable, do not publish
+  sensitive details. Use a verified private contact method listed by the
+  repository owner on GitHub, or wait until private reporting is available.
+- This project does not currently publish a dedicated security mailbox, PGP key,
+  or guaranteed response-time service level.
 
 ## Handling Process
-1. Triage, reproduce, and assign a severity (CVSS v3.1).
-2. Develop and test a fix on a private branch, including regression tests.
-3. Coordinate disclosure timeline with reporter; default disclosure window is 30 days.
-4. Publish advisory, update CHANGELOG, and tag a patched release.
+
+Maintainers will, as capacity permits:
+
+1. Triage and attempt to reproduce the report.
+2. Assess severity and affected surfaces.
+3. Develop and test a fix in a non-public workstream when appropriate.
+4. Coordinate disclosure with the reporter.
+5. Publish a GitHub Security Advisory and update project documentation when a
+   disclosure is warranted.
+
+Response and remediation timing depends on severity, reproducibility, maintainer
+availability, and the scope of the required fix.
 
 ## Security Tooling
-- Bandit, mypy (strict), Ruff, and pytest run in CI for every change.
-- Upcoming additions: SBOM generation, dependency and secret scanning, Renovate automation.
-- Dependency posture is tracked in `docs/DEPENDENCIES.md`; review quarterly or after major advisories.
+
+The hosted quality gate includes:
+
+- Ruff formatting and linting;
+- the supported mypy target;
+- Bandit;
+- `pip-audit`;
+- binary-file scanning;
+- pytest with an enforced coverage threshold;
+- editable-install, wheel, zipapp, and diagnostics smoke tests.
+
+The public-release gate additionally requires Gitleaks scans of the tracked
+worktree and repository history. GitHub secret scanning, push protection,
+Dependabot alerts and security updates, CodeQL where eligible, and private
+vulnerability reporting should be enabled or verified immediately after the
+repository becomes public.
 
 ## Responsible Disclosure
-We appreciate coordinated disclosure and are happy to credit researchers unless anonymity is requested.
+
+Coordinated disclosure is appreciated. Reporters may request attribution or
+anonymity. Please allow the maintainer a reasonable opportunity to investigate
+and remediate before public disclosure.
 
 ## Pre-release Security Checklist
-- [ ] Run `make check` (or `python scripts/dev_start.py`) to execute linting, typing, security, and pytest suites.
-- [ ] Confirm coverage meets the configured threshold (85% by default) and archive the JSON summary under `artifacts/quality/`.
-- [ ] Review dependency advisories via `pip list --outdated` and the SBOM in `artifacts/sbom/`.
-- [ ] Verify configuration changes are documented and secrets are loaded from environment variables or secure stores.
-- [ ] Update `CHANGELOG.md` and `docs/releases/RELEASE_NOTES.md` with any security-impacting fixes or breaking changes.
+
+- [ ] Run the complete hosted and local release gates.
+- [ ] Confirm coverage meets the configured threshold of 85% or higher.
+- [ ] Review dependency advisories with `pip-audit`.
+- [ ] Run tracked-worktree and full-history Gitleaks scans.
+- [ ] Verify generated reports do not expose fixture or provider-shaped secrets.
+- [ ] Confirm configuration changes are documented and secrets are loaded from
+      environment variables or secure stores.
+- [ ] Update `CHANGELOG.md` and release notes for security-impacting changes.

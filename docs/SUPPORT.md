@@ -8,13 +8,10 @@ Zscripts is a structured log collection, normalization, redaction, diagnostics, 
 - **Issues**: Report bugs via the Bug Report template; include CLI command, configuration snippet, and logs.
 - **Security**: Follow the [SECURITY policy](../SECURITY.md) for vulnerability disclosure.
 
-## Service Levels
+## Availability
 
-| Request Type        | Target Response | Notes |
-|---------------------|-----------------|-------|
-| Security incidents  | 48 hours        | Handled privately with coordinated disclosure |
-| Critical regressions| 2 business days | Provide reproduction steps and affected version |
-| Feature requests    | 5 business days | Prioritised based on roadmap alignment |
+This public-beta project is maintained on a best-effort basis. It does not
+offer response-time guarantees or private support channels.
 
 ## Self-Service Resources
 
@@ -26,8 +23,8 @@ Zscripts is a structured log collection, normalization, redaction, diagnostics, 
 
 ## Escalation
 
-If you require additional assistance, email `support@zscripts.dev` with context,
-urgency, and contact details. Include:
+For additional assistance, open a GitHub Discussion with context, urgency, and
+non-sensitive details. Include:
 
 1. CLI invocation (e.g., `python -m zscripts collect --types ...`).
 2. Relevant log snippets with `event=` and `error_id=` markers.

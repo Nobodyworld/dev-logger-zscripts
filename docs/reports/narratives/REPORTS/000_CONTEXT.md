@@ -33,4 +33,3 @@
 
 - `ZSCRIPTS_CONFIG_PATH` allows overriding the default JSON configuration file (documented in `README.md`).
 - CLI flags `--config`, `--project-root`, `--dry-run`, and `--verbose` provide runtime customization.
-

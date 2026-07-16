@@ -2,7 +2,7 @@
   "name": "codex_repo_perfection_chain",
   "description": "Sequential chain of Codex agent prompts to refine, document, test, and perfect any repository.",
   "version": "1.0.0",
-  "step": [ 
+  "step": [
     {
       "id": 1,
       "name": "Comprehend & Map",

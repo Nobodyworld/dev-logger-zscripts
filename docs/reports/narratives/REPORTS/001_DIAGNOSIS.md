@@ -31,4 +31,3 @@
 - **Test & Verify** – Augment tests covering new validation logic and run the full pytest suite.
 
 Architecture alignment is not triggered: modules follow a clear layered structure (CLI → config/utils) without circular imports, so no reorganization is necessary at this time.
-

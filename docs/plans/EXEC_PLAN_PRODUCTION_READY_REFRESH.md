@@ -88,4 +88,3 @@ The changes are source-code edits and can be reapplied safely through version co
 
 - Expose `InvalidIgnorePatternError` from `zscripts/utils.py` so other modules/tests can reference it.
 - Maintain the existing public API of CLI commands while adding warnings; ensure the new exception integrates with existing error handling (e.g., `ValueError` paths).
-

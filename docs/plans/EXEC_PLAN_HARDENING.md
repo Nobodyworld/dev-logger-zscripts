@@ -80,4 +80,3 @@ We will produce SBOM files under `artifacts/sbom/` and update documentation to r
 - CLI commands `consolidate_command` and `tree_command` must call the helper prior to writing outputs.
 - Makefile `sbom` target depends on `cyclonedx-bom` CLI (`cyclonedx-py`).
 - Pre-commit uses `detect-secrets`; CI uses `zricethezav/gitleaks-action@v2`.
-

@@ -8,9 +8,9 @@ labels: ["type:bug", "priority:triage"]
 <!-- Briefly describe the bug. -->
 
 ## Steps to Reproduce
-1. 
-2. 
-3. 
+1.
+2.
+3.
 
 ## Expected Behavior
 <!-- What should have happened? -->

@@ -125,4 +125,3 @@ Telemetry configuration defaults to disabled; enabling flags repeatedly should n
 - `zscripts/extensions/registry.py`: implement `load_extensions(paths: Sequence[str], context: ExtensionContext) -> list[ToolkitExtensionProtocol]` and ensure telemetry logs success/failure.
 - Extend `ToolkitConfig` with `extensions: tuple[str, ...]` defaulting to empty.
 - Provide tests under `tests/test_observability.py`, `tests/test_extensions.py`, `tests/test_dev_scripts.py`.
-

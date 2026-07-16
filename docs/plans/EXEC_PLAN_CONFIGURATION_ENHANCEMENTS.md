@@ -122,4 +122,3 @@ The loader should tolerate repeated invocations and treat missing configuration 
         examples_path: Path = field(default_factory=lambda: Path("examples"))
 
 - Adjust `build_toolkit_service` to receive `config: ToolkitConfig` with the new field and initialize `FileSystemExampleRepository(config.examples_path)`.
-

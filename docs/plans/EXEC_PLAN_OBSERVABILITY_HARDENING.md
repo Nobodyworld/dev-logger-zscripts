@@ -114,4 +114,3 @@ The CLI modifications add idempotent instrumentation that executes per invocatio
 - `TelemetryManager.span(operation, attributes=None)` yields a context manager that records traces and metrics.
 - The CLI will access these APIs to produce new metrics `zscripts_cli_invocations_total` and `zscripts_cli_duration_seconds`.
 - Tests should import `TelemetryManager` and `TelemetrySettings` from `zscripts.observability.telemetry` and the CLI `main` function from `zscripts.cli`.
-

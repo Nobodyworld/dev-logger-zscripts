@@ -92,4 +92,3 @@ As commands are executed, paste relevant output snippets into the verification r
 ## Interfaces and Dependencies
 
 Key Python modules: `zscripts.cli`, `zscripts.config`, `zscripts.utils`. These rely on Python standard library modules (`argparse`, `json`, `pathlib`). External tooling includes pytest for tests and ruff for linting/formatting. Any newly introduced interfaces must be fully typed and follow repository conventions (snake_case functions, UpperCamelCase classes). Maintain compatibility with Python 3.10+.
-

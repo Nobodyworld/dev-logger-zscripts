@@ -24,4 +24,3 @@
   - `mypy` 1.17.1 — MIT license.
   - `bandit` — not present in the current environment; install required for security scans.
   - `coverage` — available via `coverage[toml]` extra once dependencies are installed.
-

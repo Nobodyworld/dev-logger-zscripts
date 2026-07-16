@@ -104,4 +104,3 @@ The helper functions create parent directories if missing and are safe to call r
 
 - CLI `_write_output` will depend on `atomic_write_text`.
 - Tests reference these functions directly.
-

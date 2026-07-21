@@ -1,6 +1,6 @@
 beautifulsoup4==4.14.2
 img2pdf==0.6.1
-lxml==6.0.2
+lxml==6.1.0
 matplotlib==3.10.7
 nltk==3.9.2
 numpy==2.3.4

@@ -2,7 +2,7 @@ beautifulsoup4==4.14.2
 img2pdf==0.6.1
 lxml==6.0.2
 matplotlib==3.10.7
-nltk==3.9.2
+nltk==3.10.0
 numpy==2.3.4
 openpyxl==3.1.5
 pandas==2.3.3

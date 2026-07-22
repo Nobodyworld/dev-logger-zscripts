@@ -1,5 +1,4 @@
 # Developer tools (optional)
-black
 ruff
 mypy
 bandit

@@ -11,10 +11,14 @@
 
 ## CI Configuration
 - GitHub Actions workflow `CI` executes the quality gate on pushes to `main` and pull requests.
-- Steps: checkout, Python 3.11 setup, editable install with `.[dev]`, run `python scripts/dev_start.py`, capture diagnostics via `scripts/diagnostics_probe.py`, and upload `reports/` artifacts.
+- Steps: checkout, Python 3.11 setup, editable install with `.[dev,helpers]`, run
+  separately named operations from `scripts/quality_gate.py`, and upload
+  `reports/` artifacts.
 
-## Environment Controls
-- `QUALITY_COVERAGE_MIN`: minimum acceptable coverage percentage honoured by `scripts/dev_start.py` when running the quality gate.
+## Gate Controls
+
+- The canonical coverage threshold is defined in `scripts/quality_gate.py`; it
+  is not weakened by environment variables.
 
 ## Dependency & License Inventory
 - Runtime package declares no mandatory dependencies (`pyproject.toml`).

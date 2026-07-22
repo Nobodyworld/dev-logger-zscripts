@@ -1,45 +1,33 @@
-.PHONY: setup dev fmt format-check lint type security test coverage build deploy quality check sbom
+.PHONY: setup dev fmt format-check lint type security test coverage build deploy quality check release sbom
+
+QUALITY_GATE = python scripts/quality_gate.py
 
 setup:
 	python scripts/bootstrap.py || python scripts/bootstrap.py --skip-install
 
 dev:
-	python scripts/dev_start.py
-
-MYPY_TARGETS = \
-	zscripts/application \
-	zscripts/config.py \
-	zscripts/configuration.py \
-	zscripts/observability/logging.py \
-	zscripts/observability/metrics.py \
-	zscripts/observability/health.py \
-	zscripts/observability/instrumentation.py \
-	zscripts/extensions/scaffolding.py \
-	zscripts/schemas
+	$(QUALITY_GATE) quality
 
 fmt:
 	ruff format .
 
 format-check:
-	ruff format --check .
+	$(QUALITY_GATE) format-check
 
 lint:
-	ruff check .
+	$(QUALITY_GATE) lint
 
 type:
-	mypy $(MYPY_TARGETS)
+	$(QUALITY_GATE) type
 
 security:
-	bandit -q -r zscripts examples/sample_project
+	$(QUALITY_GATE) bandit
 
 test:
-	pytest
+	$(QUALITY_GATE) tests
 
 coverage:
-	python -m coverage run -m pytest
-	mkdir -p artifacts/coverage
-	python -m coverage json -o artifacts/coverage/coverage.json
-	python -m coverage report
+	$(QUALITY_GATE) coverage
 
 build:
 	python scripts/build_artifact.py
@@ -48,9 +36,13 @@ deploy: build
 	python artifacts/build/zscripts.pyz guardrails > artifacts/build/guardrails.json
 
 quality:
-	python scripts/dev_start.py
+	$(QUALITY_GATE) quality
 
-check: format-check lint type security test
+check:
+	$(QUALITY_GATE) check
+
+release:
+	$(QUALITY_GATE) release
 
 sbom:
 	mkdir -p artifacts/sbom

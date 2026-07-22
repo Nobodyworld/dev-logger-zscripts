@@ -42,7 +42,7 @@ extensions are in place.
   commands.
 - **Redaction packs**: allow configuration to reference named redaction packs
   stored under `docs/security/` for dynamic updates without code changes.
-- **Guardrail reporting**: extend `scripts/agent_guard.py` to emit JSON/Prometheus
+- **Guardrail reporting**: extend `scripts/quality_gate.py` summaries with Prometheus
   output summarising failures per guard, enabling dashboards and auto-remediation.
 - **Automated probes**: expand `scripts/ops_status.py` into a resilient service
   that can fan-out health checks across multiple toolkit deployments and feed

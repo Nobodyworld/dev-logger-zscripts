@@ -8,9 +8,9 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
 - Use [Conventional Commits](https://www.conventionalcommits.org/) for every commit message.
 - Open an issue before large or breaking work; share an execution plan for complex refactors.
 - Keep pull requests focused and include tests/docs for any user-visible change.
-- Run `python scripts/dev_start.py` (or `make quality`) before opening a pull
-  request. The quality gate enforces lint/type/security/tests and ≥85%
-  coverage.
+- Run `python scripts/quality_gate.py quality` (or `make quality`) before
+  opening a pull request. This is the complete hosted-CI gate; `make check` is
+  the faster contributor gate.
 - Annotate TODOs with priority and effort using `TODO(P1, est:4h): context` so
   automation can triage outstanding work.
 
@@ -37,11 +37,17 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
    make check
    ```
 
-   `make check` is non-mutating and runs the formatting check, Ruff lint, the
-   supported mypy surface, Bandit, and pytest. Run `pip-audit` as part of the
-   dependency-security gate. Use `make quality` for the
-   coverage-enforced workflow that writes
-   `artifacts/quality/quality_gate.json`.
+   All commands delegate to `scripts/quality_gate.py` and work directly on
+   Windows without GNU Make. The canonical profiles are:
+
+   - `check`: `format-check`, `lint`, `type`, `bandit`, `tests`
+   - `quality`: `format-check`, `lint`, `type`, `bandit`, `audit`, `binary`, `tests`, `coverage`, `docs`, `editable-smoke`, `wheel`, `zipapp`, `diagnostics`
+   - `release`: `format-check`, `lint`, `type`, `bandit`, `audit`, `binary`, `tests`, `coverage`, `docs`, `editable-smoke`, `wheel`, `zipapp`, `diagnostics`, `redaction`, `gitleaks-worktree`, `gitleaks-history`, `clean`
+
+   `check` is the fast contributor gate. `quality` is the complete hosted-CI
+   gate and enforces at least 85% coverage. `release` is the complete local
+   release gate; it fails if Gitleaks is unavailable and requires a clean
+   worktree. Machine-readable results are written under `reports/`.
 
 3. **Ops Health Probe**
 
@@ -69,8 +75,9 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
 
    - `pre-commit run --all-files` runs Ruff (format + lint), mypy, Bandit, and
      detect-secrets using `.secrets.baseline`.
-   - Commit-message hooks run `npx commitlint --edit "$1"`; ensure Node.js ≥18 is
-     installed locally.
+   - The local commit-message hook runs the standard-library-only
+     `scripts/validate_commit_message.py` validator. It does not download
+     software or access the network.
 
 6. **Software Bill of Materials (SBOM)**
 

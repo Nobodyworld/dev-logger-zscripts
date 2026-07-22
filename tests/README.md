@@ -1,7 +1,8 @@
 # Tests
 
-All automated coverage for the helpers resides here. Pytest is the primary
-runner and is orchestrated through `python scripts/tasks.py gate`.
+All automated coverage for the repository resides here. Pytest is the primary
+runner and is orchestrated by `python scripts/quality_gate.py tests`; the
+coverage-enforced operation is `python scripts/quality_gate.py coverage`.
 
 ## Structure
 

@@ -8,7 +8,7 @@ and `# agent-entrypoint` / `# agent-safe-task` tags inside the codebase.
 
 ### Test Maintainer
 
-- **Responsibilities**: Execute `pytest`, run the coverage-enforced quality gate (`python scripts/dev_start.py`), and refresh
+- **Responsibilities**: Execute `pytest`, run the coverage-enforced quality gate (`python scripts/quality_gate.py quality`), and refresh
   repository metrics via `python scripts/collect_quality_metrics.py --output artifacts/quality/metrics.json`. Confirm the generated report
   includes `cli_guardrails_latency_seconds`. When coverage wheels are unavailable, fall back to `python -m trace --count
   --coverdir trace_cov --module pytest`.

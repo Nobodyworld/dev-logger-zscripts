@@ -53,6 +53,14 @@ def test_pyproject_declares_console_script() -> None:
     assert scripts["zscripts"] == "zscripts.cli:main"
 
 
+def test_pyproject_packages_required_schema_validation() -> None:
+    payload = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+
+    assert "jsonschema>=4.21,<5" in payload["project"]["dependencies"]
+    assert "schemas*" in payload["tool"]["setuptools"]["packages"]["find"]["include"]
+    assert payload["tool"]["setuptools"]["package-data"]["schemas"] == ["normalized_log.json"]
+
+
 def test_built_zipapp_runs_guardrails(tmp_path: Path) -> None:
     bundle_path = build_cli_bundle(tmp_path / "zscripts.pyz")
 

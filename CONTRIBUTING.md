@@ -38,7 +38,8 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
    ```
 
    `make check` is non-mutating and runs the formatting check, Ruff lint, the
-   supported mypy surface, Bandit, and pytest. Use `make quality` for the
+   supported mypy surface, Bandit, and pytest. Run `pip-audit` as part of the
+   dependency-security gate. Use `make quality` for the
    coverage-enforced workflow that writes
    `artifacts/quality/quality_gate.json`.
 

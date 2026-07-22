@@ -2,126 +2,55 @@
 
 ## Status Classification
 
-Historical notes in this file are retained for traceability. Authoritative
-current public-readiness status is recorded in:
+`PUBLIC BETA — ACTIVE DEVELOPMENT`
 
-- `docs/operations/PUBLIC_RELEASE_FINAL_VERDICT.md`
-- `docs/operations/CLEAN_CLONE_RELEASE_VALIDATION.md`
+The repository is public. PR #48 was squash-merged as
+`b90a0eefe481c8920f9c413731df3289df75749a`, and PR #53 was squash-merged as
+`399792b687549ea97e9319ad9728c7494a0c7ede`. The latter is the exact final SHA
+validated locally; neither public visibility nor this audit denotes a stable
+release.
 
-Current classification:
+## Final Local Audit
 
-`PR #48 LOCALLY VALIDATED - READY FOR FINAL REVIEW - PUBLIC BETA CANDIDATE`
+| Gate | Result at `399792b687549ea97e9319ad9728c7494a0c7ede` |
+|---|---|
+| Platform | Windows 11 10.0.26200; Python 3.14.0 |
+| Tests | 176 passed; 13 known deprecation warnings |
+| Coverage | 92%; required threshold 85% |
+| Ruff | Format and lint passed |
+| Mypy | Supported surface passed |
+| Security | Bandit, dependency audit, and binary scan passed |
+| Pre-commit | All files passed |
+| Documentation | Link validation passed |
+| Packaging | Editable install, isolated wheel, and zipapp smokes passed |
+| Runtime evidence | Diagnostics and redaction validation passed |
+| Secret scanning | Gitleaks worktree and 109-commit history passed |
 
-## PR #48 Current Local Validation (2026-07-15)
+Only non-identifying platform evidence is retained; local executable and
+workspace paths are not public audit data.
 
-| Check | Result |
-| --- | --- |
-| Validated source | `a36578d` (required original PR head: `989d32c38f7d4ba036e532ae7eda4ff141eae650`) |
-| Environment | Windows 11 10.0.26200, Python 3.14.0 |
-| Formatting, lint, binaries, docs links | Pass; 52 links across 100 Markdown files |
-| Supported mypy / tests / coverage | Pass / 176 passed (13 warnings) / 92% |
-| Bandit / pip-audit / pre-commit | Pass; three reviewed `nosec` warnings / no known vulnerabilities / pass |
-| Packaging | Editable, isolated wheel, and zipapp smokes passed |
-| Diagnostics and redaction | Valid diagnostics JSON; fixture secret redacted in generated report |
-| Gitleaks | Worktree and history passed; 109 commits scanned; no leaks |
+## Hosted Audit
 
-Every gate was invoked with exit code 0 after the two configuration corrections:
-the pre-commit mypy hook now matches the documented supported surface, and the
-Detect Secrets baseline no longer contains an invalid obsolete filter. The
-pre-publication validation requirement against the exact merged `main` SHA
-remains unchanged.
+Run `29454174475`, job `88758852806`, failed in the combined security step.
+Bandit completed with three existing reviewed `nosec` warnings. `pip-audit`
+then returned nonzero because `setuptools 79.0.1` was affected by
+`PYSEC-2026-3447`, fixed in 83.0.0. The shell therefore did not reach the binary
+scan, tests, coverage, docs, wheel, zipapp, or diagnostics.
 
-## Historical Snapshot (2026-06-23)
+The hardening PR makes `setuptools>=83.0.0` part of the development contract,
+splits the security commands into named steps, and retains the single required
+job/check context `quality`. Public run `29879401419`, job `88796699682`,
+completed the full job successfully on commit
+`4b59291ac5bdcef281db2ff112e0aff2307824fc`.
 
-This older run occurred before tooling bootstrap was aligned in the sandbox and
-is no longer authoritative for current HEAD.
+## Historical Notes
 
-| Check | Historical Result |
-| --- | --- |
-| Security (`bandit`) | Failed in that environment due to missing executable. |
-| Coverage (`coverage`) | Failed in that environment due to missing module. |
+Earlier PR #47 and PR #48 audit sections captured valid evidence at those points
+in time. Their language about awaiting review, merge, publication, or a
+visibility change is superseded: PRs #48 and #53 are merged and the repository
+is public. Historical limitations and reviewed Bandit suppressions remain
+recorded in Git history rather than being presented as current blockers.
 
-## PR #47 Clean-Worktree Snapshot (2026-07-08)
-
-Validated source head: `124c1e4f85204aaec76d4f7feafdbd0912513bd7`
-Merged showcase baseline: `7d6e03f4674c22401e8d15a57b02f856941fed55`
-
-| Check | Command | Result |
-| --- | --- | --- |
-| Format | `ruff format --check .` | Pass. |
-| Lint | `ruff check .` | Pass. |
-| Binary scan | `python scripts/no_binaries.py` | Pass. |
-| Tests | `python -m pytest -q --basetemp=<external-temp>` | Pass (`176 passed, 13 warnings`). |
-| Docs links | `python scripts/validate_docs_links.py` | Pass. |
-| Diff whitespace | `git diff --check` | Pass. |
-| Type | supported mypy release surface | Pass. |
-| Coverage | `coverage run -m pytest && coverage report --fail-under=85` | Pass (92% total). |
-| Build | `python scripts/build_artifact.py` | Pass. |
-| Packaged smoke | `python artifacts/build/zscripts.pyz guardrails` | Pass. |
-| Packaged adapters smoke | `python artifacts/build/zscripts.pyz adapters --format json` | Pass. |
-| Raw-log report demo | supported adapter-first CLI invocation | Pass. |
-| Report redaction scan | provider-token / fixture pattern scan against generated report | Pass. |
-| Security (Bandit) | `python -m bandit -q -r zscripts examples/sample_project` | Pass under Python 3.14.0. |
-| Dependency audit | `python -m pip_audit` | Pass. |
-| Secret scan (tracked) | `gitleaks detect --no-git --source . --redact --verbose` | Pass. |
-| Secret scan (history) | `gitleaks detect --source . --redact --verbose` | Pass. |
-
-## PR #48 Hosted CI Evidence
-
-GitHub Actions run #23 passed against head
-`14bcfb545c92fc196911ce4a0b8114f0c16e095b` under Ubuntu and Python 3.11.
-
-Passed hosted checks:
-
-- installation of `.[dev,helpers]`;
-- editable imports and CLI smokes outside the checkout;
-- Ruff formatting and lint;
-- supported mypy surface;
-- Bandit, `pip-audit`, and binary-file scan;
-- all 176 tests with the 85% coverage threshold enforced;
-- documentation-link validation;
-- isolated wheel build, installation, imports, and CLI smokes;
-- zipapp build and CLI smokes;
-- diagnostics snapshot generation;
-- quality-report artifact upload.
-
-This resolves the earlier diagnostics and package-discovery failures. The
-workflow validates the installed distribution independently of pytest's
-repository-root path configuration.
-
-## Security Policy Correction (2026-07-14)
-
-The branch now removes unsupported publication claims from `SECURITY.md` and
-`CODE_OF_CONDUCT.md`:
-
-- unverified `security@zscripts.dev` contact removed;
-- unverified PGP fingerprint removed;
-- fixed response-time promises removed;
-- vulnerability reports directed to GitHub private vulnerability reporting;
-- no replacement mailbox published without owner confirmation;
-- public disclosure of sensitive vulnerability details remains prohibited.
-
-The README now carries the intended classification
-`PUBLIC BETA — ACTIVE DEVELOPMENT` and warns that format coverage and automated
-redaction are not guarantees.
-
-These documentation-only changes require hosted CI and local release-gate
-validation on the complete latest PR head.
-
-## Current Quality Risks
-
-- The complete latest PR #48 head still requires local clean-worktree validation
-  because the connector cannot execute the local release commands.
-- Tracked-worktree and full-history Gitleaks scans remain part of the final local
-  release gate rather than the hosted workflow.
-- A final clean-worktree release gate is required on the exact merged `main`
-  commit before the visibility change.
-- GitHub private vulnerability reporting, CodeQL where eligible, secret scanning,
-  push protection, Dependabot alerts, and security updates must be enabled or
-  verified after publication.
-
-## Profiling Note
-
-`python -m cProfile -s cumulative cli.py summarize --input examples/python/sample.log`
-remains useful for startup profiling. Import-heavy startup is an optimization
-area, not a public-release blocker.
+Contributor-tooling consolidation remains tracked in issue #61. Legacy helper
+disposition remains separately tracked in issue #62 and is outside this audit's
+implementation scope.

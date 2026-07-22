@@ -1,5 +1,14 @@
 # Release Notes
 
+## Public Beta Status (2026-07-21)
+
+The repository is public and remains `PUBLIC BETA — ACTIVE DEVELOPMENT`; no
+stable tag or GitHub Release has been published. PRs #48 and #53 were
+squash-merged, and `399792b687549ea97e9319ad9728c7494a0c7ede` is the exact
+final locally validated SHA. The current hardening work restores the hosted
+`quality` check, corrects public metadata, and makes JSON Schema validation a
+declared runtime contract.
+
 ## Highlights
 - Introduced a shared health check registry (`zscripts/observability/health_checks.py`)
   feeding the new `zscripts_health_checks_status` gauge, plus a

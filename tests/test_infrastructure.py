@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from jsonschema import ValidationError
 
 from zscripts.domain.models import SandboxOptions
 from zscripts.infrastructure import adapters as adapters_module
@@ -154,8 +155,7 @@ def test_json_schema_validator_uses_jsonschema(monkeypatch: pytest.MonkeyPatch) 
     assert invoked["instance"]["tool"] == "pytest"
 
 
-def test_json_schema_validator_noops_without_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(schema_module, "jsonschema", None)
+def test_json_schema_validator_rejects_invalid_normalized_payload() -> None:
     validator = schema_module.JsonSchemaValidator()
     payload = NormalizedLog(
         tool="pytest",
@@ -164,6 +164,7 @@ def test_json_schema_validator_noops_without_dependency(monkeypatch: pytest.Monk
         status="passed",
         summary="ok",
         timestamp=datetime.utcnow(),
+        metadata={"attempt": 1},
     )
-    # Should not raise when jsonschema is unavailable.
-    validator.validate(payload)
+    with pytest.raises(ValidationError):
+        validator.validate(payload)

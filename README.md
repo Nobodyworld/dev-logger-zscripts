@@ -86,6 +86,8 @@ flowchart LR
   external systems without shelling out.
 - Comprehensive pytest suite covering operations, adapters, observability, and
   infrastructure layers.
+- Required JSON Schema validation for normalized payloads; invalid payloads are
+  rejected in editable and isolated-wheel installations.
 
 ## Quickstart
 
@@ -216,8 +218,8 @@ make check  # formatting, lint, mypy, security, pytest
 Common individual commands:
 
 - `ruff check` / `ruff format` – lint and format the Python codebase.
-- `mypy zscripts agents scripts` – static type checks for runtime and automation
-  helpers.
+- The supported mypy command in `.github/workflows/ci.yml` – strict static type
+  checks for the maintained runtime surface.
 - `bandit -q -r zscripts examples/sample_project` / `pip-audit` – security
   checks for code and dependencies.
 - `pytest` – run the automated test suite (see `tests/README.md`).

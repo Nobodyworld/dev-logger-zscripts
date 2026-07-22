@@ -93,6 +93,17 @@
 
 ### Changed
 
+- Public-beta package metadata now uses the Beta classifier, SPDX `MIT` license
+  metadata with the license file included in wheels, and a required
+  `jsonschema>=4.21,<5` runtime dependency so normalized-payload validation
+  cannot silently disable itself.
+- Public status and support documentation now reflects the merged, public
+  repository state without machine-specific validation paths or unsupported
+  enterprise support language.
+- The `quality` workflow now supports manual dispatch, cancels superseded runs,
+  has a 30-minute timeout, and reports Bandit, dependency-audit, and binary-scan
+  failures as separate steps while preserving the `quality` check context.
+
 - CI now enforces strict quality/security commands directly in workflow steps:
   Ruff format check, Ruff lint, mypy, Bandit, pip-audit, binary-file scan,
   and pytest.

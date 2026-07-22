@@ -1,5 +1,15 @@
 # Project Status
 
+## 2026-07-21
+- The repository is public and remains `PUBLIC BETA — ACTIVE DEVELOPMENT`.
+- PR #48 and PR #53 were squash-merged; the exact final locally validated SHA is
+  `399792b687549ea97e9319ad9728c7494a0c7ede` (176 tests, 13 known warnings,
+  92% coverage, full packaging/security/release smokes).
+- Public Linux CI exposed `PYSEC-2026-3447` in setuptools 79.0.1. Issue #60 and
+  the current hardening PR restore the `quality` check without weakening scans.
+- Next: finish remaining contributor-tooling cleanup under #61 and make the
+  separate legacy-helper disposition decision under #62.
+
 ## 2024-08-18
 - Initial modernization kick-off: generated Repo Intelligence Report and Execution Plan to baseline architecture and roadmap.
 - Established governance, CI, and developer workflow foundations (docs, templates, pre-commit, commitlint, GitHub Actions, .env example).

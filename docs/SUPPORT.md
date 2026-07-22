@@ -30,5 +30,5 @@ non-sensitive details. Include:
 2. Relevant log snippets with `event=` and `error_id=` markers.
 3. `zscripts` version, Python version, and operating system.
 
-For enterprise support agreements, include contract identifiers so the request
-can be routed to the correct on-call rotation.
+Support is best-effort. Do not post sensitive vulnerability details in community
+channels; follow `SECURITY.md` instead.

@@ -1,215 +1,65 @@
 # Clean-Clone Release Validation
 
-- Repository: `Nobodyworld/dev-logger-zscripts`
-- Historical validation date: 2026-07-08
-- Historical branch context: PR #47 / merged showcase baseline
-- Merged `main` baseline: `7d6e03f4674c22401e8d15a57b02f856941fed55`
-- Historical clean-worktree source head: `124c1e4f85204aaec76d4f7feafdbd0912513bd7`
-- Historical environment: Windows clean worktree, Python 3.14.0
-- Intended public status: `PUBLIC BETA — ACTIVE DEVELOPMENT`
-- Current status: `PR #48 LOCALLY VALIDATED - READY FOR FINAL REVIEW - PUBLIC BETA CANDIDATE`
+## Current Record
 
-## Current PR #48 Local Validation (2026-07-15)
+- Classification: `PUBLIC BETA — ACTIVE DEVELOPMENT`
+- Repository visibility: public
+- Final locally validated SHA: `399792b687549ea97e9319ad9728c7494a0c7ede`
+- PR #48 squash merge: `b90a0eefe481c8920f9c413731df3289df75749a`
+- PR #53 squash merge: `399792b687549ea97e9319ad9728c7494a0c7ede`
 
-Validated source: `a36578d`, based on required PR head
-`989d32c38f7d4ba036e532ae7eda4ff141eae650`; `main` remained
-`7d6e03f4674c22401e8d15a57b02f856941fed55`. Windows 11 / Python 3.14.0
-validation passed all required local gates: source checks, supported mypy,
-176 tests, 92% coverage, Bandit, pip-audit, pre-commit, editable and wheel
-smokes, zipapp, diagnostics JSON, redaction, and both Gitleaks modes (109
-history commits, no leaks). Full command-level evidence is retained in the
-final verdict and quality audit.
+The clean Windows gate at the final SHA passed with Python 3.14.0: 176 tests,
+13 known deprecation warnings, 92% coverage, pre-commit, Ruff, supported mypy,
+Bandit, dependency audit, binary scan, documentation links, editable/wheel/
+zipapp smokes, diagnostics, redaction, and Gitleaks worktree/history scans.
+This evidence does not describe a stable release.
 
-The exact squash-merged `main` SHA still requires this entire release gate
-before publication or a visibility change.
+## Current Hosted State
 
-## PR #48 Hosted Revalidation
+Public run `29454174475` failed in `quality` because `pip-audit` detected
+`PYSEC-2026-3447` in runner-installed `setuptools 79.0.1`; 83.0.0 is the fixed
+version. Bandit completed first. The combined shell stopped before the binary
+scan and all later gates. The hardening PR preserves the required context
+`quality`, constrains setuptools to the fixed release, and separates the three
+security commands for diagnostics. Record the successful public run here after
+the PR check passes.
 
-GitHub Actions run #23 passed against PR #48 head
-`14bcfb545c92fc196911ce4a0b8114f0c16e095b` under Ubuntu and Python 3.11.
+## Reproduction Gate
 
-The hosted gate completed successfully:
+Use a clean clone or disposable worktree and a fresh virtual environment. Keep
+pytest temporary data outside the checkout when platform ACLs require it.
 
-- installation of `.[dev,helpers]`;
-- editable-package imports and CLI smokes outside the repository root;
-- Ruff formatting and lint;
-- the supported mypy surface;
-- Bandit, dependency audit, and binary-file scan;
-- all 176 tests with the 85% coverage threshold enforced;
-- documentation-link validation;
-- isolated wheel build, installation, imports, and CLI smokes;
-- zipapp build and CLI smokes;
-- diagnostics snapshot generation;
-- quality-report artifact upload.
-
-This resolves the earlier diagnostics and package-discovery failures. Package
-discovery explicitly includes the runtime `zscripts`, `adapters`, `agents`, and
-`scripts` package trees.
-
-Later documentation commits remove unverified security-contact claims and add the
-public-beta classification and limitations. The complete latest PR #48 head must
-receive both hosted and local validation before merge. The exact squash-merged
-`main` SHA must then receive the same local release gate before publication.
-
-## Security Reporting Disposition
-
-The branch now uses GitHub private vulnerability reporting through the Security
-tab. It no longer publishes an unverified mailbox, PGP fingerprint, or fixed
-response-time promise. Sensitive vulnerability details must not be posted in
-public issues, discussions, or pull requests.
-
-## Objective
-
-Verify that a fresh checkout can install tooling, pass strict quality and
-security checks, validate adapter inventory behavior, execute packaged CLI smoke
-workflows, and prove raw-log report redaction before public-beta visibility.
-
-## Required Validation Setup
-
-Use a clean disposable clone or worktree. On Windows, place pytest's temporary
-base outside the repository to avoid ACL and stale-directory artifacts.
-
-Representative setup:
-
-```powershell
+```text
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev,helpers]"
 python -m pip check
-$base = Join-Path $env:TEMP "zscripts-pytest-$([guid]::NewGuid())"
-```
-
-## Required Source-Tree Gate
-
-```sh
-python scripts/bootstrap.py --print-only
+pre-commit run --all-files
 ruff format --check .
 ruff check .
 python scripts/no_binaries.py
-python -m pytest -q --basetemp="$base"
+python -m pytest -q
 python scripts/validate_docs_links.py
 git diff --check
-mypy zscripts/application zscripts/config.py zscripts/configuration.py zscripts/observability/logging.py zscripts/observability/metrics.py zscripts/observability/health.py zscripts/observability/instrumentation.py zscripts/extensions/scaffolding.py zscripts/schemas
-python -m coverage erase
-python -m coverage run -m pytest --basetemp="$base"
-python -m coverage report --fail-under=85
-python -m coverage json -o reports/coverage.json
-python -m bandit -q -r zscripts examples/sample_project
-python -m pip_audit
-pre-commit run --all-files
 ```
 
-If GNU Make is available, also run `make check`; the individual commands above
-remain authoritative.
+Run mypy on the supported surface listed in `.github/workflows/ci.yml`, then run
+coverage with `--fail-under=85`, Bandit, and `pip-audit`. Build an isolated
+wheel and verify imports for `zscripts`, `jsonschema`, `adapters`, `agents`, and
+`scripts` from outside the checkout. Smoke both console entry points, confirm
+adapter ordering, build and smoke the zipapp, and run the existing diagnostics
+and redaction release gates.
 
-## Editable-Installation Smoke
-
-From a directory outside the repository checkout:
-
-```sh
-python -c "import zscripts; print(zscripts.__file__)"
-zscripts guardrails
-python -m zscripts guardrails
-zscripts adapters --format json
-```
-
-The adapter identifiers must be deterministic:
+Run both secret scans:
 
 ```text
-ci
-docker
-dotnet
-go
-java
-javascript
-python
-rust
-```
-
-## Wheel Gate
-
-```sh
-python -m build --wheel --outdir dist
-```
-
-Create a separate clean virtual environment, install only the generated wheel,
-change to a directory outside the repository, and run:
-
-```sh
-python -c "import zscripts; print(zscripts.__file__)"
-zscripts guardrails
-python -m zscripts guardrails
-zscripts adapters --format json
-```
-
-The repository root and `PYTHONPATH=.` must not mask missing wheel content.
-
-## Zipapp, Diagnostics, and Redaction Gate
-
-```sh
-python scripts/build_artifact.py
-python artifacts/build/zscripts.pyz guardrails
-python artifacts/build/zscripts.pyz adapters --format json
-python -m scripts.diagnostics_probe --include-metrics --output reports/diagnostics_local.json --fail-on-status degraded
-python cli.py --adapter ci report --input examples/raw_to_report/raw.log --format markdown --redact --output artifacts/build/raw_to_report_demo.md
-```
-
-Confirm that the diagnostics output is valid JSON and that the generated report
-does not expose the complete fixture value, common provider-token forms, API
-keys, passwords, bearer tokens, or organization-specific secrets.
-
-## Secret-Scanning Gate
-
-```sh
 gitleaks detect --no-git --source . --redact --verbose
 gitleaks detect --source . --redact --verbose
 ```
 
-Both the tracked-worktree and full-history scans must execute successfully. Record
-the history commit count.
+## Historical Evidence
 
-## Configuration Parsing
-
-Use real parsers to validate at minimum:
-
-- `.github/workflows/ci.yml`
-- `.github/dependabot.yml`
-- `.pre-commit-config.yaml`
-- `.gitleaks.toml`
-- `pyproject.toml`
-
-## Historical PR #47 Results
-
-| Check | Result |
-| --- | --- |
-| Install | Pass (`python -m pip install -e .[dev,helpers]`) |
-| Format | Pass (`ruff format --check .`) |
-| Lint | Pass (`ruff check .`) |
-| Binary scan | Pass (`python scripts/no_binaries.py`) |
-| Tests | Pass (`176 passed, 13 warnings`) |
-| Documentation links | Pass (`python scripts/validate_docs_links.py`) |
-| Diff whitespace | Pass (`git diff --check`) |
-| Type checks | Pass (supported mypy surface) |
-| Coverage | Pass (92%, threshold 85%) |
-| Build | Pass (`python scripts/build_artifact.py`) |
-| Packaged guardrails smoke | Pass |
-| Packaged adapter inventory smoke | Pass |
-| Raw-log-to-report demo | Pass |
-| Report redaction scan | Pass |
-| Bandit | Pass under Python 3.14.0 |
-| Dependency audit | Pass (`python -m pip_audit`) |
-| Gitleaks tracked-file scan | Pass |
-| Gitleaks full-history scan | Pass |
-
-## Publication Sequence
-
-1. Validate the exact latest PR #48 head locally.
-2. Record the exact SHA, commands, exit codes, test count, coverage, packaging,
-   security, redaction, and Gitleaks results.
-3. Confirm hosted CI passes on the same final branch head.
-4. Mark PR #48 ready, review, and squash-merge with expected-head protection.
-5. Repeat the complete gate on the exact merged `main` SHA.
-6. Confirm a clean worktree.
-7. Change visibility to public.
-8. Rerun CI and enable or verify private vulnerability reporting, secret scanning,
-   push protection, Dependabot security features, and CodeQL where eligible.
-9. Review initial alerts before describing the repository as clean or stable.
+PR #47 and the pre-merge PR #48 validations remain useful historical snapshots,
+but their former publication sequence is complete. PRs #48 and #53 were
+squash-merged and the repository is public. Future release decisions must use
+the current branch SHA and current hosted result rather than those older
+candidate-state instructions.

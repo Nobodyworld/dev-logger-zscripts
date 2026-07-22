@@ -39,8 +39,9 @@ scan, tests, coverage, docs, wheel, zipapp, or diagnostics.
 
 The hardening PR makes `setuptools>=83.0.0` part of the development contract,
 splits the security commands into named steps, and retains the single required
-job/check context `quality`. Add the successful hosted run identifier and result
-to this section once it completes.
+job/check context `quality`. Public run `29879401419`, job `88796699682`,
+completed the full job successfully on commit
+`4b59291ac5bdcef281db2ff112e0aff2307824fc`.
 
 ## Historical Notes
 

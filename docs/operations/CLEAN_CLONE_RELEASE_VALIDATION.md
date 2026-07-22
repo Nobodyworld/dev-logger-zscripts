@@ -21,8 +21,9 @@ Public run `29454174475` failed in `quality` because `pip-audit` detected
 version. Bandit completed first. The combined shell stopped before the binary
 scan and all later gates. The hardening PR preserves the required context
 `quality`, constrains setuptools to the fixed release, and separates the three
-security commands for diagnostics. Record the successful public run here after
-the PR check passes.
+security commands for diagnostics. Public run `29879401419`, job `88796699682`,
+then completed the full `quality` job successfully on commit
+`4b59291ac5bdcef281db2ff112e0aff2307824fc`.
 
 ## Reproduction Gate
 

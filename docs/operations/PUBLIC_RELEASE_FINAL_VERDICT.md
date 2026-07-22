@@ -38,10 +38,10 @@ failed in the combined security step. Bandit completed, then `pip-audit` found
 shell stopped at that failure, the binary scan and later test, package, docs, and
 diagnostics steps did not run. Issue #60 tracks that root cause.
 
-The current hardening PR constrains the development toolchain to the fixed
-setuptools release and keeps the single required status-check context named
-`quality`. Its successful hosted result will be recorded here after GitHub
-Actions completes.
+The hardening PR constrains the development toolchain to the fixed setuptools
+release and keeps the single required status-check context named `quality`.
+Public run `29879401419`, job `88796699682`, completed that full job
+successfully on commit `4b59291ac5bdcef281db2ff112e0aff2307824fc`.
 
 ## Historical Context
 

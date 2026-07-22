@@ -38,13 +38,11 @@ This guide summarises how automated agents should interact with the toolkit.
 
 ## Quality Gate
 
-- Run `python scripts/agent_guard.py` for fast feedback when iterating locally.
-  The guard executes linting, mypy (strict), Bandit, and pytest; use
-  `--only/--skip` to tailor workloads. For coverage-enforced runs, continue to
-  use `python scripts/dev_start.py` or `make quality`, which also produce
-  `artifacts/quality/quality_gate.json`.
-- Quality summaries from `dev_start.py` are written to `artifacts/quality/quality_gate.json`;
-  upload the file as a CI artifact for post-run auditing.
+- Run `python scripts/quality_gate.py check` for fast contributor feedback.
+  Use named operations for a focused rerun and `make quality` for the complete
+  hosted-CI profile.
+- Operation and profile summaries are written as JSON under `reports/`; hosted
+  CI uploads that directory even when a gate fails.
 - After a full gate, execute `python scripts/collect_quality_metrics.py --output artifacts/quality/metrics.json`
   to capture coverage, complexity, dependency, build footprint, and CLI latency metrics for the steward report.
 - To skip expensive steps locally, set the following environment variables to

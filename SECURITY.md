@@ -51,8 +51,9 @@ The hosted quality gate includes:
 - pytest with an enforced coverage threshold;
 - editable-install, wheel, zipapp, and diagnostics smoke tests.
 
-The public-release gate additionally requires Gitleaks scans of the tracked
-worktree and repository history. GitHub secret scanning, push protection,
+The local `release` profile additionally validates report redaction, requires
+Gitleaks scans of the tracked worktree and repository history, and verifies a
+clean worktree. GitHub secret scanning, push protection,
 Dependabot alerts and security updates, CodeQL where eligible, and private
 vulnerability reporting should be enabled or verified immediately after the
 repository becomes public.

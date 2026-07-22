@@ -29,81 +29,32 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e '.[dev,helpers]'
-      - name: Verify required CI tools
-        run: |
-          command -v ruff
-          command -v mypy
-          command -v bandit
-          command -v pip-audit
-          command -v coverage
-          command -v pytest
-          command -v zscripts
-      - name: Verify editable package installation
-        run: |
-          mkdir -p reports
-          smoke_dir="$(mktemp -d)"
-          (
-            cd "$smoke_dir"
-            python -c "import zscripts; print(zscripts.__file__)"
-            zscripts guardrails > "$GITHUB_WORKSPACE/reports/guardrails_editable.json"
-            python -m zscripts guardrails > "$GITHUB_WORKSPACE/reports/guardrails_module.json"
-          )
       - name: Lint
         run: |
-          ruff format --check .
-          ruff check .
+          python scripts/quality_gate.py format-check
+          python scripts/quality_gate.py lint
       - name: Type check
-        run: |
-          mypy \
-            zscripts/application \
-            zscripts/config.py \
-            zscripts/configuration.py \
-            zscripts/observability/logging.py \
-            zscripts/observability/metrics.py \
-            zscripts/observability/health.py \
-            zscripts/observability/instrumentation.py \
-            zscripts/extensions/scaffolding.py \
-            zscripts/schemas
+        run: python scripts/quality_gate.py type
       - name: Bandit
-        run: bandit -q -r zscripts examples/sample_project
+        run: python scripts/quality_gate.py bandit
       - name: Dependency audit
-        run: pip-audit
+        run: python scripts/quality_gate.py audit
       - name: Binary scan
-        run: python scripts/no_binaries.py
+        run: python scripts/quality_gate.py binary
       - name: Run tests with coverage
         run: |
-          python -m coverage erase
-          python -m coverage run -m pytest
-          python -m coverage report --fail-under=85
-          python -m coverage json -o reports/coverage.json
+          python scripts/quality_gate.py tests
+          python scripts/quality_gate.py coverage
       - name: Validate documentation links
-        run: python scripts/validate_docs_links.py
+        run: python scripts/quality_gate.py docs
+      - name: Verify editable package installation
+        run: python scripts/quality_gate.py editable-smoke
       - name: Build and smoke wheel
-        run: |
-          python -m build --wheel --outdir dist
-          wheel_venv="$RUNNER_TEMP/zscripts-wheel-smoke"
-          python -m venv "$wheel_venv"
-          "$wheel_venv/bin/python" -m pip install --upgrade pip
-          "$wheel_venv/bin/python" -m pip install dist/*.whl
-          (
-            cd "$RUNNER_TEMP"
-            "$wheel_venv/bin/python" -c "import zscripts; print(zscripts.__file__)"
-            "$wheel_venv/bin/python" -c "import jsonschema; print(jsonschema.__version__)"
-            if "$wheel_venv/bin/python" -c "from datetime import datetime; from zscripts.infrastructure.schema import JsonSchemaValidator; from zscripts.schemas import NormalizedLog; payload = NormalizedLog(tool='pytest', ecosystem='python', command='pytest', status='passed', summary='ok', timestamp=datetime.now(), metadata={'attempt': 1}); JsonSchemaValidator().validate(payload)"; then
-              echo "Invalid normalized payload unexpectedly passed schema validation."
-              exit 1
-            fi
-            "$wheel_venv/bin/zscripts" guardrails > "$GITHUB_WORKSPACE/reports/guardrails_wheel.json"
-            "$wheel_venv/bin/python" -m zscripts guardrails > "$GITHUB_WORKSPACE/reports/guardrails_wheel_module.json"
-          )
+        run: python scripts/quality_gate.py wheel
       - name: Build and smoke zipapp
-        run: |
-          python scripts/build_artifact.py
-          python artifacts/build/zscripts.pyz guardrails > reports/guardrails_zipapp.json
-          python artifacts/build/zscripts.pyz adapters --format json > reports/adapters_zipapp.json
+        run: python scripts/quality_gate.py zipapp
       - name: Capture diagnostics snapshot
-        run: |
-          python -m scripts.diagnostics_probe --include-metrics --output reports/diagnostics_ci.json --fail-on-status degraded
+        run: python scripts/quality_gate.py diagnostics
       - name: Upload quality summary
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0

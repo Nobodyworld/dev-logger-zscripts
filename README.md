@@ -209,19 +209,26 @@ pip install --upgrade pip
 pip install .[dev,helpers]  # Add helpers for full functionality
 ```
 
-Execute the full quality gate with:
+Execute the fast contributor gate with:
 
 ```sh
 make check  # formatting, lint, mypy, security, pytest
 ```
 
+Use `make quality` for the complete hosted-CI contract (audit, binary scan,
+coverage ≥85%, documentation, packaging, zipapp, and diagnostics), and
+`make release` for the local release contract (quality plus redaction,
+tracked-worktree/full-history Gitleaks, and a final clean-worktree check).
+All three targets delegate to `scripts/quality_gate.py` and can be invoked
+directly on Windows.
+
 Common individual commands:
 
 - `ruff check` / `ruff format` – lint and format the Python codebase.
-- The supported mypy command in `.github/workflows/ci.yml` – strict static type
-  checks for the maintained runtime surface.
-- `bandit -q -r zscripts examples/sample_project` / `pip-audit` – security
-  checks for code and dependencies.
+- `python scripts/quality_gate.py type` – strict static type checks for the
+  centrally defined maintained runtime surface.
+- `python scripts/quality_gate.py bandit` / `python scripts/quality_gate.py audit`
+  – source and dependency security checks.
 - `pytest` – run the automated test suite (see `tests/README.md`).
 - `python scripts/collect_quality_metrics.py` – emit complexity and dependency metrics.
 
@@ -229,7 +236,7 @@ Common individual commands:
 
 - `make setup` – bootstrap the environment (falls back to `--skip-install` if
   package installation fails, useful in restricted sandboxes).
-- `make dev` – execute the full quality gate defined in `scripts/dev_start.py`.
+- `make dev` – execute the complete `quality` profile.
 - `make test` – run the full pytest suite.
 - `make build` – build the zipapp bundle at `artifacts/build/zscripts.pyz`.
 - `make deploy` – smoke the packaged CLI by running `guardrails` and saving the

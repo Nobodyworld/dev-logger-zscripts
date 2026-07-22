@@ -43,4 +43,5 @@ jobs:
 
 - Keep `--redact` enabled for CI artifacts.
 - Prefer adapter-specific inputs (for example `--adapter ci`) to improve parsing quality.
-- Reuse `python scripts/dev_start.py` to run the same quality gate locally.
+- Reuse `python scripts/quality_gate.py quality` to run the hosted quality
+  contract locally.

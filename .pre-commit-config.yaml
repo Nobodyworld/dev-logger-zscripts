@@ -1,31 +1,4 @@
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.4
-    hooks:
-      - id: ruff
-        args: [--fix]
-      - id: ruff-format
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.2
-    hooks:
-      - id: mypy
-        additional_dependencies: []
-        pass_filenames: false
-        args:
-          - zscripts/application
-          - zscripts/config.py
-          - zscripts/configuration.py
-          - zscripts/observability/logging.py
-          - zscripts/observability/metrics.py
-          - zscripts/observability/health.py
-          - zscripts/observability/instrumentation.py
-          - zscripts/extensions/scaffolding.py
-          - zscripts/schemas
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.10
-    hooks:
-      - id: bandit
-        args: [-q, -r, zscripts, examples/sample_project]
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
@@ -40,9 +13,29 @@ repos:
         args: [--baseline, .secrets.baseline]
   - repo: local
     hooks:
-      - id: commitlint
-        name: commitlint
-        entry: npx --yes @commitlint/cli@19.3.0 --config commitlint.config.js --edit
+      - id: format-check
+        name: Ruff format check
+        entry: python scripts/quality_gate.py format-check
+        language: system
+        pass_filenames: false
+      - id: lint
+        name: Ruff lint
+        entry: python scripts/quality_gate.py lint
+        language: system
+        pass_filenames: false
+      - id: type-check
+        name: Supported mypy surface
+        entry: python scripts/quality_gate.py type
+        language: system
+        pass_filenames: false
+      - id: bandit
+        name: Bandit
+        entry: python scripts/quality_gate.py bandit
+        language: system
+        pass_filenames: false
+      - id: conventional-commit-message
+        name: Conventional commit message
+        entry: python scripts/validate_commit_message.py
         language: system
         stages: [commit-msg]
         pass_filenames: true

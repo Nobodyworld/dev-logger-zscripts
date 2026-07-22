@@ -107,7 +107,7 @@ If a release introduces regressions:
 - Run `python cli.py diagnostics --format text` for a quick CLI summary or
   `python scripts/diagnostics_probe.py --include-metrics` to capture a JSON
   artifact for incident retrospectives.
-- `scripts/agent_guard.py` runs lint, type, and test gates with the
+- `scripts/quality_gate.py check` runs format, lint, type, security, and test gates with the
   same metrics instrumentation for agent-friendly workflows.
 
 Keep this document updated whenever telemetry formats or operational workflows change.

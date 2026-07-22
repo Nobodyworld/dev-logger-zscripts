@@ -102,12 +102,10 @@ how they interact at runtime.
   with telemetry helpers.
 - `scripts/bootstrap.py` — installs dependencies and configures pre-commit
   hooks.
-- `scripts/dev_start.py` — runs lint/type/security/tests/coverage checks and
-  enforces an 85% coverage threshold.
+- `scripts/quality_gate.py` — owns contributor, hosted-CI, and local-release
+  operations, including the supported mypy surface and 85% coverage threshold.
 - `scripts/diagnostics_probe.py` — automation helper mirroring the CLI
   diagnostics payload with failure thresholds for CI.
-- `scripts/agent_guard.py` — runs lint, mypy, bandit, and pytest for quick
-  agent-friendly validation.
 - `scripts/scaffold_module.py` — unified scaffolder for extensions and registry
   health providers.
 - `scripts/tag_release.py` — bumps semantic versions and optionally creates git

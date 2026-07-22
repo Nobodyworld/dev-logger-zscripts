@@ -40,7 +40,7 @@ and automation assets.
 - **Install:** `pip install .[dev]`
 - **Check-only:** `make check` (runs formatting, linting, mypy, bandit, pytest)
 - **Tests:** `pytest`
-- **Type checks:** `mypy zscripts agents scripts`
+- **Type checks:** `python scripts/quality_gate.py type`
 - **Lint:** `ruff check`
 
 Developers should keep `CHANGELOG.md`, `README.md`, and `TASKLIST.md` up to date
@@ -64,7 +64,7 @@ when shipping notable changes.
 
 ## Quality Expectations
 
-- Maintain 100% passing status for `pytest`, `ruff check`, and `mypy zscripts agents scripts`.
+- Maintain 100% passing status for the canonical `check` profile.
 - Avoid committing generated artifacts outside of the `artifacts/` hierarchy.
 - Every directory at the repository root (and major runtime packages) includes a
   `README.md` describing its purpose.

@@ -158,7 +158,7 @@ For long-form post-mortems or reports, put them in `docs/` and link from `TASKLI
   - Prettier + ESLint (`typescript-eslint`)
   - Strict TypeScript (`"strict": true`); avoid `any`.
 - **Python**
-  - Black + Ruff + isort
+  - Ruff formatter + Ruff lint
 - **Rust**
   - `rustfmt` + `clippy`
 - **Shell**

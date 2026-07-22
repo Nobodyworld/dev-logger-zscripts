@@ -45,8 +45,8 @@ Use this playbook to diagnose issues when zscripts is embedded in automation.
 
 - Restart automation workers with `--enable-telemetry` to keep health endpoints
   accessible during post-incident analysis.
-- Run `python scripts/dev_start.py` to validate the codebase (lint/type/tests)
-  before rolling out fixes. Ensure the coverage report meets the 85% threshold.
+- Run `python scripts/quality_gate.py quality` before rolling out fixes. Ensure
+  the coverage report meets the 85% threshold.
 
 ## Residual Risks
 

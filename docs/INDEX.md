@@ -34,5 +34,6 @@ Zscripts is a structured log collection, normalization, redaction, diagnostics, 
 - [Extension Guide](guides/EXTENSION_GUIDE.md)
 - [Legacy and Optional Helpers](helpers/LEGACY_OPTIONAL_HELPERS.md)
 - [Legacy Helper Inventory and Phase 2 Decision Record](operations/LEGACY_HELPER_INVENTORY.md)
+- [Legacy Helper Phase 2A Compatibility Contract](operations/LEGACY_HELPER_COMPATIBILITY.md)
 - [Future Roadmap](future_roadmap.md)
 - [Final Refinement Report](final_report.md)

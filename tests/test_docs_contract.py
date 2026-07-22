@@ -22,6 +22,7 @@ def test_required_docs_exist() -> None:
         ROOT / "docs/guides/RAW_LOG_TO_REDACTED_REPORT.md",
         ROOT / "docs/guides/GITHUB_ACTIONS_USAGE.md",
         ROOT / "docs/helpers/LEGACY_OPTIONAL_HELPERS.md",
+        ROOT / "docs/operations/LEGACY_HELPER_COMPATIBILITY.md",
     ]
     missing = [str(path.relative_to(ROOT)) for path in required if not path.exists()]
     assert not missing, f"Missing required documentation files: {missing}"

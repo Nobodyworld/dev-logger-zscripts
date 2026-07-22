@@ -40,9 +40,9 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
    All commands delegate to `scripts/quality_gate.py` and work directly on
    Windows without GNU Make. The canonical profiles are:
 
-   - `check`: `format-check`, `lint`, `type`, `bandit`, `tests`
-   - `quality`: `format-check`, `lint`, `type`, `bandit`, `audit`, `binary`, `tests`, `coverage`, `docs`, `editable-smoke`, `wheel`, `zipapp`, `diagnostics`
-   - `release`: `format-check`, `lint`, `type`, `bandit`, `audit`, `binary`, `tests`, `coverage`, `docs`, `editable-smoke`, `wheel`, `zipapp`, `diagnostics`, `redaction`, `gitleaks-worktree`, `gitleaks-history`, `clean`
+   - `check`: `format-check`, `lint`, `type`, `helper-surface`, `helper-boundary`, `helper-compatibility`, `bandit`, `tests`
+   - `quality`: `format-check`, `lint`, `type`, `helper-surface`, `helper-boundary`, `helper-compatibility`, `bandit`, `audit`, `binary`, `tests`, `coverage`, `docs`, `editable-smoke`, `wheel`, `zipapp`, `diagnostics`
+   - `release`: `format-check`, `lint`, `type`, `helper-surface`, `helper-boundary`, `helper-compatibility`, `bandit`, `audit`, `binary`, `tests`, `coverage`, `docs`, `editable-smoke`, `wheel`, `zipapp`, `diagnostics`, `redaction`, `gitleaks-worktree`, `gitleaks-history`, `clean`
 
    `check` is the fast contributor gate. `quality` is the complete hosted-CI
    gate and enforces at least 85% coverage. `release` is the complete local

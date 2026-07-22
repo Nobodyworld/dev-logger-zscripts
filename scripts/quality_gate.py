@@ -35,11 +35,25 @@ MYPY_TARGETS: tuple[str, ...] = (
 
 EXPECTED_ADAPTERS = ("ci", "docker", "dotnet", "go", "java", "javascript", "python", "rust")
 
-CHECK_OPERATIONS: tuple[str, ...] = ("format-check", "lint", "type", "bandit", "tests")
+HELPER_CONTRACT_OPERATIONS: tuple[str, ...] = (
+    "helper-surface",
+    "helper-boundary",
+    "helper-compatibility",
+)
+
+CHECK_OPERATIONS: tuple[str, ...] = (
+    "format-check",
+    "lint",
+    "type",
+    *HELPER_CONTRACT_OPERATIONS,
+    "bandit",
+    "tests",
+)
 QUALITY_OPERATIONS: tuple[str, ...] = (
     "format-check",
     "lint",
     "type",
+    *HELPER_CONTRACT_OPERATIONS,
     "bandit",
     "audit",
     "binary",
@@ -187,6 +201,15 @@ def _run_wheel_smoke() -> dict[str, object]:
         wheels = list(wheel_dir.glob("*.whl"))
         if len(wheels) != 1:
             raise GateFailure(f"Expected exactly one wheel, found {len(wheels)} in {wheel_dir}")
+        _run(
+            [
+                sys.executable,
+                "scripts/check_legacy_helper_boundary.py",
+                "wheel",
+                "--wheel",
+                str(wheels[0]),
+            ]
+        )
 
         environment = smoke_root / "venv"
         venv.EnvBuilder(with_pip=True).create(environment)
@@ -219,7 +242,11 @@ def _run_wheel_smoke() -> dict[str, object]:
             capture_output=True,
         )
         _assert_adapter_order(adapters.stdout)
-    return {"adapter_order": list(EXPECTED_ADAPTERS), "isolated_install": True}
+    return {
+        "adapter_order": list(EXPECTED_ADAPTERS),
+        "isolated_install": True,
+        "helper_modules_included": 154,
+    }
 
 
 def _run_zipapp_smoke() -> dict[str, object]:
@@ -304,6 +331,11 @@ OPERATIONS: dict[str, Operation] = {
     "format-check": _simple(_python_module("ruff", "format", "--check", ".")),
     "lint": _simple(_python_module("ruff", "check", ".")),
     "type": _simple(_python_module("mypy", *MYPY_TARGETS)),
+    "helper-surface": _simple([sys.executable, "scripts/check_legacy_helper_boundary.py", "surface"]),
+    "helper-boundary": _simple([sys.executable, "scripts/check_legacy_helper_boundary.py", "boundary"]),
+    "helper-compatibility": _simple(
+        [sys.executable, "scripts/check_legacy_helper_boundary.py", "compatibility"]
+    ),
     "bandit": _simple(_python_module("bandit", "-q", "-r", "zscripts", "examples/sample_project")),
     "audit": _simple(_python_module("pip_audit", "--timeout", "60")),
     "binary": _simple([sys.executable, "scripts/no_binaries.py"]),

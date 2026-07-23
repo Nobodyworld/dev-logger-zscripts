@@ -3,6 +3,7 @@
 Zscripts is a structured log collection, normalization, redaction, diagnostics, and reporting toolkit for developers and automation systems.
 
 - [CLI Overview](../README.md)
+- [Repository Intelligence Product Roadmap](product/REPOSITORY_INTELLIGENCE_ROADMAP.md)
 - [Architecture Deep-Dive](architecture/ARCHITECTURE.md)
 - [Architecture Overview](architecture/ARCHITECTURE_OVERVIEW.md)
 - [ToolkitService API Reference](api.md)

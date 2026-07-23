@@ -24,6 +24,20 @@ application orchestration, and infrastructure details isolated.
    - Presents a user-friendly CLI with subcommands such as `collect`, `parse`,
      `summarize`, and `guardrails` that reuse the application service layer.
 
+## Legacy Helper Boundary
+
+`zscripts/helpers` is a temporarily wheel-included legacy collection, not a
+maintained architecture layer. Maintained application, domain, infrastructure,
+observability, extension, schema, adapter, and agent code may not import
+`zscripts.helpers` or obsolete top-level `helpers` paths. Phase 2A enforces this
+rule statically without importing helper source.
+
+The complete 154-module surface is frozen in
+`docs/operations/legacy_helper_surface.json`. Seven registry-exposed modules
+receive temporary import/registry compatibility only; the rest remain legacy
+and unsupported. Phase 2A changes neither package discovery nor wheel inclusion.
+Phase 2B requires a later consumer review and separate owner approval.
+
 ## Data Flow
 
 ```

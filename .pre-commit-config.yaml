@@ -28,6 +28,21 @@ repos:
         entry: python scripts/quality_gate.py type
         language: system
         pass_filenames: false
+      - id: helper-surface
+        name: Legacy helper surface freeze
+        entry: python scripts/quality_gate.py helper-surface
+        language: system
+        pass_filenames: false
+      - id: helper-boundary
+        name: Maintained core helper-import boundary
+        entry: python scripts/quality_gate.py helper-boundary
+        language: system
+        pass_filenames: false
+      - id: helper-compatibility
+        name: Legacy helper compatibility manifest
+        entry: python scripts/quality_gate.py helper-compatibility
+        language: system
+        pass_filenames: false
       - id: bandit
         name: Bandit
         entry: python scripts/quality_gate.py bandit

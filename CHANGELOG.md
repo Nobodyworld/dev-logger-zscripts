@@ -4,6 +4,11 @@
 
 ### Added
 
+- Phase 2A legacy-helper compatibility contracts: a deterministic 154-module
+  surface freeze, seven temporary registry compatibility points, maintained-core
+  import-boundary enforcement, and canonical quality-gate checks. Helpers remain
+  wheel-included and unchanged; Phase 2B is not authorized.
+
 - Public release documentation updates including
   `docs/operations/PUBLIC_RELEASE_AUDIT.md` and
   `docs/operations/CLEAN_CLONE_RELEASE_VALIDATION.md`.

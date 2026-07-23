@@ -1,6 +1,9 @@
 # Legacy Helper Inventory and Phase 2 Decision Record
 
-Status: evidence record; no Phase 2 disposition is approved by this document.
+Status: evidence record. Issue #70 subsequently approved the non-breaking Phase
+2A compatibility contract documented in
+[`LEGACY_HELPER_COMPATIBILITY.md`](LEGACY_HELPER_COMPATIBILITY.md). Phase 2B is
+not authorized.
 
 ## 1. Audited revision
 

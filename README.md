@@ -140,9 +140,10 @@ Global flags such as `--config`, `--set`, `--adapter`, `--enable-telemetry`,
 ## Helpers (Legacy and Optional)
 
 The helper collection under `zscripts/helpers` is not part of the strict core
-identity and is treated as legacy/optional utility code. It remains
-available for compatibility, but the core project scope is adapter-driven log
-normalization and diagnostics.
+identity and is treated as legacy/optional utility code. Phase 2A keeps all 154
+tracked helper modules in the wheel without changing their behavior. Seven
+registry-exposed modules are temporary import/registry compatibility points;
+all other helpers are legacy, unsupported, and temporarily wheel-included.
 
 Helper modules are grouped by domain:
 
@@ -157,8 +158,15 @@ Install helpers extras only when needed:
 - `pip install .[helpers-web]`
 - `pip install .[helpers-ml]`
 
-Migration note: helper domains should be moved into a dedicated repository over
-time. Until migration is complete, they are explicitly optional.
+The Phase 2A compatibility window begins when Phase 2A merges and lasts until
+both 90 calendar days and one documented public-beta deprecation cycle have
+completed; the later condition controls. Phase 2B requires consumer review and
+separate owner approval. This public-source beta commitment is not a stable
+semantic-version guarantee. See
+`docs/operations/LEGACY_HELPER_COMPATIBILITY.md` for the enforceable contract.
+
+Torch remains at 2.9.0 during Phase 2A. Torch 2.13 and all ML-helper migration
+decisions remain deferred under issue #62.
 
 Use the registry system to call helpers by tag:
 

@@ -35,6 +35,11 @@ jobs:
           python scripts/quality_gate.py lint
       - name: Type check
         run: python scripts/quality_gate.py type
+      - name: Legacy helper Phase 2A contracts
+        run: |
+          python scripts/quality_gate.py helper-surface
+          python scripts/quality_gate.py helper-boundary
+          python scripts/quality_gate.py helper-compatibility
       - name: Bandit
         run: python scripts/quality_gate.py bandit
       - name: Dependency audit

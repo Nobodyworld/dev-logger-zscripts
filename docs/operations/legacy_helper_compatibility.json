@@ -1,0 +1,206 @@
+{
+  "approved_owner_identifiers": [],
+  "compatibility_point_count": 7,
+  "compatibility_points": [
+    {
+      "behavioral_support": false,
+      "callables": [
+        "batched",
+        "normalize_columns",
+        "rolling_window"
+      ],
+      "compatibility_status": "temporary-compatibility",
+      "compatibility_window": {
+        "eligibility_rule": "whichever-is-later",
+        "minimum_days": 90,
+        "minimum_public_beta_cycles": 1,
+        "start_event": "phase2a_merge"
+      },
+      "import_time_side_effects": false,
+      "module": "zscripts.helpers.numpy.array_utils",
+      "owner": "unassigned",
+      "phase2b_proposal": "migrate",
+      "registry_keys": [
+        "numpy.batched",
+        "numpy.normalize_columns",
+        "numpy.rolling_window"
+      ],
+      "shim_policy": "none-in-phase-2a",
+      "static_risk": "moderate",
+      "third_party_imports": [
+        "numpy"
+      ]
+    },
+    {
+      "behavioral_support": false,
+      "callables": [
+        "consolidate_files"
+      ],
+      "compatibility_status": "temporary-compatibility",
+      "compatibility_window": {
+        "eligibility_rule": "whichever-is-later",
+        "minimum_days": 90,
+        "minimum_public_beta_cycles": 1,
+        "start_event": "phase2a_merge"
+      },
+      "import_time_side_effects": true,
+      "module": "zscripts.helpers.pandas.concat_csvs",
+      "owner": "unassigned",
+      "phase2b_proposal": "retire-review",
+      "registry_keys": [
+        "pandas.concat_csvs"
+      ],
+      "shim_policy": "none-in-phase-2a",
+      "static_risk": "critical-review",
+      "third_party_imports": [
+        "pandas"
+      ]
+    },
+    {
+      "behavioral_support": false,
+      "callables": [
+        "process_excel_file"
+      ],
+      "compatibility_status": "temporary-compatibility",
+      "compatibility_window": {
+        "eligibility_rule": "whichever-is-later",
+        "minimum_days": 90,
+        "minimum_public_beta_cycles": 1,
+        "start_event": "phase2a_merge"
+      },
+      "import_time_side_effects": true,
+      "module": "zscripts.helpers.pandas.excel_to_json_posts",
+      "owner": "unassigned",
+      "phase2b_proposal": "migrate",
+      "registry_keys": [
+        "pandas.excel_to_json_posts"
+      ],
+      "shim_policy": "none-in-phase-2a",
+      "static_risk": "moderate",
+      "third_party_imports": [
+        "pandas"
+      ]
+    },
+    {
+      "behavioral_support": false,
+      "callables": [
+        "add_watermark"
+      ],
+      "compatibility_status": "temporary-compatibility",
+      "compatibility_window": {
+        "eligibility_rule": "whichever-is-later",
+        "minimum_days": 90,
+        "minimum_public_beta_cycles": 1,
+        "start_event": "phase2a_merge"
+      },
+      "import_time_side_effects": false,
+      "module": "zscripts.helpers.pillow.add_watermark",
+      "owner": "unassigned",
+      "phase2b_proposal": "migrate",
+      "registry_keys": [
+        "pillow.add_watermark"
+      ],
+      "shim_policy": "none-in-phase-2a",
+      "static_risk": "moderate",
+      "third_party_imports": [
+        "PIL"
+      ]
+    },
+    {
+      "behavioral_support": false,
+      "callables": [
+        "resize_images_by_aspect_ratio",
+        "resize_images_by_ratio"
+      ],
+      "compatibility_status": "temporary-compatibility",
+      "compatibility_window": {
+        "eligibility_rule": "whichever-is-later",
+        "minimum_days": 90,
+        "minimum_public_beta_cycles": 1,
+        "start_event": "phase2a_merge"
+      },
+      "import_time_side_effects": false,
+      "module": "zscripts.helpers.pillow.ratio_image_2",
+      "owner": "unassigned",
+      "phase2b_proposal": "retire-review",
+      "registry_keys": [
+        "pillow.resize_by_aspect",
+        "pillow.resize_by_ratio"
+      ],
+      "shim_policy": "none-in-phase-2a",
+      "static_risk": "high",
+      "third_party_imports": [
+        "PIL"
+      ]
+    },
+    {
+      "behavioral_support": false,
+      "callables": [
+        "create_retrying_session",
+        "fetch_json"
+      ],
+      "compatibility_status": "temporary-compatibility",
+      "compatibility_window": {
+        "eligibility_rule": "whichever-is-later",
+        "minimum_days": 90,
+        "minimum_public_beta_cycles": 1,
+        "start_event": "phase2a_merge"
+      },
+      "import_time_side_effects": false,
+      "module": "zscripts.helpers.requests.http",
+      "owner": "unassigned",
+      "phase2b_proposal": "retire-review",
+      "registry_keys": [
+        "requests.fetch_json",
+        "requests.retrying_session"
+      ],
+      "shim_policy": "none-in-phase-2a",
+      "static_risk": "high",
+      "third_party_imports": [
+        "requests",
+        "urllib3"
+      ]
+    },
+    {
+      "behavioral_support": false,
+      "callables": [
+        "bold_li_prefix_before_colon",
+        "listify_numbered_paragraphs",
+        "section_by_h2"
+      ],
+      "compatibility_status": "temporary-compatibility",
+      "compatibility_window": {
+        "eligibility_rule": "whichever-is-later",
+        "minimum_days": 90,
+        "minimum_public_beta_cycles": 1,
+        "start_event": "phase2a_merge"
+      },
+      "import_time_side_effects": false,
+      "module": "zscripts.helpers.web_crawl.html_ops",
+      "owner": "unassigned",
+      "phase2b_proposal": "migrate",
+      "registry_keys": [
+        "html_ops.bold_prefix",
+        "html_ops.listify",
+        "html_ops.section"
+      ],
+      "shim_policy": "none-in-phase-2a",
+      "static_risk": "moderate",
+      "third_party_imports": [
+        "bs4"
+      ]
+    }
+  ],
+  "default_policy": {
+    "applies_to": "all-tracked-helper-modules-except-explicit-compatibility-points",
+    "behavioral_support": false,
+    "compatibility_status": "legacy-unsupported",
+    "phase2b_requires_owner_approval": true,
+    "shim_policy": "none-in-phase-2a",
+    "wheel_inclusion": "temporarily-wheel-included"
+  },
+  "phase": "2A",
+  "schema_version": 1,
+  "source_inventory": "docs/operations/legacy_helper_inventory.json",
+  "source_registry": "configs/registry.yaml"
+}

@@ -4,6 +4,11 @@
 
 ### Added
 
+- Evidence-backed consumer and ownership review for the seven temporary legacy
+  helper compatibility points, plus the public-beta deprecation notice. The
+  notice starts the required cycle without authorizing Phase 2B; all owner
+  fields remain unassigned and all 154 helpers remain wheel-included.
+
 - Phase 2A legacy-helper compatibility contracts: a deterministic 154-module
   surface freeze, seven temporary registry compatibility points, maintained-core
   import-boundary enforcement, and canonical quality-gate checks. Helpers remain

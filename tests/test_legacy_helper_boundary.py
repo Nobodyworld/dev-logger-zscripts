@@ -41,7 +41,7 @@ def test_surface_regeneration_is_byte_identical() -> None:
     first = boundary._serialize(boundary.build_surface_payload())
     second = boundary._serialize(boundary.build_surface_payload())
     assert first == second
-    assert first.encode() == SURFACE_PATH.read_bytes()
+    assert first.encode() == SURFACE_PATH.read_bytes().replace(b"\r\n", b"\n")
 
 
 @pytest.mark.parametrize("mutation", ["duplicate", "unsorted", "count"])

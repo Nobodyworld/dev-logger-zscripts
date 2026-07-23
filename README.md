@@ -163,7 +163,11 @@ both 90 calendar days and one documented public-beta deprecation cycle have
 completed; the later condition controls. Phase 2B requires consumer review and
 separate owner approval. This public-source beta commitment is not a stable
 semantic-version guarantee. See
-`docs/operations/LEGACY_HELPER_COMPATIBILITY.md` for the enforceable contract.
+`docs/operations/LEGACY_HELPER_COMPATIBILITY.md` for the enforceable contract,
+`docs/operations/LEGACY_HELPER_CONSUMER_REVIEW.md` for the evidence-backed
+consumer review, and
+`docs/operations/LEGACY_HELPER_DEPRECATION_NOTICE.md` for the active
+public-beta deprecation notice.
 
 Torch remains at 2.9.0 during Phase 2A. Torch 2.13 and all ML-helper migration
 decisions remain deferred under issue #62.

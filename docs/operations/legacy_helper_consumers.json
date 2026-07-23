@@ -1,0 +1,1268 @@
+{
+  "compatibility_points": [
+    {
+      "automation": [
+        {
+          "category": "documentation_only_reference",
+          "detail": "Static contract metadata only; it does not import or execute the helper.",
+          "path": "scripts/check_legacy_helper_boundary.py"
+        }
+      ],
+      "callables": [
+        "batched",
+        "normalize_columns",
+        "rolling_window"
+      ],
+      "consumer_review_status": "complete",
+      "current_internal_consumers": [
+        {
+          "category": "no_current_reference_found",
+          "detail": "No direct runtime consumer was found.",
+          "scope": "non-test repository code outside the compatibility module and its package re-export"
+        }
+      ],
+      "dependencies": [
+        "numpy"
+      ],
+      "documentation": [
+        {
+          "category": "documentation_only_reference",
+          "detail": "Documents the temporary compatibility point and registry surface.",
+          "path": "docs/operations/LEGACY_HELPER_COMPATIBILITY.md"
+        }
+      ],
+      "historical_consumers": [
+        {
+          "category": "package_reexport",
+          "commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+          "detail": "The package re-export was introduced with the helper consolidation and remains present.",
+          "path": "zscripts/helpers/numpy/__init__.py"
+        },
+        {
+          "category": "test_only_reference",
+          "commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+          "detail": "Pytest coverage was introduced with the helper consolidation and remains present.",
+          "path": "tests/test_numpy_helpers.py"
+        }
+      ],
+      "history_summary": {
+        "assessment": "Package re-export, registry exposure, and focused pytest coverage suggest an intentionally reusable narrow interface, but no non-test runtime consumer was found.",
+        "first_observed_commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+        "latest_observed_use_sha": "d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35",
+        "obsolete_top_level_paths": [],
+        "removed_consumers": [],
+        "renamed_modules_or_callables": []
+      },
+      "migration_requirements": [
+        "Define array shape, dtype, empty-input, and error semantics.",
+        "Preserve or deliberately replace the package re-export and all three registry keys.",
+        "Provide owned NumPy version and platform support plus isolated tests."
+      ],
+      "module": "zscripts.helpers.numpy.array_utils",
+      "owner": "unassigned",
+      "owner_recommendation": "owner needed before migration",
+      "package_reexports": [
+        {
+          "category": "package_reexport",
+          "path": "zscripts/helpers/numpy/__init__.py",
+          "symbols": [
+            "batched",
+            "normalize_columns",
+            "rolling_window"
+          ]
+        }
+      ],
+      "proposed_disposition": "migrate",
+      "public_external_consumers": [],
+      "registry_evidence": [
+        {
+          "category": "registry_reference",
+          "key": "numpy.batched",
+          "path": "configs/registry.yaml",
+          "runtime_consumer": false,
+          "target": "zscripts.helpers.numpy.array_utils:batched"
+        },
+        {
+          "category": "registry_reference",
+          "key": "numpy.normalize_columns",
+          "path": "configs/registry.yaml",
+          "runtime_consumer": false,
+          "target": "zscripts.helpers.numpy.array_utils:normalize_columns"
+        },
+        {
+          "category": "registry_reference",
+          "key": "numpy.rolling_window",
+          "path": "configs/registry.yaml",
+          "runtime_consumer": false,
+          "target": "zscripts.helpers.numpy.array_utils:rolling_window"
+        }
+      ],
+      "registry_keys": [
+        "numpy.batched",
+        "numpy.normalize_columns",
+        "numpy.rolling_window"
+      ],
+      "retirement_blockers": [
+        "The 90-day threshold and one public-beta cycle must both complete.",
+        "The package re-export and focused tests require an explicit migration decision.",
+        "Separate owner approval under issue #62 is required."
+      ],
+      "self_invocations": [],
+      "shim_requirements": [
+        "No shim is added in this review.",
+        "Any later non-executing tombstone or forwarding design requires issue #62 owner approval and must not import NumPy merely to resolve the old path."
+      ],
+      "static_risk": "moderate",
+      "tests": [
+        {
+          "category": "test_only_reference",
+          "detail": "Imports all three symbols through zscripts.helpers.numpy and directly invokes each callable.",
+          "path": "tests/test_numpy_helpers.py"
+        }
+      ]
+    },
+    {
+      "automation": [
+        {
+          "category": "documentation_only_reference",
+          "detail": "Static contract metadata only; it does not import or execute the helper.",
+          "path": "scripts/check_legacy_helper_boundary.py"
+        }
+      ],
+      "callables": [
+        "consolidate_files"
+      ],
+      "consumer_review_status": "complete",
+      "current_internal_consumers": [
+        {
+          "category": "no_current_reference_found",
+          "detail": "No independent direct runtime consumer was found; same-name zscripts.utils and captured-example symbols are unrelated homonyms.",
+          "scope": "repository code outside the compatibility module"
+        }
+      ],
+      "dependencies": [
+        "pandas"
+      ],
+      "documentation": [
+        {
+          "category": "documentation_only_reference",
+          "detail": "Documents the temporary compatibility point and critical-review risk.",
+          "path": "docs/operations/LEGACY_HELPER_COMPATIBILITY.md"
+        }
+      ],
+      "historical_consumers": [
+        {
+          "category": "test_only_reference",
+          "commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+          "detail": "The standalone smoke script was introduced with consolidation and remains present.",
+          "path": "tests/smoke_pandas_concat_csvs.py"
+        }
+      ],
+      "history_summary": {
+        "assessment": "The organization-specific guarded main, obsolete utility import, and standalone smoke script suggest imported internal automation rather than a durable public interface.",
+        "first_observed_commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+        "latest_observed_use_sha": "d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35",
+        "obsolete_top_level_paths": [
+          "helpers.utilities.paths"
+        ],
+        "removed_consumers": [],
+        "renamed_modules_or_callables": []
+      },
+      "migration_requirements": [
+        "Identify any untracked automation that relies on in-place CSV consolidation.",
+        "Define replacement behavior for file selection, output naming, overwrite behavior, and organization-path removal."
+      ],
+      "module": "zscripts.helpers.pandas.concat_csvs",
+      "owner": "unassigned",
+      "owner_recommendation": "explicit unowned retirement risk may be accepted",
+      "package_reexports": [],
+      "proposed_disposition": "retire-review",
+      "public_external_consumers": [],
+      "registry_evidence": [
+        {
+          "category": "registry_reference",
+          "key": "pandas.concat_csvs",
+          "path": "configs/registry.yaml",
+          "runtime_consumer": false,
+          "target": "zscripts.helpers.pandas.concat_csvs:consolidate_files"
+        }
+      ],
+      "registry_keys": [
+        "pandas.concat_csvs"
+      ],
+      "retirement_blockers": [
+        "The 90-day threshold and one public-beta cycle must both complete.",
+        "Critical-review risk and the obsolete helpers.utilities.paths import require an explicit security/import-safety decision.",
+        "Issue #62 must either approve an owner or explicitly accept unowned retirement risk."
+      ],
+      "self_invocations": [
+        {
+          "category": "direct_invocation",
+          "detail": "The guarded script main invokes consolidate_files for organization-specific paths; this is not an independent consumer.",
+          "path": "zscripts/helpers/pandas/concat_csvs.py"
+        }
+      ],
+      "shim_requirements": [
+        "No shim is added in this review.",
+        "A future non-executing tombstone could explain retirement without importing pandas or the obsolete organization-path module, but requires owner approval."
+      ],
+      "static_risk": "critical-review",
+      "tests": [
+        {
+          "category": "test_only_reference",
+          "detail": "Directly imports and invokes consolidate_files, but the smoke_ filename is not collected by default pytest discovery.",
+          "path": "tests/smoke_pandas_concat_csvs.py"
+        }
+      ]
+    },
+    {
+      "automation": [
+        {
+          "category": "documentation_only_reference",
+          "detail": "Static contract metadata only; it does not import or execute the helper.",
+          "path": "scripts/check_legacy_helper_boundary.py"
+        }
+      ],
+      "callables": [
+        "process_excel_file"
+      ],
+      "consumer_review_status": "complete",
+      "current_internal_consumers": [
+        {
+          "category": "no_current_reference_found",
+          "detail": "No independent direct runtime consumer was found.",
+          "scope": "repository code outside the compatibility module"
+        }
+      ],
+      "dependencies": [
+        "pandas"
+      ],
+      "documentation": [
+        {
+          "category": "documentation_only_reference",
+          "detail": "Documents the temporary compatibility point and registry key.",
+          "path": "docs/operations/LEGACY_HELPER_COMPATIBILITY.md"
+        }
+      ],
+      "historical_consumers": [
+        {
+          "category": "test_only_reference",
+          "commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+          "detail": "The standalone smoke script was introduced with consolidation and remains present.",
+          "path": "tests/smoke_pandas_excel_to_json_posts.py"
+        }
+      ],
+      "history_summary": {
+        "assessment": "The guarded file-conversion script and standalone smoke coverage suggest internal content tooling; registry exposure is the only durable compatibility signal.",
+        "first_observed_commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+        "latest_observed_use_sha": "d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35",
+        "obsolete_top_level_paths": [],
+        "removed_consumers": [],
+        "renamed_modules_or_callables": []
+      },
+      "migration_requirements": [
+        "Define Excel-engine support, sheet-selection errors, ordering, duplicate removal, and categories/tags coercion.",
+        "Provide owned pandas and Excel-engine dependency metadata plus isolated fixture tests.",
+        "Preserve or deliberately replace the registry key."
+      ],
+      "module": "zscripts.helpers.pandas.excel_to_json_posts",
+      "owner": "unassigned",
+      "owner_recommendation": "owner needed before migration",
+      "package_reexports": [],
+      "proposed_disposition": "migrate",
+      "public_external_consumers": [],
+      "registry_evidence": [
+        {
+          "category": "registry_reference",
+          "key": "pandas.excel_to_json_posts",
+          "path": "configs/registry.yaml",
+          "runtime_consumer": false,
+          "target": "zscripts.helpers.pandas.excel_to_json_posts:process_excel_file"
+        }
+      ],
+      "registry_keys": [
+        "pandas.excel_to_json_posts"
+      ],
+      "retirement_blockers": [
+        "The 90-day threshold and one public-beta cycle must both complete.",
+        "The registry key and file-format behavior require an owned migration contract.",
+        "Separate owner approval under issue #62 is required."
+      ],
+      "self_invocations": [
+        {
+          "category": "direct_invocation",
+          "detail": "The guarded script main invokes process_excel_file and writes JSON; this is not an independent consumer.",
+          "path": "zscripts/helpers/pandas/excel_to_json_posts.py"
+        }
+      ],
+      "shim_requirements": [
+        "No shim is added in this review.",
+        "Any future non-executing compatibility module must avoid importing pandas until an owned implementation is selected."
+      ],
+      "static_risk": "moderate",
+      "tests": [
+        {
+          "category": "test_only_reference",
+          "detail": "Directly imports and invokes process_excel_file, but the smoke_ filename is not collected by default pytest discovery.",
+          "path": "tests/smoke_pandas_excel_to_json_posts.py"
+        }
+      ]
+    },
+    {
+      "automation": [
+        {
+          "category": "documentation_only_reference",
+          "detail": "Static contract metadata only; it does not import or execute the helper.",
+          "path": "scripts/check_legacy_helper_boundary.py"
+        }
+      ],
+      "callables": [
+        "add_watermark"
+      ],
+      "consumer_review_status": "complete",
+      "current_internal_consumers": [
+        {
+          "category": "direct_import",
+          "detail": "Imports add_watermark through the obsolete helpers.pillow.add_watermark path.",
+          "path": "zscripts/helpers/pillow/thumb_wm_marg.py"
+        },
+        {
+          "category": "direct_invocation",
+          "detail": "Invokes add_watermark inside import-time batch automation that also writes and deletes files.",
+          "path": "zscripts/helpers/pillow/thumb_wm_marg.py"
+        }
+      ],
+      "dependencies": [
+        "PIL"
+      ],
+      "documentation": [
+        {
+          "category": "documentation_only_reference",
+          "detail": "Shows a registry call for pillow.add_watermark; this is documentation, not proof of a runtime consumer.",
+          "path": "README.md"
+        },
+        {
+          "category": "documentation_only_reference",
+          "detail": "Documents the temporary compatibility point and registry key.",
+          "path": "docs/operations/LEGACY_HELPER_COMPATIBILITY.md"
+        },
+        {
+          "category": "documentation_only_reference",
+          "detail": "Records helpers.pillow.add_watermark as an obsolete top-level import target.",
+          "path": "docs/operations/LEGACY_HELPER_INVENTORY.md"
+        }
+      ],
+      "historical_consumers": [
+        {
+          "category": "direct_import",
+          "commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+          "detail": "The obsolete-path internal consumer was introduced with consolidation and remains present.",
+          "path": "zscripts/helpers/pillow/thumb_wm_marg.py"
+        },
+        {
+          "category": "test_only_reference",
+          "commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+          "detail": "The standalone smoke script was introduced with consolidation and remains present.",
+          "path": "tests/smoke_pillow_watermark_ratio.py"
+        }
+      ],
+      "history_summary": {
+        "assessment": "An obsolete-path internal batch consumer and the README registry example show active compatibility pressure, but the organization-specific destructive batch workflow is not evidence of a stable public API.",
+        "first_observed_commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+        "latest_observed_use_sha": "d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35",
+        "obsolete_top_level_paths": [
+          "helpers.pillow.add_watermark"
+        ],
+        "removed_consumers": [],
+        "renamed_modules_or_callables": []
+      },
+      "migration_requirements": [
+        "Define font fallback, logo sizing, image modes, output format, error reporting, and file-overwrite semantics.",
+        "Separate the callable from the destructive import-time thumb_wm_marg workflow before any support claim.",
+        "Preserve or deliberately replace the registry key and document the obsolete top-level consumer path."
+      ],
+      "module": "zscripts.helpers.pillow.add_watermark",
+      "owner": "unassigned",
+      "owner_recommendation": "owner needed before migration",
+      "package_reexports": [],
+      "proposed_disposition": "migrate",
+      "public_external_consumers": [],
+      "registry_evidence": [
+        {
+          "category": "registry_reference",
+          "key": "pillow.add_watermark",
+          "path": "configs/registry.yaml",
+          "runtime_consumer": false,
+          "target": "zscripts.helpers.pillow.add_watermark:add_watermark"
+        }
+      ],
+      "registry_keys": [
+        "pillow.add_watermark"
+      ],
+      "retirement_blockers": [
+        "The 90-day threshold and one public-beta cycle must both complete.",
+        "The obsolete internal consumer and README registry example require migration guidance.",
+        "Separate owner approval under issue #62 is required."
+      ],
+      "self_invocations": [],
+      "shim_requirements": [
+        "No shim is added in this review.",
+        "A future non-executing tombstone for the obsolete helpers path may be feasible, but a functional forwarding shim would execute Pillow-backed behavior and needs owner approval."
+      ],
+      "static_risk": "moderate",
+      "tests": [
+        {
+          "category": "test_only_reference",
+          "detail": "Directly imports and invokes add_watermark, but the smoke_ filename is not collected by default pytest discovery.",
+          "path": "tests/smoke_pillow_watermark_ratio.py"
+        }
+      ]
+    },
+    {
+      "automation": [
+        {
+          "category": "documentation_only_reference",
+          "detail": "Static contract metadata only; it does not import or execute the helper.",
+          "path": "scripts/check_legacy_helper_boundary.py"
+        }
+      ],
+      "callables": [
+        "resize_images_by_aspect_ratio",
+        "resize_images_by_ratio"
+      ],
+      "consumer_review_status": "complete",
+      "current_internal_consumers": [
+        {
+          "category": "no_current_reference_found",
+          "detail": "No direct runtime consumer was found.",
+          "scope": "non-test repository code outside the compatibility module"
+        }
+      ],
+      "dependencies": [
+        "PIL"
+      ],
+      "documentation": [
+        {
+          "category": "documentation_only_reference",
+          "detail": "Documents the temporary compatibility point and both registry keys.",
+          "path": "docs/operations/LEGACY_HELPER_COMPATIBILITY.md"
+        }
+      ],
+      "historical_consumers": [
+        {
+          "category": "test_only_reference",
+          "commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+          "detail": "The standalone smoke script was introduced with consolidation and remains present.",
+          "path": "tests/smoke_pillow_watermark_ratio.py"
+        }
+      ],
+      "history_summary": {
+        "assessment": "Registry exposure and a standalone image smoke script suggest legacy batch tooling; no independent current runtime consumer or durable public interface evidence was found.",
+        "first_observed_commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+        "latest_observed_use_sha": "d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35",
+        "obsolete_top_level_paths": [],
+        "removed_consumers": [],
+        "renamed_modules_or_callables": []
+      },
+      "migration_requirements": [
+        "Identify any untracked image-batch automation and document output dimensions, aspect presets, formats, quality, overwrite, and directory-creation behavior.",
+        "Provide a replacement path before retiring either registry key."
+      ],
+      "module": "zscripts.helpers.pillow.ratio_image_2",
+      "owner": "unassigned",
+      "owner_recommendation": "explicit unowned retirement risk may be accepted",
+      "package_reexports": [],
+      "proposed_disposition": "retire-review",
+      "public_external_consumers": [],
+      "registry_evidence": [
+        {
+          "category": "registry_reference",
+          "key": "pillow.resize_by_aspect",
+          "path": "configs/registry.yaml",
+          "runtime_consumer": false,
+          "target": "zscripts.helpers.pillow.ratio_image_2:resize_images_by_aspect_ratio"
+        },
+        {
+          "category": "registry_reference",
+          "key": "pillow.resize_by_ratio",
+          "path": "configs/registry.yaml",
+          "runtime_consumer": false,
+          "target": "zscripts.helpers.pillow.ratio_image_2:resize_images_by_ratio"
+        }
+      ],
+      "registry_keys": [
+        "pillow.resize_by_aspect",
+        "pillow.resize_by_ratio"
+      ],
+      "retirement_blockers": [
+        "The 90-day threshold and one public-beta cycle must both complete.",
+        "Filesystem reads, writes, and directory creation require explicit migration or accepted-retirement risk.",
+        "Issue #62 must either approve an owner or explicitly accept unowned retirement risk."
+      ],
+      "self_invocations": [],
+      "shim_requirements": [
+        "No shim is added in this review.",
+        "A future non-executing tombstone can explain retirement without importing Pillow; functional forwarding would preserve filesystem mutation and needs owner approval."
+      ],
+      "static_risk": "high",
+      "tests": [
+        {
+          "category": "test_only_reference",
+          "detail": "Directly imports and invokes both callables, but the smoke_ filename is not collected by default pytest discovery.",
+          "path": "tests/smoke_pillow_watermark_ratio.py"
+        }
+      ]
+    },
+    {
+      "automation": [
+        {
+          "category": "documentation_only_reference",
+          "detail": "Static contract metadata only; it does not import or execute the helper.",
+          "path": "scripts/check_legacy_helper_boundary.py"
+        }
+      ],
+      "callables": [
+        "create_retrying_session",
+        "fetch_json"
+      ],
+      "consumer_review_status": "complete",
+      "current_internal_consumers": [
+        {
+          "category": "no_current_reference_found",
+          "detail": "No independent direct runtime consumer was found.",
+          "scope": "non-test repository code outside the compatibility module and its package re-export"
+        }
+      ],
+      "dependencies": [
+        "requests",
+        "urllib3"
+      ],
+      "documentation": [
+        {
+          "category": "documentation_only_reference",
+          "detail": "Documents the temporary compatibility point, package re-export, and registry keys.",
+          "path": "docs/operations/LEGACY_HELPER_COMPATIBILITY.md"
+        }
+      ],
+      "historical_consumers": [
+        {
+          "category": "package_reexport",
+          "commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+          "detail": "The package re-export was introduced with helper consolidation and remains present.",
+          "path": "zscripts/helpers/requests/__init__.py"
+        },
+        {
+          "category": "test_only_reference",
+          "commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+          "detail": "Pytest coverage was introduced with helper consolidation and remains present.",
+          "path": "tests/test_requests_helpers.py"
+        }
+      ],
+      "history_summary": {
+        "assessment": "Package re-export, registry exposure, and focused mocked tests suggest a reusable narrow interface, but network behavior and absent non-test consumers make continued support owner-sensitive.",
+        "first_observed_commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+        "latest_observed_use_sha": "d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35",
+        "obsolete_top_level_paths": [],
+        "removed_consumers": [],
+        "renamed_modules_or_callables": []
+      },
+      "migration_requirements": [
+        "Define retry methods/statuses, timeout, TLS/proxy, headers, error, response-decoding, and session-lifecycle semantics.",
+        "Review requests and urllib3 compatibility and security ownership.",
+        "Preserve or deliberately replace the package re-export and both registry keys."
+      ],
+      "module": "zscripts.helpers.requests.http",
+      "owner": "unassigned",
+      "owner_recommendation": "owner needed before shim support",
+      "package_reexports": [
+        {
+          "category": "package_reexport",
+          "path": "zscripts/helpers/requests/__init__.py",
+          "symbols": [
+            "create_retrying_session",
+            "fetch_json"
+          ]
+        }
+      ],
+      "proposed_disposition": "retire-review",
+      "public_external_consumers": [],
+      "registry_evidence": [
+        {
+          "category": "registry_reference",
+          "key": "requests.fetch_json",
+          "path": "configs/registry.yaml",
+          "runtime_consumer": false,
+          "target": "zscripts.helpers.requests.http:fetch_json"
+        },
+        {
+          "category": "registry_reference",
+          "key": "requests.retrying_session",
+          "path": "configs/registry.yaml",
+          "runtime_consumer": false,
+          "target": "zscripts.helpers.requests.http:create_retrying_session"
+        }
+      ],
+      "registry_keys": [
+        "requests.fetch_json",
+        "requests.retrying_session"
+      ],
+      "retirement_blockers": [
+        "The 90-day threshold and one public-beta cycle must both complete.",
+        "The package re-export, network behavior, and registry keys require an explicit support or retirement decision.",
+        "Separate owner approval under issue #62 is required."
+      ],
+      "self_invocations": [
+        {
+          "category": "direct_invocation",
+          "detail": "fetch_json invokes create_retrying_session when no session is supplied; this is implementation coupling, not an independent consumer.",
+          "path": "zscripts/helpers/requests/http.py"
+        }
+      ],
+      "shim_requirements": [
+        "No shim is added in this review.",
+        "A future non-executing tombstone is feasible, but any forwarding shim would retain network execution and requires an accountable owner."
+      ],
+      "static_risk": "high",
+      "tests": [
+        {
+          "category": "test_only_reference",
+          "detail": "Imports both symbols through zscripts.helpers.requests and directly exercises session construction and mocked JSON fetching.",
+          "path": "tests/test_requests_helpers.py"
+        }
+      ]
+    },
+    {
+      "automation": [
+        {
+          "category": "documentation_only_reference",
+          "detail": "Static contract metadata only; it does not import or execute the helper.",
+          "path": "scripts/check_legacy_helper_boundary.py"
+        }
+      ],
+      "callables": [
+        "bold_li_prefix_before_colon",
+        "listify_numbered_paragraphs",
+        "section_by_h2"
+      ],
+      "consumer_review_status": "complete",
+      "current_internal_consumers": [
+        {
+          "category": "direct_import",
+          "detail": "Relatively imports bold_li_prefix_before_colon and listify_numbered_paragraphs.",
+          "path": "zscripts/helpers/web_crawl/list_from.py"
+        },
+        {
+          "category": "direct_invocation",
+          "detail": "Invokes listify_numbered_paragraphs and bold_li_prefix_before_colon in format_html.",
+          "path": "zscripts/helpers/web_crawl/list_from.py"
+        },
+        {
+          "category": "direct_import",
+          "detail": "Relatively imports section_by_h2.",
+          "path": "zscripts/helpers/web_crawl/sections.py"
+        },
+        {
+          "category": "direct_invocation",
+          "detail": "Invokes section_by_h2 in split_sections.",
+          "path": "zscripts/helpers/web_crawl/sections.py"
+        },
+        {
+          "category": "direct_import",
+          "detail": "Relatively imports bold_li_prefix_before_colon.",
+          "path": "zscripts/helpers/web_crawl/strong.py"
+        },
+        {
+          "category": "direct_invocation",
+          "detail": "Invokes bold_li_prefix_before_colon in apply_strong_prefixes.",
+          "path": "zscripts/helpers/web_crawl/strong.py"
+        }
+      ],
+      "dependencies": [
+        "bs4"
+      ],
+      "documentation": [
+        {
+          "category": "documentation_only_reference",
+          "detail": "Domain-level crawler documentation only; it does not name the compatibility callables.",
+          "path": "docs/helpers/web_crawl/observability.md"
+        },
+        {
+          "category": "documentation_only_reference",
+          "detail": "Domain-level crawler documentation only; it does not name the compatibility callables.",
+          "path": "docs/helpers/web_crawl/storage.md"
+        },
+        {
+          "category": "documentation_only_reference",
+          "detail": "Documents the temporary compatibility point and all three registry keys.",
+          "path": "docs/operations/LEGACY_HELPER_COMPATIBILITY.md"
+        }
+      ],
+      "historical_consumers": [
+        {
+          "category": "direct_import",
+          "commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+          "detail": "The internal HTML-formatting consumer was introduced with consolidation and remains present.",
+          "path": "zscripts/helpers/web_crawl/list_from.py"
+        },
+        {
+          "category": "direct_import",
+          "commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+          "detail": "The internal section wrapper was introduced with consolidation and remains present.",
+          "path": "zscripts/helpers/web_crawl/sections.py"
+        },
+        {
+          "category": "direct_import",
+          "commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+          "detail": "The internal strong-prefix wrapper was introduced with consolidation and remains present.",
+          "path": "zscripts/helpers/web_crawl/strong.py"
+        },
+        {
+          "category": "test_only_reference",
+          "commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+          "detail": "The standalone smoke script was introduced with consolidation and remains present.",
+          "path": "tests/smoke_web_crawl_html_ops.py"
+        }
+      ],
+      "history_summary": {
+        "assessment": "Three internal wrappers directly consume the compatibility callables, making this a durable internal workflow boundary even though no external indexed consumer was found.",
+        "first_observed_commit": "05c62dc38955a05cc422ae015e078d4450f339d5",
+        "latest_observed_use_sha": "d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35",
+        "obsolete_top_level_paths": [],
+        "removed_consumers": [],
+        "renamed_modules_or_callables": []
+      },
+      "migration_requirements": [
+        "Define supported BeautifulSoup/parser versions and in-place DOM mutation and error semantics.",
+        "Migrate the list_from, sections, and strong wrappers with the shared callables.",
+        "Preserve or deliberately replace all three registry keys and provide isolated HTML fixtures."
+      ],
+      "module": "zscripts.helpers.web_crawl.html_ops",
+      "owner": "unassigned",
+      "owner_recommendation": "owner needed before migration",
+      "package_reexports": [],
+      "proposed_disposition": "migrate",
+      "public_external_consumers": [],
+      "registry_evidence": [
+        {
+          "category": "registry_reference",
+          "key": "html_ops.bold_prefix",
+          "path": "configs/registry.yaml",
+          "runtime_consumer": false,
+          "target": "zscripts.helpers.web_crawl.html_ops:bold_li_prefix_before_colon"
+        },
+        {
+          "category": "registry_reference",
+          "key": "html_ops.listify",
+          "path": "configs/registry.yaml",
+          "runtime_consumer": false,
+          "target": "zscripts.helpers.web_crawl.html_ops:listify_numbered_paragraphs"
+        },
+        {
+          "category": "registry_reference",
+          "key": "html_ops.section",
+          "path": "configs/registry.yaml",
+          "runtime_consumer": false,
+          "target": "zscripts.helpers.web_crawl.html_ops:section_by_h2"
+        }
+      ],
+      "registry_keys": [
+        "html_ops.bold_prefix",
+        "html_ops.listify",
+        "html_ops.section"
+      ],
+      "retirement_blockers": [
+        "The 90-day threshold and one public-beta cycle must both complete.",
+        "Three current internal wrappers directly depend on the compatibility callables.",
+        "Separate owner approval under issue #62 is required."
+      ],
+      "self_invocations": [],
+      "shim_requirements": [
+        "No shim is added in this review.",
+        "A future non-executing tombstone is possible, but forwarding must not create duplicate BeautifulSoup type identities or import the extracted implementation before ownership is approved."
+      ],
+      "static_risk": "moderate",
+      "tests": [
+        {
+          "category": "test_only_reference",
+          "detail": "Directly imports and invokes all three compatibility callables, but the smoke_ filename is not collected by default pytest discovery.",
+          "path": "tests/smoke_web_crawl_html_ops.py"
+        }
+      ]
+    }
+  ],
+  "deprecation_cycle": {
+    "completed": false,
+    "eligibility_rule": "whichever-is-later",
+    "minimum_public_beta_cycles": 1,
+    "status": "started"
+  },
+  "evidence_categories": [
+    "direct_import",
+    "direct_invocation",
+    "documentation_only_reference",
+    "no_current_reference_found",
+    "package_reexport",
+    "registry_reference",
+    "test_only_reference"
+  ],
+  "phase": "consumer-review",
+  "phase2a_merge_sha": "d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35",
+  "phase2a_merge_timestamp": "2026-07-23T00:40:54Z",
+  "phase2b_authorized": false,
+  "public_search_evidence": [
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        },
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_inventory.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_inventory.json"
+        },
+        {
+          "is_fork": false,
+          "path": "scripts/check_legacy_helper_boundary.py",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/scripts/check_legacy_helper_boundary.py"
+        }
+      ],
+      "query": "zscripts.helpers.numpy.array_utils",
+      "query_kind": "full_module_path",
+      "result": "same_repository_only"
+    },
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        },
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_inventory.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_inventory.json"
+        },
+        {
+          "is_fork": false,
+          "path": "scripts/check_legacy_helper_boundary.py",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/scripts/check_legacy_helper_boundary.py"
+        }
+      ],
+      "query": "zscripts.helpers.pandas.concat_csvs",
+      "query_kind": "full_module_path",
+      "result": "same_repository_only"
+    },
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        },
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_inventory.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_inventory.json"
+        },
+        {
+          "is_fork": false,
+          "path": "scripts/check_legacy_helper_boundary.py",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/scripts/check_legacy_helper_boundary.py"
+        }
+      ],
+      "query": "zscripts.helpers.pandas.excel_to_json_posts",
+      "query_kind": "full_module_path",
+      "result": "same_repository_only"
+    },
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        },
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_inventory.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_inventory.json"
+        },
+        {
+          "is_fork": false,
+          "path": "scripts/check_legacy_helper_boundary.py",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/scripts/check_legacy_helper_boundary.py"
+        }
+      ],
+      "query": "zscripts.helpers.pillow.add_watermark",
+      "query_kind": "full_module_path",
+      "result": "same_repository_only"
+    },
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        },
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_inventory.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_inventory.json"
+        },
+        {
+          "is_fork": false,
+          "path": "scripts/check_legacy_helper_boundary.py",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/scripts/check_legacy_helper_boundary.py"
+        }
+      ],
+      "query": "zscripts.helpers.pillow.ratio_image_2",
+      "query_kind": "full_module_path",
+      "result": "same_repository_only"
+    },
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        },
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_inventory.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_inventory.json"
+        },
+        {
+          "is_fork": false,
+          "path": "scripts/check_legacy_helper_boundary.py",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/scripts/check_legacy_helper_boundary.py"
+        }
+      ],
+      "query": "zscripts.helpers.requests.http",
+      "query_kind": "full_module_path",
+      "result": "same_repository_only"
+    },
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        },
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_inventory.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_inventory.json"
+        },
+        {
+          "is_fork": false,
+          "path": "scripts/check_legacy_helper_boundary.py",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/scripts/check_legacy_helper_boundary.py"
+        }
+      ],
+      "query": "zscripts.helpers.web_crawl.html_ops",
+      "query_kind": "full_module_path",
+      "result": "same_repository_only"
+    },
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        }
+      ],
+      "query": "numpy.batched",
+      "query_kind": "registry_key",
+      "result": "same_repository_only"
+    },
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        }
+      ],
+      "query": "numpy.normalize_columns",
+      "query_kind": "registry_key",
+      "result": "same_repository_only"
+    },
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        }
+      ],
+      "query": "numpy.rolling_window",
+      "query_kind": "registry_key",
+      "result": "same_repository_only"
+    },
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        }
+      ],
+      "query": "pandas.concat_csvs",
+      "query_kind": "registry_key",
+      "result": "same_repository_only"
+    },
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        }
+      ],
+      "query": "pandas.excel_to_json_posts",
+      "query_kind": "registry_key",
+      "result": "same_repository_only"
+    },
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "README.md",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/README.md"
+        },
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        }
+      ],
+      "query": "pillow.add_watermark",
+      "query_kind": "registry_key",
+      "result": "same_repository_only"
+    },
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        }
+      ],
+      "query": "pillow.resize_by_aspect",
+      "query_kind": "registry_key",
+      "result": "same_repository_only"
+    },
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        }
+      ],
+      "query": "pillow.resize_by_ratio",
+      "query_kind": "registry_key",
+      "result": "same_repository_only"
+    },
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        }
+      ],
+      "query": "requests.fetch_json",
+      "query_kind": "registry_key",
+      "result": "same_repository_and_external_non_consumer_matches"
+    },
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        }
+      ],
+      "query": "requests.retrying_session",
+      "query_kind": "registry_key",
+      "result": "same_repository_only"
+    },
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        }
+      ],
+      "query": "html_ops.bold_prefix",
+      "query_kind": "registry_key",
+      "result": "same_repository_only"
+    },
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        }
+      ],
+      "query": "html_ops.listify",
+      "query_kind": "registry_key",
+      "result": "same_repository_only"
+    },
+    {
+      "matches": [
+        {
+          "is_fork": false,
+          "path": "docs/operations/legacy_helper_compatibility.json",
+          "repository": "Nobodyworld/dev-logger-zscripts",
+          "url": "https://github.com/Nobodyworld/dev-logger-zscripts/blob/d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35/docs/operations/legacy_helper_compatibility.json"
+        }
+      ],
+      "query": "html_ops.section",
+      "query_kind": "registry_key",
+      "result": "same_repository_only"
+    },
+    {
+      "matches": [],
+      "query": "from zscripts.helpers.numpy.array_utils import",
+      "query_kind": "distinctive_import",
+      "result": "no_indexed_public_match_found"
+    },
+    {
+      "matches": [],
+      "query": "from zscripts.helpers.pandas.concat_csvs import",
+      "query_kind": "distinctive_import",
+      "result": "no_indexed_public_match_found"
+    },
+    {
+      "matches": [],
+      "query": "from zscripts.helpers.pandas.excel_to_json_posts import",
+      "query_kind": "distinctive_import",
+      "result": "no_indexed_public_match_found"
+    },
+    {
+      "matches": [],
+      "query": "from zscripts.helpers.pillow.add_watermark import",
+      "query_kind": "distinctive_import",
+      "result": "no_indexed_public_match_found"
+    },
+    {
+      "matches": [],
+      "query": "from zscripts.helpers.pillow.ratio_image_2 import",
+      "query_kind": "distinctive_import",
+      "result": "no_indexed_public_match_found"
+    },
+    {
+      "matches": [],
+      "query": "from zscripts.helpers.requests.http import",
+      "query_kind": "distinctive_import",
+      "result": "no_indexed_public_match_found"
+    },
+    {
+      "matches": [],
+      "query": "from zscripts.helpers.web_crawl.html_ops import",
+      "query_kind": "distinctive_import",
+      "result": "no_indexed_public_match_found"
+    }
+  ],
+  "public_search_non_consumers": [
+    {
+      "is_fork": false,
+      "path": "benchmarks/ai_code_defects/manifest.json",
+      "query": "requests.fetch_json",
+      "reason": "Benchmark metadata describes the third-party requests package not exposing requests.fetch_json; it does not import or invoke this repository.",
+      "repository": "duriantaco/skylos",
+      "url": "https://github.com/duriantaco/skylos/blob/a3b345f9be9196c8d866274d4fe73f25737df39d/benchmarks/ai_code_defects/manifest.json"
+    },
+    {
+      "is_fork": false,
+      "path": "test/test_ai_code_defect_benchmark.py",
+      "query": "requests.fetch_json",
+      "reason": "A test fixture asserts a diagnostic message about the unrelated third-party requests package; it is not a consumer.",
+      "repository": "duriantaco/skylos",
+      "url": "https://github.com/duriantaco/skylos/blob/a3b345f9be9196c8d866274d4fe73f25737df39d/test/test_ai_code_defect_benchmark.py"
+    },
+    {
+      "is_fork": false,
+      "path": "test/test_ai_defect_challenge_harness.py",
+      "query": "requests.fetch_json",
+      "reason": "A challenge-harness fixture quotes an unavailable requests.fetch_json attribute; it does not reference zscripts.",
+      "repository": "duriantaco/skylos",
+      "url": "https://github.com/duriantaco/skylos/blob/a3b345f9be9196c8d866274d4fe73f25737df39d/test/test_ai_defect_challenge_harness.py"
+    }
+  ],
+  "schema_version": 1,
+  "scope_contract": {
+    "helper_module_count": 154,
+    "helper_source_sha256": "3ad00abc6bd267b8f2d2bb1da1dd1e0f67ebccf15188eeb66afdeef7fda14a19",
+    "package_discovery_exclude": [
+      "artifacts*",
+      "docs*",
+      "examples*",
+      "tests*"
+    ],
+    "package_discovery_include": [
+      "adapters*",
+      "agents*",
+      "schemas*",
+      "scripts*",
+      "zscripts*"
+    ],
+    "registry_blob_sha1": "ca3420b8d443514b15e039d7a8f04e2ccb24b041",
+    "torch_exact_pin": "torch==2.9.0",
+    "torch_package_lower_bound": "torch>=2.9.0",
+    "wheel_inclusion": "all-154-temporarily-wheel-included"
+  },
+  "search_limitations": [
+    "GitHub code search covers indexed public code and can omit unindexed, deleted, private, archived, non-default-branch, or otherwise unavailable content.",
+    "An empty GitHub result means no indexed public match was found, not that no external consumer exists.",
+    "The repository history receives the helper collection in one consolidation commit and does not preserve the source repository history before that import.",
+    "Exact callable searches can collide with unrelated symbols; homonyms were inspected and excluded unless module, import, registry, or call-site context tied them to a compatibility point.",
+    "External repositories were not cloned or executed, and no credential-bearing content was sought."
+  ],
+  "search_methodology": {
+    "current_repository": "Tracked-file exact-string and regex searches covering module paths, registry keys, callables, imports, re-exports, invocations, tests, examples, documentation, automation, configuration, and scripts.",
+    "helper_execution": false,
+    "history": "Full reachable Git history searched with pickaxe string and regex queries; relevant file histories and diffs inspected without restoring deleted content.",
+    "public_github": "Authenticated exact-string GitHub code search, limit 100 per query, covering seven module paths, thirteen registry keys, and seven distinctive full-path import forms."
+  },
+  "time_threshold": "2026-10-21T00:40:54Z"
+}

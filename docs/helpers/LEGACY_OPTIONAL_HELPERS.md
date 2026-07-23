@@ -15,6 +15,10 @@ their current behavior is not declared production-supported. All other modules
 are legacy, unsupported, and temporarily wheel-included. The enforceable policy
 is recorded in
 [`../operations/LEGACY_HELPER_COMPATIBILITY.md`](../operations/LEGACY_HELPER_COMPATIBILITY.md).
+The evidence-backed consumer review and active public-beta notice are
+[`../operations/LEGACY_HELPER_CONSUMER_REVIEW.md`](../operations/LEGACY_HELPER_CONSUMER_REVIEW.md)
+and
+[`../operations/LEGACY_HELPER_DEPRECATION_NOTICE.md`](../operations/LEGACY_HELPER_DEPRECATION_NOTICE.md).
 
 ## Policy
 
@@ -37,3 +41,7 @@ and at least one documented public-beta deprecation cycle have completed,
 whichever is later. Consumer review and separate owner approval are still
 required after that threshold. Torch remains at 2.9.0; Torch 2.13 review is
 deferred to the ML-helper decision under issue #62.
+
+The notice started at the Phase 2A merge timestamp. It documents the 90-day
+threshold and begins the required public-beta cycle; it does not complete the
+cycle or authorize Phase 2B.

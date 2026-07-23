@@ -3,6 +3,12 @@
 Status: owner-approved Phase 2A contract from issue #70. Phase 2B is not
 authorized.
 
+The follow-up
+[`consumer and ownership review`](LEGACY_HELPER_CONSUMER_REVIEW.md) records
+current, historical, and indexed-public evidence. The
+[`public-beta deprecation notice`](LEGACY_HELPER_DEPRECATION_NOTICE.md) records
+the merged start event and begins—but does not complete—the mandatory cycle.
+
 ## Scope
 
 Phase 2A is non-breaking preparation for issue #62. It freezes the complete
@@ -62,9 +68,11 @@ the following have completed:
 2. at least one documented public-beta deprecation cycle has completed.
 
 The later condition controls. No fixed Phase 2B calendar date can be calculated
-or published before the merge event. After the window, Phase 2B still requires a
-consumer review and separate owner approval. Passing the eligibility threshold
-does not authorize removal or extraction automatically.
+or published before the merge event. The merge and threshold are now recorded
+in the deprecation notice, but that threshold is not a Phase 2B authorization
+date. After the window, Phase 2B still requires consumer review and separate
+owner approval. Passing the eligibility threshold does not authorize removal or
+extraction automatically.
 
 This is a public-source compatibility commitment for the public beta. It is not
 a stable-release semantic-version guarantee and does not convert the legacy

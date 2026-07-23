@@ -1,52 +1,30 @@
 # Future Roadmap
 
-This roadmap highlights areas for future investment now that observability and
-extensions are in place.
+Zscripts is transitioning toward a local, deterministic repository intelligence,
+reporting, visualization, and agent-handoff product.
 
-## Scalability
+The authoritative product plan is:
 
-- **Multi-tenant telemetry**: promote the health server into a standalone
-  process (e.g., uvicorn + FastAPI) to multiplex requests across concurrent CLI
-  sessions.
-- **Adapter sandbox pooling**: add a worker pool to reuse sandbox processes and
-  avoid repeated initialisation overhead when parsing large batches.
-- **Command queueing**: emit instrumentation events to a message bus (Redis,
-  NATS) so multiple CLI workers can scale horizontally while retaining
-  correlation IDs.
+- [Zscripts 0.2 Repository Intelligence Roadmap](product/REPOSITORY_INTELLIGENCE_ROADMAP.md)
+- [Umbrella issue #76](https://github.com/Nobodyworld/dev-logger-zscripts/issues/76)
 
-## Platform Integrations
+## Current priority
 
-- **Remote metrics export**: add optional OpenTelemetry exporters so metrics and
-  traces can be forwarded to OTLP collectors without relying solely on the
-  embedded HTTP server.
-- **Extension registry**: publish an index of vetted extensions, including
-  metadata (version, compatibility) to allow dynamic discovery.
-- **Manifest API**: promote the runtime manifest registry to a REST endpoint so
-  remote agents can query capabilities without invoking the CLI.
+The fastest safe route is:
 
-## Deployment
+1. build a deterministic Python/Django static-analysis engine;
+2. produce useful symbol, metric, dependency, inheritance, and call evidence;
+3. ship Markdown, Excel, GraphML, and agent-handoff exports;
+4. add a localhost-only dashboard after the evidence contracts stabilize;
+5. dogfood the Python MVP before approving additional languages.
 
-- **Containerisation**: ship a Dockerfile with baked-in telemetry defaults and a
-  non-root runtime user. Couple with a compose file exposing `/metrics` for
-  monitoring stacks such as Prometheus + Grafana.
-- **Release automation**: integrate semantic versioning with changelog
-  generation and auto-tag releases once the quality gate passes on `main`.
-- **Autoscaling**: ship Helm charts or Terraform modules that deploy the
-  containerised toolkit behind load balancers and wire Prometheus scraping rules
-  to the readiness/liveness endpoints.
+## Deferred directions
 
-## Agent Safety
+The previous roadmap emphasized hosted telemetry, message queues, containers,
+autoscaling, and remote extension registries. Those ideas are not current product
+priorities. They may be reconsidered only when repository intelligence requires
+them and after the local product has demonstrated value.
 
-- **Policy engine**: extend `ExtensionContext` with a policy evaluation hook so
-  automated agents can enforce allow/deny rules before executing extension
-  commands.
-- **Redaction packs**: allow configuration to reference named redaction packs
-  stored under `docs/security/` for dynamic updates without code changes.
-- **Guardrail reporting**: extend `scripts/quality_gate.py` summaries with Prometheus
-  output summarising failures per guard, enabling dashboards and auto-remediation.
-- **Automated probes**: expand `scripts/ops_status.py` into a resilient service
-  that can fan-out health checks across multiple toolkit deployments and feed
-  alerting systems.
-
-Each milestone should keep observability first-class: new features must emit
-structured logs, telemetry, and actionable health signals.
+The core product remains local, read-only, deterministic, and usable without an
+LLM. The legacy helper compatibility track under issues #62 and #73 remains
+separate from this roadmap.

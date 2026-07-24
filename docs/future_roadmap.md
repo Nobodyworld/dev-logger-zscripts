@@ -1,52 +1,44 @@
 # Future Roadmap
 
-This roadmap highlights areas for future investment now that observability and
-extensions are in place.
+Zscripts is transitioning toward a local, deterministic **repository review
+workspace**.
 
-## Scalability
+The authoritative plan is:
 
-- **Multi-tenant telemetry**: promote the health server into a standalone
-  process (e.g., uvicorn + FastAPI) to multiplex requests across concurrent CLI
-  sessions.
-- **Adapter sandbox pooling**: add a worker pool to reuse sandbox processes and
-  avoid repeated initialisation overhead when parsing large batches.
-- **Command queueing**: emit instrumentation events to a message bus (Redis,
-  NATS) so multiple CLI workers can scale horizontally while retaining
-  correlation IDs.
+- [Zscripts 0.2 Repository Review Workspace Roadmap](product/REPOSITORY_INTELLIGENCE_ROADMAP.md)
+- [Umbrella issue #76](https://github.com/Nobodyworld/dev-logger-zscripts/issues/76)
 
-## Platform Integrations
+## Product workflow
 
-- **Remote metrics export**: add optional OpenTelemetry exporters so metrics and
-  traces can be forwarded to OTLP collectors without relying solely on the
-  embedded HTTP server.
-- **Extension registry**: publish an index of vetted extensions, including
-  metadata (version, compatibility) to allow dynamic discovery.
-- **Manifest API**: promote the runtime manifest registry to a REST endpoint so
-  remote agents can query capabilities without invoking the CLI.
+```text
+Scan → Explore → Review → Compare → Handoff
+```
 
-## Deployment
+The workspace—not a generated spreadsheet or report bundle—is the product.
+Analysis remains local, read-only, reviewable, and usable without an LLM.
 
-- **Containerisation**: ship a Dockerfile with baked-in telemetry defaults and a
-  non-root runtime user. Couple with a compose file exposing `/metrics` for
-  monitoring stacks such as Prometheus + Grafana.
-- **Release automation**: integrate semantic versioning with changelog
-  generation and auto-tag releases once the quality gate passes on `main`.
-- **Autoscaling**: ship Helm charts or Terraform modules that deploy the
-  containerised toolkit behind load balancers and wire Prometheus scraping rules
-  to the readiness/liveness endpoints.
+## Current priority
 
-## Agent Safety
+The fastest safe route is:
 
-- **Policy engine**: extend `ExtensionContext` with a policy evaluation hook so
-  automated agents can enforce allow/deny rules before executing extension
-  commands.
-- **Redaction packs**: allow configuration to reference named redaction packs
-  stored under `docs/security/` for dynamic updates without code changes.
-- **Guardrail reporting**: extend `scripts/quality_gate.py` summaries with Prometheus
-  output summarising failures per guard, enabling dashboards and auto-remediation.
-- **Automated probes**: expand `scripts/ops_status.py` into a resilient service
-  that can fan-out health checks across multiple toolkit deployments and feed
-  alerting systems.
+1. finalize safety, evidence, snapshot, and review-state contracts;
+2. build one end-to-end generic Python Repository Review MVP;
+3. deliver a thin localhost UI with Overview and Symbols views immediately;
+4. add relationships, persistent findings, comparisons, and handoffs in vertical
+   slices;
+5. dogfood the Python workspace before approving framework-specific enrichment or
+   additional languages.
 
-Each milestone should keep observability first-class: new features must emit
-structured logs, telemetry, and actionable health signals.
+Optional exports are generated from the active view. XLSX, cloud services,
+desktop packaging, multi-user collaboration, and additional language analyzers are
+deferred until the local workspace demonstrates value.
+
+## Deferred directions
+
+The previous roadmap emphasized hosted telemetry, message queues, containers,
+autoscaling, remote extension registries, Excel-first reports, framework-specific
+analysis, and a dashboard delivered after the engine. Those are not current
+priorities.
+
+The legacy helper compatibility track under issues #62 and #73 remains separate
+from product development and must not block the repository review roadmap.

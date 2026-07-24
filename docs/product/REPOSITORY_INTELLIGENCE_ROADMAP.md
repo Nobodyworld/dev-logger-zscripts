@@ -1,560 +1,734 @@
-# Zscripts 0.2 Repository Intelligence Roadmap
+# Zscripts 0.2 Repository Review Workspace Roadmap
 
 Status: proposed product direction for `PUBLIC BETA — ACTIVE DEVELOPMENT`.
 
 Umbrella issue: #76
 
-## Product decision
+## Product definition
 
-Zscripts will become a **local, deterministic repository intelligence, reporting,
-visualization, and agent-handoff tool**.
+Zscripts will become a **local repository review workspace** that maps code
+structure, relationships, complexity, architecture, and change without requiring
+an LLM or executing the analyzed project.
 
-The core product must answer questions such as:
+The product workflow is intentionally small:
 
-- What modules, classes, methods, and functions exist?
-- Where are names, responsibilities, or logic duplicated?
-- Which modules, classes, and functions depend on one another?
-- What inheritance, composition, call, import, and framework relationships exist?
-- Where are the dependency cycles, high-coupling modules, god classes, and
-  architectural boundary violations?
+```text
+Scan → Explore → Review → Compare → Handoff
+```
+
+Zscripts is not primarily a report generator, spreadsheet exporter, framework-
+specific analyzer, cloud service, coding agent, or repository orchestrator.
+
+The review workspace is the product. Exports are optional views of its evidence.
+
+## User promise
+
+A user selects a local repository and receives a persistent, reviewable workspace
+for answering questions such as:
+
+- What packages, modules, classes, functions, methods, and public exports exist?
+- Which symbols depend on one another?
+- Where are the inheritance, composition, import, containment, and statically
+  resolvable call relationships?
+- Where are the dependency cycles, high-coupling modules, oversized symbols,
+  naming inconsistencies, and duplicate-logic candidates?
 - Is the repository a monolith, modular monolith, monorepo, multi-package system,
-  plugin architecture, library, application, or mixed system?
+  plugin architecture, layered system, service-oriented repository, or mixed
+  system?
 - Which programming paradigms are evidenced by the source?
-- How has the architecture changed between two snapshots?
-- What compact evidence should a human or coding agent receive before continuing
+- What changed between two repository snapshots?
+- Which findings have already been reviewed, dismissed, accepted, or resolved?
+- What concise evidence should a human or coding agent receive before continuing
   work?
 
-The primary analysis must not require an LLM. Optional AI interpretation may be
-added later as a consumer of deterministic evidence, never as the source of truth.
+Primary analysis must be deterministic and must not require an LLM. Optional AI
+interpretation may be added later as a separate consumer of the evidence, never as
+the source of truth.
 
 ## Why this remains useful
 
-GitHub connectors and coding agents can inspect remote repository content, but they
-still do not replace deterministic local evidence for:
+GitHub connectors and coding agents can inspect remote content, but they do not
+replace a local, repeatable workspace for:
 
-- dirty, staged, untracked, ignored, or generated state;
-- installed local toolchains and local validation results;
+- dirty, staged, untracked, ignored, or generated repository state;
 - complete symbol and relationship inventories;
-- reproducible architecture metrics;
-- cross-file naming and duplication review;
-- local/private repository analysis;
-- spreadsheet review;
-- bounded, redacted handoff packages;
-- before/after repository comparisons.
-
-Zscripts should provide this evidence consistently to humans, local workflow
-orchestrators, GitHub coordination workflows, and coding agents.
+- persistent review decisions across scans;
+- reproducible architecture and maintainability metrics;
+- cross-file naming and duplicate-candidate review;
+- private repositories that should not leave the machine;
+- local validation evidence;
+- before/after architecture comparisons;
+- bounded, redacted handoffs.
 
 ## Product boundaries
 
 ### Core product
 
 - Read-only local repository analysis.
-- Deterministic, versioned evidence schemas.
-- Static source analysis with explicit confidence and limitations.
-- Symbol, dependency, inheritance, call, and containment graphs.
-- Architecture, modularity, paradigm, naming, complexity, and maintainability
-  metrics.
-- Repository snapshots and snapshot comparison.
-- JSON, Markdown, CSV, XLSX, GraphML, and bounded Mermaid exports.
-- Deterministic human and agent handoffs.
-- Localhost-only API and dashboard.
+- Versioned, deterministic evidence contracts.
+- Local snapshot persistence and comparison.
+- Searchable symbol and relationship exploration.
+- Explainable metrics and findings.
+- Persistent review statuses and annotations.
+- Localhost-only review workspace.
+- Deterministic handoff generation.
+- Optional per-view exports.
 
-### Explicitly outside the core
+### Explicitly outside the initial core
 
 - The legacy `zscripts/helpers` collection.
-- Autonomous commits, pushes, merges, releases, or remote repository mutation.
-- Cloud-hosted multi-tenant analysis.
-- Analysis that imports or executes the target project.
+- Autonomous commits, pushes, merges, releases, or repository mutation.
+- Cloud-hosted or multi-tenant analysis.
 - LLM-required classification.
-- Arbitrary shell execution from analyzed repository content.
+- Importing or executing the analyzed project.
+- Arbitrary shell execution from repository content.
+- Multi-user collaboration.
+- Automatic refactoring.
+- Excel-first workflows.
+- Multiple language analyzers before the Python workflow proves useful.
 
 The helper compatibility work under #62 and #73 is a separate governance track and
 must not block this roadmap.
 
-## Fastest safe delivery strategy
+## Product vocabulary
 
-Build **vertical slices** that produce user-visible value early, while preserving a
-single deterministic evidence model.
+The public product vocabulary should remain consistent:
 
-Do not build a large UI before the engine and schemas are trustworthy. Do not build
-multiple language analyzers before the Python/Django workflow is useful.
+- **Repository**: a configured local project.
+- **Snapshot**: one exact analysis state.
+- **Symbol**: a package, module, class, function, method, interface-like construct,
+  constant, or public export.
+- **Relationship**: a typed, evidenced edge between records.
+- **Metric**: a raw deterministic measurement.
+- **Finding**: a versioned rule result derived from evidence.
+- **Review**: a user decision about a finding.
+- **Handoff**: a bounded summary selected from one or more snapshots.
 
-The first valuable slice should:
+## Core user experience
 
-1. analyze a Python/Django repository without importing it;
-2. list modules, classes, functions, methods, signatures, and locations;
-3. report imports, inheritance, and resolvable calls;
-4. calculate a small set of documented metrics;
-5. export JSON, Markdown, XLSX, and GraphML;
-6. generate a concise handoff;
-7. remain experimental and read-only.
+The workspace has five primary views.
 
-## Target architecture
+### 1. Overview
 
-```mermaid
-flowchart LR
-    A[Repository Discovery] --> B[Language Adapter]
-    B --> C[Normalized Evidence Model]
-    C --> D[Relationship Graph Builder]
-    C --> E[Metrics and Heuristics]
-    D --> E
-    C --> F[Snapshot Store]
-    D --> F
-    E --> F
-    F --> G[Report and Export Layer]
-    F --> H[Snapshot Comparison]
-    F --> I[Agent Handoff Compiler]
-    G --> J[Local API]
-    H --> J
-    I --> J
-    J --> K[React Dashboard]
+The Overview answers:
+
+- What kind of repository is this?
+- How large and complex is it?
+- How is it organized?
+- What are the highest-priority findings?
+- What changed since the prior snapshot?
+
+It should show:
+
+- language and manifest detection;
+- package/module/symbol counts;
+- repository shape and confidence;
+- complexity and coupling summaries;
+- cycle and hotspot counts;
+- test and documentation signals;
+- recent snapshot deltas;
+- parse gaps, exclusions, truncation, and safety status.
+
+Every conclusion must link to the evidence that produced it.
+
+### 2. Symbols
+
+The Symbols view is the modern replacement for manual class/function reports.
+
+It should support:
+
+- packages and modules;
+- classes and interface-like constructs;
+- functions and methods;
+- signatures, decorators, annotations, and visibility;
+- inheritance and containment;
+- public exports;
+- source file and line;
+- complexity and size;
+- incoming/outgoing relationships;
+- nearby test and documentation evidence.
+
+Required interactions:
+
+- search;
+- filter;
+- sort;
+- group;
+- show/hide columns;
+- save filters;
+- inspect source evidence;
+- open related symbols;
+- compare a symbol across snapshots.
+
+### 3. Relationships
+
+One relationship workspace should expose switchable graph modes:
+
+- package dependencies;
+- module imports;
+- class inheritance;
+- class composition and type references;
+- symbol containment;
+- function and method calls where statically resolvable;
+- framework-enriched relationships when a later adapter recognizes them.
+
+Large repositories must use progressive disclosure rather than one global graph:
+
+```text
+Repository
+  └── Package
+       └── Module
+            └── Class
+                 └── Method
 ```
 
-### Architectural rules
+Users should be able to focus a node, expand a bounded neighborhood, collapse by
+package/module, filter edge types, inspect cycles, and view file/line evidence.
 
-- `domain`: immutable evidence records and graph contracts.
-- `application`: repository analysis, comparison, export, and handoff use cases.
-- `infrastructure`: filesystem, Git, caching, parser adapters, and exporters.
-- `interfaces`: CLI, local API, and UI.
-- Language-specific logic must be behind adapter protocols.
-- UI code must consume application contracts rather than reimplement analysis.
-- The analyzed repository is an input, never an importable plugin.
+Every edge must declare a resolution status such as:
 
-## Evidence model
+- `resolved-static`;
+- `probable-static`;
+- `ambiguous`;
+- `unresolved-dynamic`.
 
-Every artifact must record:
+### 4. Findings
 
-- schema version;
-- analyzer version;
-- rule-set version;
-- repository identity;
+The Findings view is a persistent review queue, not a regenerated warning list.
+
+Initial finding families:
+
+- dependency cycles;
+- naming inconsistencies;
+- duplicate symbol names;
+- duplicate-logic candidates;
+- oversized functions, classes, and modules;
+- high complexity;
+- high fan-in or fan-out;
+- deep inheritance;
+- low-cohesion candidates;
+- suspicious cross-boundary imports;
+- undocumented public symbols;
+- high-complexity symbols without nearby test evidence;
+- orphan or dead-looking candidates, clearly labeled as candidates.
+
+Review states:
+
+```text
+New
+Reviewed
+Needs action
+Accepted
+Dismissed
+Resolved
+```
+
+A finding must include:
+
+- rule and rule-set version;
+- severity and confidence;
+- evidence and affected symbols;
+- explanation and possible next action;
+- first-seen and last-seen snapshots;
+- review status and notes.
+
+Finding evidence and user review state must be stored separately so decisions can
+persist across repeated scans.
+
+### 5. Handoff
+
+The Handoff view lets a user choose what to include:
+
+- repository state;
+- architecture evidence;
+- important symbols;
+- recent changes;
+- selected findings;
+- dependency cycles;
+- complexity hotspots;
+- validation results;
+- selected files;
+- task objective;
+- unresolved analysis gaps.
+
+Supported actions:
+
+- preview;
+- copy to clipboard;
+- save as a handoff record;
+- export concise Markdown;
+- export structured JSON.
+
+The handoff is one view of the evidence, not the product itself.
+
+## Local data model
+
+Use SQLite for the initial application store.
+
+```text
+Application database
+├── repositories
+├── snapshots
+├── files
+├── modules
+├── symbols
+├── relationships
+├── metrics
+├── findings
+├── finding_reviews
+├── annotations
+├── comparisons
+└── handoffs
+```
+
+The application database and caches must live outside analyzed repositories.
+Analyzed repositories remain unchanged unless the user explicitly exports to a
+chosen path.
+
+### Repository record
+
+- canonical local path;
+- display name;
+- source-control metadata;
+- language/manifests summary;
+- analysis configuration;
+- last analysis state.
+
+### Snapshot record
+
 - branch and Git SHA when available;
-- dirty-state evidence;
-- configuration and exclusion policy digest;
-- start/completion status;
-- truncation and parse-gap diagnostics;
-- redaction metadata;
-- source file hashes;
-- deterministic node and relationship identifiers.
+- dirty/staged/untracked state;
+- analyzer, schema, and rule-set versions;
+- configuration and exclusion digest;
+- source fingerprint;
+- start/completion/cancellation state;
+- resource usage and timing;
+- parse gaps and truncation evidence.
 
-Primary records:
+A failed or cancelled scan must never appear as complete.
 
-- `RepositorySnapshot`
-- `ProjectRecord`
-- `FileRecord`
-- `ModuleRecord`
-- `SymbolRecord`
-- `RelationshipRecord`
-- `MetricRecord`
-- `FindingRecord`
-- `DiagnosticRecord`
-- `ReportManifest`
+### Symbol record
 
-Relationship records must contain an evidence classification such as:
+- stable identifier;
+- language and kind;
+- qualified and display names;
+- file and source range;
+- parent symbol;
+- visibility;
+- signature and annotations;
+- decorators;
+- documentation status;
+- complexity and size;
+- content fingerprint.
 
-- `resolved-static`
-- `probable-static`
-- `ambiguous`
-- `unresolved-dynamic`
+### Relationship record
 
-Static limitations must never be hidden behind confident prose.
+- source and target IDs;
+- relationship type;
+- evidence and source location;
+- confidence and resolution status;
+- analyzer and adapter version.
 
-## Python and Django MVP
+### Finding record
 
-Issue: #77
+A deterministic rule output separate from the user review record.
+
+## Analysis pipeline
+
+```text
+Repository discovery
+        ↓
+Safe file inventory
+        ↓
+Language detection
+        ↓
+Language analyzer
+        ↓
+Symbol resolution
+        ↓
+Relationship graphs
+        ↓
+Metrics
+        ↓
+Findings
+        ↓
+Architecture classification
+        ↓
+Atomic snapshot persistence
+```
 
 ### Repository discovery
 
-- Respect Git tracked files, `.gitignore`, configured excludes, and default
-  sensitive/generated directories.
-- Record every excluded path with a non-sensitive reason.
-- Enforce file-count, file-size, total-byte, and runtime limits.
-- Support cancellation and partial results.
-- Cache by file hash, analyzer version, and configuration digest.
+Detect:
 
-### Python symbols
+- Git root and worktree state;
+- source, test, package, and workspace roots;
+- manifests and language evidence;
+- generated/build/cache directories;
+- ignored files;
+- binaries and oversized files;
+- configured exclusions.
 
-Extract without importing source:
+Default exclusions include:
+
+- `.git` internals;
+- `.env*` and common credential/key files;
+- virtual environments and dependency caches;
+- build outputs and generated artifacts;
+- ignored files unless explicitly included;
+- binaries and files exceeding configured limits.
+
+Every exclusion must be represented by a non-sensitive reason.
+
+### Initial language analyzer
+
+The first analyzer is **generic Python**, not Django-specific.
+
+Extract statically:
 
 - modules and packages;
 - classes and nested classes;
 - functions, async functions, methods, and nested functions;
 - signatures, annotations, decorators, docstrings, visibility, and source ranges;
 - assignments and constants where useful;
-- imports, relative imports, aliases, and public re-exports;
+- imports, aliases, relative imports, and public exports;
+- inheritance and class references;
+- calls and instantiations where resolvable;
 - abstract methods, protocols, dataclasses, enums, and common framework markers.
 
-### Django evidence
+Framework adapters may later enrich generic evidence for Django, FastAPI, Flask,
+SQLAlchemy, Pydantic, pytest, Click, Typer, or other demonstrated needs. No
+framework should define the core product.
 
-Identify statically:
+### Resolution policy
 
-- Django apps;
-- models and declared fields;
-- model inheritance and relationships;
-- views and view classes;
-- forms and serializers;
-- URL patterns and included URL modules;
-- admin registrations;
-- signals and receivers;
-- management commands;
-- settings modules;
-- migrations as a separate evidence category.
+Static Python resolution is incomplete. Zscripts must distinguish resolved,
+probable, ambiguous, dynamic, and unresolved relationships instead of presenting
+all edges as facts.
 
-The analyzer must not call `django.setup()`, import settings, connect to databases,
-or execute migrations.
+### Incremental analysis
 
-## Graph model
+Cache by:
 
-Issue: #78
+- file content hash;
+- analyzer version;
+- schema version;
+- rule-set version;
+- relevant configuration digest.
 
-Required graphs:
+Only affected files and dependent graph sections should be recomputed when safe.
 
-- module import graph;
-- package dependency graph;
-- symbol containment graph;
-- class inheritance graph;
-- class composition/reference graph;
-- function and method call graph;
-- Django model relationship graph;
-- URL-to-view graph;
-- signal-to-receiver graph where statically evident.
-
-Required graph analysis:
-
-- strongly connected components;
-- circular imports and dependency cycles;
-- fan-in and fan-out;
-- hubs, leaves, orphans, and bridge nodes;
-- inheritance depth and breadth;
-- cross-package and cross-layer edges;
-- graph reduction by package, module, class, and neighborhood depth.
-
-Graph outputs:
-
-- deterministic JSON;
-- GraphML;
-- bounded Mermaid;
-- UI-ready node/edge payloads.
-
-## Metrics and classification
-
-Issue: #79
+## Metrics and findings
 
 ### Raw metrics
 
-- files, lines, modules, packages, classes, functions, methods, and exports;
+- files, lines, packages, modules, classes, functions, methods, and exports;
 - cyclomatic and cognitive complexity;
-- symbol and module size distributions;
-- internal/external dependency counts;
-- fan-in/fan-out and instability;
-- cohesion and coupling proxies;
+- nesting and parameter counts;
+- symbol/module size distributions;
+- internal and external dependencies;
+- fan-in, fan-out, and instability;
+- cohesion proxies;
 - inheritance depth and breadth;
 - abstract/concrete and public/private ratios;
-- documentation and test proximity;
-- Git change concentration where available.
+- documentation and test-proximity signals;
+- Git change concentration when available.
 
-### Naming and duplication
+### Naming review
 
-- duplicate names in different scopes;
-- overloaded concepts and inconsistent synonyms;
-- naming convention violations and outliers;
-- excessively generic names;
-- normalized AST fingerprints for duplicate-logic candidates;
-- similar signatures and class shapes;
-- repeated dependency patterns.
+Detect:
 
-Duplicate-logic output is a review candidate, not proof of semantic duplication.
+- duplicate class/function names;
+- similar names for apparently overlapping concepts;
+- inconsistent abbreviations and synonyms;
+- generic names;
+- naming-convention deviations;
+- terminology drift across packages.
 
-### Repository shape
+### Duplicate-logic candidates
 
-Classify with evidence and confidence:
+Use deterministic static techniques such as:
 
-- single-package monolith;
+- normalized AST fingerprints;
+- structural/control-flow shape;
+- signature similarity;
+- called-symbol overlap;
+- imported-dependency overlap;
+- token shingles or locality-sensitive hashes.
+
+These are review candidates, never proof of semantic duplication.
+
+### Repository classification
+
+Possible evidence-backed classifications:
+
+- single-package application;
 - modular monolith;
 - monorepo or multi-package repository;
-- plugin/extension architecture;
+- plugin-oriented architecture;
 - layered architecture;
 - service-oriented repository;
 - library/tool/application mixture;
-- unknown or mixed.
+- mixed;
+- unknown.
 
-### Paradigm indicators
+Every classification must include confidence, supporting rules, contradictory
+evidence, and an `unknown` or `mixed` outcome when evidence is insufficient.
 
-Report evidence for:
+### Programming-paradigm indicators
+
+Report relative evidence for:
 
 - object-oriented;
-- functional;
 - procedural;
+- functional;
 - event-driven;
 - declarative/configuration-driven;
 - dependency-injection oriented;
 - data/domain-model oriented.
 
-Every classification must expose supporting rules, contradictory evidence, and
-confidence. No rule may claim to understand intent beyond the source evidence.
+These indicators describe source evidence, not developer intent.
 
-## Reports, spreadsheets, comparisons, and handoffs
+## View-first exports
 
-Issue: #80
-
-A complete report bundle should include:
+Default behavior:
 
 ```text
-report/
-├── manifest.json
-├── repository.json
-├── symbols.json
-├── relationships.json
-├── metrics.json
-├── findings.json
-├── report.md
-├── report.xlsx
-├── handoff.md
-├── graph.graphml
-└── diagrams/
+Analyze → Store snapshot → Open workspace
 ```
 
-### Excel workbook
+Do not generate a report bundle after every scan.
 
-Sheets:
+Optional per-view exports:
 
-- Overview
-- Modules
-- Classes
-- Functions and Methods
-- Public Exports
-- Inheritance
-- Calls and Dependencies
-- Cycles
-- Complexity
-- Naming Findings
-- Duplicate Candidates
-- Architecture Findings
-- Django Apps, Models, Views, and URLs
-- Diagnostics and Exclusions
+- visible symbol table to CSV;
+- selected findings to Markdown or JSON;
+- focused graph to SVG/PNG/GraphML;
+- snapshot evidence to JSON;
+- handoff to clipboard, Markdown, or JSON.
 
-Workbook requirements:
+XLSX may be added later if dogfooding demonstrates real value. It must not drive
+the architecture or block the MVP.
 
-- stable row ordering;
-- filters and frozen headers;
-- useful widths and source-path hyperlinks;
-- no macros or executable content;
-- exact SHA and schema metadata;
-- truncation notices;
-- redaction across cells and hyperlinks.
+## Runtime architecture
 
-### Snapshot comparison
+```mermaid
+flowchart LR
+    A[Python Static Analysis Engine] --> B[Versioned Evidence Model]
+    B --> C[SQLite Snapshot Store]
+    C --> D[Application Services]
+    D --> E[FastAPI Localhost API]
+    E --> F[React Review Workspace]
+    D --> G[CLI and Handoff Consumers]
+```
 
-Compare two snapshots or Git refs for:
+Architectural rules:
 
-- files and symbols added, removed, or changed;
-- signature, inheritance, and public export changes;
-- dependency and cycle changes;
-- metric deltas;
-- architecture classification changes;
-- new and resolved findings.
+- The engine does not know about React.
+- The UI never reimplements analysis.
+- CLI and UI use the same application services.
+- Repository-derived text is escaped and bounded.
+- The analyzed repository is input, never an importable plugin.
+- Analysis data is committed atomically to the local store.
 
-### Agent handoff
+### Local runtime
 
-Generate a bounded handoff with:
+The intended command is:
 
-- repository identity and state;
-- architecture summary with evidence;
-- important symbols and dependency hubs;
-- baseline changes;
-- validation evidence;
-- parse gaps and uncertainty;
-- relevant paths and suggested next commands;
-- links to supporting artifacts.
+```text
+zscripts workspace
+```
 
-The handoff must remain useful without an LLM and easy for an LLM or workflow
-orchestrator to consume.
+It should:
 
-## Local dashboard
+1. bind to `127.0.0.1` by default;
+2. serve the API and built UI from one local process;
+3. open the browser;
+4. store data in the user application-data directory;
+5. make no ordinary outbound network request.
 
-Issue: #81
+No Docker, Redis, external database, or cloud account is required for the MVP.
+Tauri packaging may be evaluated only after the local web workflow is stable.
 
-Recommended first implementation:
+## Public and private-input safety
 
-- FastAPI localhost backend;
-- TypeScript/React frontend;
-- shared versioned evidence contracts;
-- bind to `127.0.0.1` by default;
-- no cloud dependency or ordinary outbound network request;
-- optional Tauri packaging only after the local web workflow is stable.
-
-Primary screens:
-
-1. repository picker and recent snapshots;
-2. repository overview and classification;
-3. symbol explorer;
-4. dependency graph explorer;
-5. inheritance and class relationship explorer;
-6. metrics and findings;
-7. Django architecture view;
-8. snapshot comparison;
-9. report/export center;
-10. handoff preview.
-
-Large graphs require aggregation, filtering, node limits, and explicit truncation.
-
-## Public-repository and private-input safety
-
-Issue: #82
+Cross-cutting issue: #82
 
 ### Analysis safety
 
-- Static parsing only in the MVP.
 - Never import analyzed modules.
-- Never run repository hooks, migrations, framework setup, or project commands.
-- Never write into the analyzed repository unless a user explicitly selects an
-  export path.
-- Use atomic output writes and cancellation-safe caches.
+- Never execute analyzed repository scripts.
+- Never invoke framework setup, migrations, hooks, or plugins.
+- Never make network calls based on analyzed code.
+- Never write into the analyzed repository by default.
+- Never follow symlinks outside allowed roots without explicit permission.
 
 ### Privacy
 
-Default exclusions include:
+- Honor `.gitignore` and configured exclusions.
+- Exclude likely secrets and credentials by default.
+- Support metadata-only scans with no source excerpts.
+- Bound any stored source evidence.
+- Redact paths, secrets, emails, tokens, and organization-specific values from
+  exports.
+- Never commit private-repository source or identifying local paths as fixtures.
 
-- `.env` and common secret files;
-- key stores and credentials;
-- `.git` internals;
-- dependency caches and virtual environments;
-- build outputs and generated artifacts;
-- ignored files unless explicitly included.
+### Resource controls
 
-Support a metadata-only mode with no source snippets. Apply redaction consistently
-to JSON, Markdown, Excel, GraphML, UI payloads, and handoffs.
-
-### Resource limits
-
-- maximum files;
-- maximum file size;
-- maximum total bytes;
-- maximum nodes and edges;
-- maximum relationship depth;
+- file-count, file-size, and total-byte limits;
+- node and edge limits;
 - runtime and memory budgets;
 - progress and cancellation;
-- explicit partial/truncated status.
+- explicit partial/truncated status;
+- cancellation-safe cache and snapshot handling.
 
 ### Public API discipline
 
-- New commands remain under `experimental` until approved.
+- New commands and routes remain experimental until approved.
 - Schemas and rules are versioned.
-- Golden fixtures and compatibility tests precede stable claims.
-- Existing `quality` remains the single required status context.
+- Golden fixtures and malicious-input tests precede stable claims.
+- Existing `quality` remains the only required GitHub status context.
+- No stable tag, release, or package publication during the MVP.
 
-## Dogfooding and language expansion
+## Vertical delivery plan
+
+The roadmap is delivered through complete, reviewable vertical slices rather than
+large disconnected subsystems.
+
+### Phase 0 — product contracts and safety
+
+Issues: #76 and #82
+
+Deliver:
+
+- final public product narrative;
+- information architecture for the five views;
+- evidence and snapshot contracts;
+- finding/review-state contracts;
+- privacy, exclusion, and resource-limit policies;
+- experimental API policy;
+- purpose-built safe fixtures.
+
+No broad runtime implementation.
+
+### Phase 1 — Repository Review MVP
+
+Issue: #77
+
+Deliver end to end:
+
+- select/configure a local repository;
+- safe generic-Python discovery and AST extraction;
+- SQLite repository and snapshot persistence;
+- thin FastAPI backend;
+- thin React shell;
+- Overview view;
+- Symbols view;
+- search, filter, sort, and source evidence;
+- progress, cancellation, and parse diagnostics;
+- reopen prior snapshots;
+- CLI and UI evidence equivalence.
+
+Exit criteria:
+
+- useful generic Python repository scan;
+- no analyzed code imports or writes;
+- byte-identical core evidence from unchanged input;
+- completed snapshots persisted atomically;
+- user can review symbols in the local workspace.
+
+### Phase 2 — Relationships
+
+Issue: #78
+
+Deliver:
+
+- package/module imports;
+- class inheritance;
+- containment;
+- cycle detection;
+- focused graph explorer;
+- source evidence panel;
+- bounded neighborhood expansion.
+
+Do not begin with a complete function call graph. Add call relationships later as
+resolution quality improves.
+
+### Phase 3 — Findings and review workflow
+
+Issue: #79
+
+Deliver:
+
+- first high-value deterministic findings;
+- finding statuses and notes;
+- first/last seen tracking;
+- naming drift and duplicate-name review;
+- size, complexity, coupling, cycle, inheritance, documentation, and test signals;
+- initial normalized-AST duplicate candidates.
+
+### Phase 4 — deeper calls and architecture analysis
+
+Issues: #78 and #79
+
+Deliver:
+
+- statically resolvable call edges;
+- explicit ambiguous/unresolved call evidence;
+- cohesion proxies;
+- repository shape classification;
+- paradigm indicators;
+- architecture-boundary rules;
+- explainable confidence and contradictory evidence.
+
+### Phase 5 — snapshot comparison and handoffs
+
+Issue: #80
+
+Deliver:
+
+- added, removed, and changed symbols;
+- signature, inheritance, and dependency deltas;
+- finding deltas and metric trends;
+- architecture drift;
+- configurable handoff builder;
+- copy-to-clipboard and bounded Markdown/JSON output;
+- selected-view exports.
+
+### Phase 6 — framework enrichment
+
+Add framework adapters only where actual dogfooding demonstrates value. Generic
+Python remains the core analyzer.
+
+### Phase 7 — polish and dogfood
 
 Issue: #83
 
-Prove value on representative Python/Django repositories before adding languages.
-Evaluate:
+Improve:
 
-- whether symbol inventory prevents duplicate concepts and naming drift;
-- usefulness of inheritance and dependency graphs;
-- accuracy and explainability of modularity/paradigm findings;
-- value of the Excel workbook;
-- reduction in agent clarification requests;
-- false-positive rates;
-- performance and graph-size limits.
+- large table and graph performance;
+- saved filters;
+- keyboard navigation and accessibility;
+- responsive layouts;
+- source previews;
+- progress and cancellation;
+- selected-view exports;
+- installation workflow.
 
-Only sanitized aggregate evidence or purpose-built public fixtures may enter this
-public repository.
+Dogfood against purpose-built public fixtures and sanitized aggregate evidence.
 
-After Python contracts stabilize, add language adapters in this likely order:
+### Phase 8 — additional languages
+
+Only after the Python workspace proves useful. Recommended evaluation order:
 
 1. TypeScript/JavaScript;
 2. Rust;
 3. C#;
-4. Go or Java based on demonstrated repository demand.
+4. Go or Java according to demonstrated demand.
 
-All adapters must emit the same language-neutral evidence schema.
+All analyzers must emit the same language-neutral evidence model.
 
-## Ordered implementation slices
-
-### Slice 0 — product and safety contract
-
-Issues: #76 and #82
-
-- Approve schemas, safety rules, experimental namespace, fixture policy, and
-  performance budgets.
-- No user-visible runtime behavior changes beyond experimental scaffolding.
-
-Exit criteria:
-
-- reviewed architecture and schemas;
-- malicious/sensitive fixtures defined;
-- public-beta documentation accurate.
-
-### Slice 1 — deterministic Python symbol inventory
-
-Issue: #77
-
-- repository discovery;
-- Python AST extraction;
-- stable records and JSON output;
-- Django fixture;
-- cache and parse diagnostics.
-
-Exit criteria:
-
-- useful symbol report from a Django fixture;
-- byte-identical repeat analysis;
-- no project imports or writes.
-
-### Slice 2 — first useful report
-
-Issues: #77 and a narrow portion of #80
-
-- Markdown summary;
-- symbol/module CSV or XLSX sheets;
-- deterministic handoff draft.
-
-This intentionally ships before the full graph UI so the product becomes useful
-early.
-
-### Slice 3 — dependency and inheritance graphs
-
-Issue: #78
-
-- imports, inheritance, containment, resolvable calls;
-- cycles and graph metrics;
-- JSON, GraphML, and bounded Mermaid.
-
-### Slice 4 — architecture and duplication findings
-
-Issue: #79
-
-- coupling/cohesion, complexity, naming, duplicate candidates;
-- repository shape and paradigm evidence.
-
-### Slice 5 — complete export and comparison layer
-
-Issue: #80
-
-- full Excel workbook;
-- snapshot comparison;
-- production-quality bounded handoff compiler.
-
-### Slice 6 — localhost dashboard
-
-Issue: #81
-
-- local API;
-- React dashboard;
-- interactive graphs and export workflow.
-
-### Slice 7 — dogfood and next-language decision
-
-Issue: #83
-
-- measured evaluation;
-- performance budgets;
-- false-positive review;
-- approve TypeScript only if Python MVP proves value.
-
-## PR and branch strategy
+## GitHub execution model
 
 Because the repository is public-facing:
 
@@ -562,38 +736,38 @@ Because the repository is public-facing:
 - draft PRs until exact-head `quality` passes;
 - squash merges only;
 - no long-lived implementation branch;
-- experimental namespace for new commands;
-- schema and fixture changes reviewed before UI changes;
-- no helper cleanup mixed with repository-intelligence work;
-- no version tag, release, or package publication during the MVP.
-
-Recommended first implementation branch after this roadmap merges:
-
-```text
-feature/repository-analysis-schema
-```
-
-Recommended first implementation issue: #77, with #82 safety tests included in the
-same initial vertical slice where necessary.
+- no helper cleanup mixed with product development;
+- no private repository evidence committed;
+- schema and safety changes reviewed with the vertical slice that first uses them;
+- rendered UI review required for user-facing changes;
+- no release, tag, or package publication during the MVP.
 
 ## MVP completion gate
 
-The MVP is complete only when a user can:
+The first product milestone is complete only when a user can:
 
-1. select a Python/Django repository;
-2. analyze it without importing or changing it;
-3. review classes, functions, methods, modules, imports, inheritance, and calls;
-4. see documented metrics and architecture findings;
-5. explore a dependency graph;
-6. export JSON, Markdown, Excel, and GraphML;
-7. compare two snapshots;
-8. generate a deterministic agent handoff;
-9. perform the same workflow through a localhost UI;
-10. reproduce the same evidence on an unchanged repository.
+1. start Zscripts locally;
+2. select an ordinary Python repository;
+3. analyze it without executing or modifying it;
+4. view packages, modules, classes, functions, and methods;
+5. search, filter, sort, and inspect source evidence;
+6. inspect imports, inheritance, containment, and cycles;
+7. review deterministic metrics and findings;
+8. mark findings reviewed, accepted, dismissed, or resolved;
+9. rescan and compare snapshots;
+10. generate a bounded handoff;
+11. reproduce the same evidence from unchanged source;
+12. confirm ordinary use sends no repository data outside localhost.
 
 ## Immediate next action
 
-After this roadmap is reviewed and merged, begin #77 with a schema-and-fixtures PR.
-Do not begin the React dashboard first. The fastest route to a credible product is
-a trustworthy Python/Django evidence engine followed immediately by a simple
-Excel/report vertical slice.
+1. Review and merge this documentation-only roadmap.
+2. Update issues #76–#83 to match the workspace-first vertical-slice model.
+3. Begin #77 from the resulting `main` SHA.
+4. Implement the full Repository Review MVP vertical slice, including the minimum
+   #82 safety contracts required by that slice.
+5. Review the rendered workspace before expanding graph and finding scope.
+
+Do not start with a standalone export engine, framework-specific analyzer, or
+late-stage dashboard. The fastest credible path is one small end-to-end local
+workspace that proves the product workflow.

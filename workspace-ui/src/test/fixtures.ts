@@ -1,10 +1,10 @@
 import type { Overview, Repository, Snapshot, SymbolRecord } from "../types";
 
 export const repository: Repository = {
-    repository_id: "repository-0123456789abcdef",
+    repository_id: "repository-0123456789abcdef", // pragma: allowlist secret
     display_name: "sample-repository",
     branch: "main",
-    git_sha: "19ba55e1bbd76fab",
+    git_sha: "19ba55e1bbd76fab", // pragma: allowlist secret
     dirty: false,
     staged: false,
     untracked: false,
@@ -20,7 +20,7 @@ export const snapshot: Snapshot = {
     schema_version: "1",
     rule_set_version: "1",
     state: "completed",
-    source_fingerprint: "abcdef0123456789abcdef0123456789",
+    source_fingerprint: "abcdef0123456789abcdef0123456789", // pragma: allowlist secret
     file_count: 12,
     included_file_count: 10,
     module_count: 4,

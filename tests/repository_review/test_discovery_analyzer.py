@@ -72,8 +72,14 @@ def test_discovery_records_safe_exclusions_and_resource_limits(tmp_path: Path) -
     repository = tmp_path / "bounded"
     repository.mkdir()
     (repository / ".gitignore").write_text("ignored.py\n", encoding="utf-8")
-    (repository / ".env").write_text("TOKEN=do-not-export\n", encoding="utf-8")
-    (repository / "credentials-prod.py").write_text("SECRET = 'hidden'\n", encoding="utf-8")
+    (repository / ".env").write_text(
+        "TOKEN=do-not-export\n",  # pragma: allowlist secret
+        encoding="utf-8",
+    )
+    (repository / "credentials-prod.py").write_text(
+        "SECRET = 'hidden'\n",  # pragma: allowlist secret
+        encoding="utf-8",
+    )
     (repository / "ignored.py").write_text("def ignored(): ...\n", encoding="utf-8")
     (repository / "binary.py").write_bytes(b"\x00\x01")
     (repository / "large.py").write_text("x = '" + ("a" * 200) + "'\n", encoding="utf-8")

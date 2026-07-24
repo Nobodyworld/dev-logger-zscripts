@@ -32,14 +32,14 @@ def test_malicious_import_time_code_is_never_executed(
 ) -> None:
     repository = tmp_path / "malicious"
     shutil.copytree(FIXTURES / "malicious", repository)
-    literal_secret = "literal-default-must-not-appear"
+    literal_secret = "literal-default-must-not-appear"  # pragma: allowlist secret
     (repository / "literal_default.py").write_text(
         f'def configured(token: str = "{literal_secret}") -> str:\n    return token\n',
         encoding="utf-8",
     )
     before = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in repository.glob("*.py")}
     marker = repository / "ZSCRIPT_ANALYZER_MUST_NOT_CREATE"
-    secret = "must-not-appear-in-evidence"
+    secret = "must-not-appear-in-evidence"  # pragma: allowlist secret
     monkeypatch.chdir(repository)
     monkeypatch.setenv("ZSCRIPT_ANALYZER_SECRET", secret)
     monkeypatch.setattr(os, "system", _raise_execution)

@@ -44,12 +44,16 @@ license inventory.
 
 ## CI action provenance
 
-New CI actions remain immutable commit-pinned:
+The new Node setup action remains immutable commit-pinned:
 
 | Action | Commit | Reviewed tag |
 | --- | --- | --- |
-| `pnpm/action-setup` | `0ebf47130e4866e96fce0953f49152a61190b271` | `v6.0.9` |
-| `actions/setup-node` | `820762786026740c76f36085b0efc47a31fe5020` | `v7.0.0` |
+| `actions/setup-node` | `48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e` | `v6.4.0` |
+
+The workflow activates exact `pnpm@10.18.1` through the Corepack bundled with
+the selected Node runtime. This avoids an unapproved third-party action while
+retaining deterministic package-manager activation under the repository's
+existing Actions allowlist.
 
 Existing checkout, Python setup, and artifact-upload actions remain pinned to
 their previously reviewed commits.

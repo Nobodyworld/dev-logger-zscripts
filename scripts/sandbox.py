@@ -7,11 +7,14 @@ import subprocess
 from collections.abc import MutableMapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 try:  # pragma: no cover - platform specific branch
-    import resource
+    import resource as _resource
+
+    resource: Any = _resource
 except ImportError:  # pragma: no cover - Windows fallback
-    resource = None  # type: ignore[assignment]
+    resource = None
 
 
 @dataclass

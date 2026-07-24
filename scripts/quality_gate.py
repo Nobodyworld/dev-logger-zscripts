@@ -6,10 +6,13 @@ import argparse
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
+import urllib.request
 import venv
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -23,6 +26,11 @@ COVERAGE_THRESHOLD = 85
 
 MYPY_TARGETS: tuple[str, ...] = (
     "zscripts/application",
+    "zscripts/domain/repository_review.py",
+    "zscripts/infrastructure/python_analyzer.py",
+    "zscripts/infrastructure/repository_discovery.py",
+    "zscripts/infrastructure/snapshot_store.py",
+    "zscripts/interfaces",
     "zscripts/config.py",
     "zscripts/configuration.py",
     "zscripts/observability/logging.py",
@@ -45,6 +53,16 @@ CHECK_OPERATIONS: tuple[str, ...] = (
     "format-check",
     "lint",
     "type",
+    "frontend-install",
+    "frontend-format",
+    "frontend-lint",
+    "frontend-typecheck",
+    "frontend-tests",
+    "frontend-build",
+    "repository-safety",
+    "snapshot-store",
+    "workspace-api",
+    "packaged-workspace",
     *HELPER_CONTRACT_OPERATIONS,
     "bandit",
     "tests",
@@ -53,6 +71,16 @@ QUALITY_OPERATIONS: tuple[str, ...] = (
     "format-check",
     "lint",
     "type",
+    "frontend-install",
+    "frontend-format",
+    "frontend-lint",
+    "frontend-typecheck",
+    "frontend-tests",
+    "frontend-build",
+    "repository-safety",
+    "snapshot-store",
+    "workspace-api",
+    "packaged-workspace",
     *HELPER_CONTRACT_OPERATIONS,
     "bandit",
     "audit",
@@ -194,6 +222,7 @@ def _run_editable_smoke() -> dict[str, object]:
 
 
 def _run_wheel_smoke() -> dict[str, object]:
+    _ensure_workspace_assets()
     with tempfile.TemporaryDirectory(prefix="zscripts-wheel-smoke-") as directory:
         smoke_root = Path(directory)
         wheel_dir = smoke_root / "dist"
@@ -215,7 +244,10 @@ def _run_wheel_smoke() -> dict[str, object]:
         venv.EnvBuilder(with_pip=True).create(environment)
         python = _console_script(environment, "python")
         _run([str(python), "-m", "pip", "install", "--upgrade", "pip"], cwd=smoke_root)
-        _run([str(python), "-m", "pip", "install", str(wheels[0])], cwd=smoke_root)
+        _run(
+            [str(python), "-m", "pip", "install", f"{wheels[0]}[workspace]"],
+            cwd=smoke_root,
+        )
         _run(
             [
                 str(python),
@@ -242,11 +274,135 @@ def _run_wheel_smoke() -> dict[str, object]:
             capture_output=True,
         )
         _assert_adapter_order(adapters.stdout)
+        workspace_smoke = _smoke_packaged_workspace(
+            python=python,
+            console=console,
+            smoke_root=smoke_root,
+        )
     return {
         "adapter_order": list(EXPECTED_ADAPTERS),
         "isolated_install": True,
         "helper_modules_included": 154,
+        "workspace": workspace_smoke,
     }
+
+
+def _require_pnpm() -> str:
+    executable = shutil.which("pnpm")
+    if executable is None:
+        raise GateFailure(
+            "pnpm is required for the repository review workspace. "
+            "Install the package-manager version declared in workspace-ui/package.json."
+        )
+    return executable
+
+
+def _frontend(*arguments: str) -> list[str]:
+    return [_require_pnpm(), "--dir", "workspace-ui", *arguments]
+
+
+def _run_frontend_install() -> dict[str, object]:
+    _run(_frontend("install", "--frozen-lockfile"))
+    return {"package_manager": "pnpm@10.18.1", "frozen_lockfile": True}
+
+
+def _run_frontend_build() -> dict[str, object]:
+    _run(_frontend("build"))
+    _run([sys.executable, "scripts/build_workspace_assets.py"])
+    assets = sorted(
+        path.relative_to(ROOT / "zscripts" / "workspace_static").as_posix()
+        for path in (ROOT / "zscripts" / "workspace_static").rglob("*")
+        if path.is_file()
+    )
+    return {"generated_package_assets": assets}
+
+
+def _frontend_simple(*arguments: str) -> Operation:
+    def runner() -> None:
+        _run(_frontend(*arguments))
+
+    return runner
+
+
+def _ensure_workspace_assets() -> None:
+    if not (ROOT / "zscripts" / "workspace_static" / "index.html").is_file():
+        _run_frontend_build()
+
+
+def _available_loopback_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind(("127.0.0.1", 0))
+        return int(listener.getsockname()[1])
+
+
+def _smoke_packaged_workspace(
+    *,
+    python: Path,
+    console: Path,
+    smoke_root: Path,
+) -> dict[str, object]:
+    port = _available_loopback_port()
+    command = [
+        str(console),
+        "workspace",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        str(port),
+        "--app-data-dir",
+        str(smoke_root / "data"),
+    ]
+    print(f"$ {_display(command)}", flush=True)
+    process = subprocess.Popen(  # noqa: S603 - fixed installed console script and arguments
+        command,
+        cwd=smoke_root,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    url = f"http://127.0.0.1:{port}/"
+    try:
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                stdout, stderr = process.communicate()
+                raise GateFailure(f"Packaged workspace exited before serving assets:\n{stdout}\n{stderr}")
+            try:
+                with urllib.request.urlopen(url, timeout=1) as response:  # noqa: S310 - loopback URL
+                    payload = response.read().decode("utf-8")
+                    content_security_policy = response.headers.get("Content-Security-Policy")
+                    if "Zscripts Repository Review" not in payload:
+                        raise GateFailure("Packaged workspace index did not contain the product title.")
+                    if not content_security_policy:
+                        raise GateFailure("Packaged workspace response omitted Content-Security-Policy.")
+                    return {
+                        "served": True,
+                        "host": "127.0.0.1",
+                        "content_security_policy": True,
+                    }
+            except (OSError, urllib.error.URLError):
+                time.sleep(0.2)
+        raise GateFailure("Packaged workspace did not become ready within 20 seconds.")
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+
+
+def _run_packaged_workspace_smoke() -> dict[str, object]:
+    _ensure_workspace_assets()
+    console = _console_script(Path(sys.prefix), "zscripts")
+    with tempfile.TemporaryDirectory(prefix="zscripts-packaged-workspace-") as directory:
+        smoke_root = Path(directory)
+        return _smoke_packaged_workspace(
+            python=Path(sys.executable),
+            console=console,
+            smoke_root=smoke_root,
+        )
 
 
 def _run_zipapp_smoke() -> dict[str, object]:
@@ -331,6 +487,22 @@ OPERATIONS: dict[str, Operation] = {
     "format-check": _simple(_python_module("ruff", "format", "--check", ".")),
     "lint": _simple(_python_module("ruff", "check", ".")),
     "type": _simple(_python_module("mypy", *MYPY_TARGETS)),
+    "frontend-install": _run_frontend_install,
+    "frontend-format": _frontend_simple("format:check"),
+    "frontend-lint": _frontend_simple("lint"),
+    "frontend-typecheck": _frontend_simple("typecheck"),
+    "frontend-tests": _frontend_simple("test"),
+    "frontend-build": _run_frontend_build,
+    "repository-safety": _simple(
+        _python_module(
+            "pytest",
+            "tests/repository_review/test_safety.py",
+            "tests/repository_review/test_discovery_analyzer.py",
+        )
+    ),
+    "snapshot-store": _simple(_python_module("pytest", "tests/repository_review/test_snapshot_store.py")),
+    "workspace-api": _simple(_python_module("pytest", "tests/repository_review/test_api_cli.py")),
+    "packaged-workspace": _run_packaged_workspace_smoke,
     "helper-surface": _simple([sys.executable, "scripts/check_legacy_helper_boundary.py", "surface"]),
     "helper-boundary": _simple([sys.executable, "scripts/check_legacy_helper_boundary.py", "boundary"]),
     "helper-compatibility": _simple(

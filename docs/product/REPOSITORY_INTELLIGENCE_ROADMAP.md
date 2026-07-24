@@ -1,6 +1,7 @@
 # Zscripts 0.2 Repository Review Workspace Roadmap
 
-Status: proposed product direction for `PUBLIC BETA — ACTIVE DEVELOPMENT`.
+Status: approved direction; Phase 1 Repository Review MVP implemented for review
+under `PUBLIC BETA — ACTIVE DEVELOPMENT`.
 
 Umbrella issue: #76
 
@@ -761,12 +762,12 @@ The first product milestone is complete only when a user can:
 
 ## Immediate next action
 
-1. Review and merge this documentation-only roadmap.
-2. Update issues #76–#83 to match the workspace-first vertical-slice model.
-3. Begin #77 from the resulting `main` SHA.
-4. Implement the full Repository Review MVP vertical slice, including the minimum
-   #82 safety contracts required by that slice.
-5. Review the rendered workspace before expanding graph and finding scope.
+1. Review the #77 MVP implementation and rendered desktop/mobile workspace.
+2. Merge only after the exact-head hosted `quality` context succeeds.
+3. Dogfood Overview, Symbols, source evidence, cancellation, and prior snapshots
+   against public or purpose-built fixtures.
+4. Begin #78 Relationships only after MVP review confirms the evidence and
+   interaction contracts.
 
 Do not start with a standalone export engine, framework-specific analyzer, or
 late-stage dashboard. The fastest credible path is one small end-to-end local

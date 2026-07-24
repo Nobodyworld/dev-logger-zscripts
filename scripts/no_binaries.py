@@ -14,6 +14,7 @@ IGNORE_DIRS = {
     ".pytest_cache",
     ".ruff_cache",
     ".venv",
+    "node_modules",
     "venv",
 }
 IGNORE_ROOT_DIRS = {"artifacts"}

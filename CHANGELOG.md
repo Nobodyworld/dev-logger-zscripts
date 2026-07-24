@@ -4,6 +4,16 @@
 
 ### Added
 
+- Experimental Repository Review MVP: bounded read-only generic-Python
+  discovery and AST extraction, versioned deterministic evidence, atomic local
+  SQLite snapshots, experimental CLI and loopback API, and responsive React
+  Overview/Symbols views with progress, cancellation, prior snapshots, filters,
+  sorting, pagination, and bounded source evidence.
+- Repository-review hostile-input, determinism, rollback, cancellation, API,
+  frontend, and packaged-workspace tests plus named CI/quality operations.
+- Public repository-review architecture, configuration, privacy, dependency,
+  workflow, data-deletion, and static-analysis limitation documentation.
+
 - Evidence-backed consumer and ownership review for the seven temporary legacy
   helper compatibility points, plus the public-beta deprecation notice. The
   notice starts the required cycle without authorizing Phase 2B; all owner

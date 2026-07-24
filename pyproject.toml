@@ -44,6 +44,13 @@ dev = [
     "coverage[toml]>=7.6.0",
     "pre-commit>=3.8.0",
     "PyYAML>=6.0.2",
+    "httpx2==2.9.1",
+    "types-jsonschema==4.26.0.20260518",
+]
+workspace = [
+    "fastapi==0.139.2",
+    "pydantic==2.13.4",
+    "uvicorn==0.51.0",
 ]
 helpers = [
     "beautifulsoup4>=4.14.2",
@@ -84,6 +91,7 @@ exclude = ["artifacts*", "docs*", "examples*", "tests*"]
 
 [tool.setuptools.package-data]
 schemas = ["normalized_log.json"]
+zscripts = ["workspace_static/**"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
@@ -91,6 +99,7 @@ pythonpath = ["."]
 [tool.ruff]
 line-length = 110
 target-version = "py311"
+extend-exclude = ["tests/fixtures/repository_review/malicious/malformed.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]

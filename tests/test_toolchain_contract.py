@@ -19,10 +19,8 @@ def test_ruff_formatter_contract_is_exact_and_aligned() -> None:
     assert RUFF_CONSTRAINT in dev_dependencies
     assert RUFF_CONSTRAINT in requirement_lines
     assert not any(
-        dependency.startswith("ruff") and dependency != RUFF_CONSTRAINT
-        for dependency in dev_dependencies
+        dependency.startswith("ruff") and dependency != RUFF_CONSTRAINT for dependency in dev_dependencies
     )
     assert not any(
-        dependency.startswith("ruff") and dependency != RUFF_CONSTRAINT
-        for dependency in requirement_lines
+        dependency.startswith("ruff") and dependency != RUFF_CONSTRAINT for dependency in requirement_lines
     )

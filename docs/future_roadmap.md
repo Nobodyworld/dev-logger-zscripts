@@ -1,30 +1,44 @@
 # Future Roadmap
 
-Zscripts is transitioning toward a local, deterministic repository intelligence,
-reporting, visualization, and agent-handoff product.
+Zscripts is transitioning toward a local, deterministic **repository review
+workspace**.
 
-The authoritative product plan is:
+The authoritative plan is:
 
-- [Zscripts 0.2 Repository Intelligence Roadmap](product/REPOSITORY_INTELLIGENCE_ROADMAP.md)
+- [Zscripts 0.2 Repository Review Workspace Roadmap](product/REPOSITORY_INTELLIGENCE_ROADMAP.md)
 - [Umbrella issue #76](https://github.com/Nobodyworld/dev-logger-zscripts/issues/76)
+
+## Product workflow
+
+```text
+Scan → Explore → Review → Compare → Handoff
+```
+
+The workspace—not a generated spreadsheet or report bundle—is the product.
+Analysis remains local, read-only, reviewable, and usable without an LLM.
 
 ## Current priority
 
 The fastest safe route is:
 
-1. build a deterministic Python/Django static-analysis engine;
-2. produce useful symbol, metric, dependency, inheritance, and call evidence;
-3. ship Markdown, Excel, GraphML, and agent-handoff exports;
-4. add a localhost-only dashboard after the evidence contracts stabilize;
-5. dogfood the Python MVP before approving additional languages.
+1. finalize safety, evidence, snapshot, and review-state contracts;
+2. build one end-to-end generic Python Repository Review MVP;
+3. deliver a thin localhost UI with Overview and Symbols views immediately;
+4. add relationships, persistent findings, comparisons, and handoffs in vertical
+   slices;
+5. dogfood the Python workspace before approving framework-specific enrichment or
+   additional languages.
+
+Optional exports are generated from the active view. XLSX, cloud services,
+desktop packaging, multi-user collaboration, and additional language analyzers are
+deferred until the local workspace demonstrates value.
 
 ## Deferred directions
 
 The previous roadmap emphasized hosted telemetry, message queues, containers,
-autoscaling, and remote extension registries. Those ideas are not current product
-priorities. They may be reconsidered only when repository intelligence requires
-them and after the local product has demonstrated value.
+autoscaling, remote extension registries, Excel-first reports, framework-specific
+analysis, and a dashboard delivered after the engine. Those are not current
+priorities.
 
-The core product remains local, read-only, deterministic, and usable without an
-LLM. The legacy helper compatibility track under issues #62 and #73 remains
-separate from this roadmap.
+The legacy helper compatibility track under issues #62 and #73 remains separate
+from product development and must not block the repository review roadmap.

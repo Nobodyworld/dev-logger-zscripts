@@ -1,4 +1,4 @@
 # Developer tools (optional)
-ruff
+ruff==0.15.22
 mypy
 bandit

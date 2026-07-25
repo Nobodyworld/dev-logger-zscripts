@@ -6,6 +6,7 @@ Zscripts is a structured log collection, normalization, redaction, diagnostics, 
 - [Architecture Deep-Dive](architecture/ARCHITECTURE.md)
 - [Architecture Overview](architecture/ARCHITECTURE_OVERVIEW.md)
 - [ToolkitService API Reference](api.md)
+- [Experimental Repository Review Workspace](repository-review.md)
 - [Operational Workflows](workflows.md)
 - [Automation Playbook](automation/AUTOMATION.md)
 - [Normalized Log Schema](schema.md)

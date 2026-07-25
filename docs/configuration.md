@@ -121,3 +121,28 @@ Repeat `--set` for each key you want to change.
 - **File not found**: Double-check relative paths to configuration files and
   example directories. Paths are resolved relative to the current working
   directory.
+
+## Experimental repository-review settings
+
+Repository review intentionally does not consume or mutate the analyzed
+repository's application configuration.
+
+```sh
+zscripts experimental analyze PATH \
+  --app-data-dir LOCAL_DATA \
+  --max-files 5000 \
+  --max-file-size 1000000 \
+  --max-total-bytes 100000000 \
+  --exclude "generated/**" \
+  --json
+```
+
+- `--app-data-dir` overrides the platform application-data directory.
+- `ZCRIPTS_DATA_DIR` provides the same storage override when the flag is absent.
+- `--exclude` is repeatable and accepts repository-relative glob patterns.
+- resource values must be positive; invalid values fail before analysis.
+- `zscripts workspace --host` accepts only `127.0.0.1`; use `--port` to select a
+  different local port.
+
+See [Experimental Repository Review Workspace](repository-review.md) for default
+exclusions, storage, and privacy details.

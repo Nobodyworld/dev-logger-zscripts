@@ -11,6 +11,7 @@ repos:
     hooks:
       - id: detect-secrets
         args: [--baseline, .secrets.baseline]
+        exclude: ^workspace-ui/pnpm-lock\.yaml$
   - repo: local
     hooks:
       - id: format-check

@@ -40,9 +40,9 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
    All commands delegate to `scripts/quality_gate.py` and work directly on
    Windows without GNU Make. The canonical profiles are:
 
-   - `check`: `format-check`, `lint`, `type`, `helper-surface`, `helper-boundary`, `helper-compatibility`, `bandit`, `tests`
-   - `quality`: `format-check`, `lint`, `type`, `helper-surface`, `helper-boundary`, `helper-compatibility`, `bandit`, `audit`, `binary`, `tests`, `coverage`, `docs`, `editable-smoke`, `wheel`, `zipapp`, `diagnostics`
-   - `release`: `format-check`, `lint`, `type`, `helper-surface`, `helper-boundary`, `helper-compatibility`, `bandit`, `audit`, `binary`, `tests`, `coverage`, `docs`, `editable-smoke`, `wheel`, `zipapp`, `diagnostics`, `redaction`, `gitleaks-worktree`, `gitleaks-history`, `clean`
+   - `check`: `format-check`, `lint`, `type`, `frontend-install`, `frontend-format`, `frontend-lint`, `frontend-typecheck`, `frontend-tests`, `frontend-build`, `repository-safety`, `snapshot-store`, `workspace-api`, `packaged-workspace`, `helper-surface`, `helper-boundary`, `helper-compatibility`, `bandit`, `tests`
+   - `quality`: `format-check`, `lint`, `type`, `frontend-install`, `frontend-format`, `frontend-lint`, `frontend-typecheck`, `frontend-tests`, `frontend-build`, `repository-safety`, `snapshot-store`, `workspace-api`, `packaged-workspace`, `helper-surface`, `helper-boundary`, `helper-compatibility`, `bandit`, `audit`, `binary`, `tests`, `coverage`, `docs`, `editable-smoke`, `wheel`, `zipapp`, `diagnostics`
+   - `release`: `format-check`, `lint`, `type`, `frontend-install`, `frontend-format`, `frontend-lint`, `frontend-typecheck`, `frontend-tests`, `frontend-build`, `repository-safety`, `snapshot-store`, `workspace-api`, `packaged-workspace`, `helper-surface`, `helper-boundary`, `helper-compatibility`, `bandit`, `audit`, `binary`, `tests`, `coverage`, `docs`, `editable-smoke`, `wheel`, `zipapp`, `diagnostics`, `redaction`, `gitleaks-worktree`, `gitleaks-history`, `clean`
 
    `check` is the fast contributor gate. `quality` is the complete hosted-CI
    gate and enforces at least 85% coverage. `release` is the complete local
@@ -100,6 +100,10 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
 - When adding fixtures, place reusable assets under `tests/data/` and reference them via helper functions.
 - Run `pytest` before opening a PR. For integration-heavy work, add coverage assertions or performance benchmarks when feasible.
 - Packaging changes must preserve the hosted editable-install and isolated wheel-install smoke tests.
+- Repository-review changes must run the named `repository-safety`,
+  `snapshot-store`, `workspace-api`, and `packaged-workspace` operations.
+- Frontend changes must pass frozen install, Prettier, ESLint, TypeScript,
+  Vitest, production build, and desktop/mobile browser review.
 
 ## Documentation Standards
 

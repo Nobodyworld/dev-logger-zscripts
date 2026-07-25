@@ -58,3 +58,25 @@ provide a log source now emit clear error messages and exit with status code 2
 instead of uncaught tracebacks. Destination paths are validated up front as
 well—the CLI creates missing directories, uses atomic writes, and reports
 permission errors before any partial files are left behind.
+
+## 6. Local Repository Review
+
+1. Build the private frontend workspace and packaged assets:
+
+   ```sh
+   pnpm --dir workspace-ui install --frozen-lockfile
+   pnpm --dir workspace-ui build
+   python scripts/build_workspace_assets.py
+   ```
+
+2. Start `zscripts workspace` and open `http://127.0.0.1:8765`.
+3. Select a local Python repository and begin analysis.
+4. Watch bounded progress or cancel between files.
+5. Review counts and parse gaps in Overview.
+6. Search/filter/sort Symbols and request a bounded source excerpt when needed.
+7. Reopen the completed snapshot from the recent-repository/snapshot controls.
+
+No repository command, framework setup, migration, hook, plugin, or analyzed
+Python module is executed. Use the experimental CLI when a deterministic JSON
+contract is preferable to the UI. See
+[Experimental Repository Review Workspace](repository-review.md).

@@ -88,6 +88,8 @@ flowchart LR
   infrastructure layers.
 - Required JSON Schema validation for normalized payloads; invalid payloads are
   rejected in editable and isolated-wheel installations.
+- Experimental local repository review workspace with bounded, read-only Python
+  AST analysis, atomic SQLite snapshots, and responsive Overview/Symbols views.
 
 ## Quickstart
 
@@ -136,6 +138,38 @@ python cli.py adapters --format json
 Global flags such as `--config`, `--set`, `--adapter`, `--enable-telemetry`,
 `--log-level`, and `--log-format` are available to every command. See
 `agents/cli_adapter.py` for a machine-readable description of the surface area.
+
+## Experimental Repository Review Workspace
+
+The workspace is a local-first product slice for scanning an ordinary Python
+repository without importing or executing it. It stores metadata-only snapshots
+outside the analyzed repository and serves a responsive Overview and searchable
+Symbols view from one localhost-only process.
+
+```sh
+# Editable development checkout
+python -m pip install -e ".[dev,workspace]"
+pnpm --dir workspace-ui install --frozen-lockfile
+pnpm --dir workspace-ui build
+python scripts/build_workspace_assets.py
+
+# Start the local workspace at http://127.0.0.1:8765
+zscripts workspace
+
+# Or scan through the experimental CLI
+zscripts experimental analyze /path/to/repository --json
+```
+
+Default discovery excludes likely credentials, generated/cache directories,
+binaries, ignored files, and symlinks. Scans have file-count, per-file, and
+total-byte limits; cancelled or failed attempts never appear as completed
+snapshots. Ordinary use makes no outbound network request.
+
+This is **PUBLIC BETA — ACTIVE DEVELOPMENT**. Static syntax evidence cannot prove
+runtime behavior, architectural intent, code safety, or framework semantics.
+Review the complete [repository review guide](docs/repository-review.md) for
+installation, API, storage/deletion, privacy, exclusions, limitations, and
+validation details.
 
 ## Helpers (Legacy and Optional)
 
@@ -218,7 +252,7 @@ Create a virtual environment and install the optional tooling extras:
 python -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
-pip install .[dev,helpers]  # Add helpers for full functionality
+pip install .[dev,helpers,workspace]  # Includes local workspace development
 ```
 
 Execute the fast contributor gate with:

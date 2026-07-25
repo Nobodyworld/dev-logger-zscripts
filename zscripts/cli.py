@@ -19,6 +19,11 @@ from zscripts.application.io_utils import (
     prepare_output_path,
 )
 from zscripts.application.report_formatters import get_report_formatter
+from zscripts.application.repository_review import (
+    RepositoryReviewService,
+    public_repository,
+    public_snapshot,
+)
 from zscripts.application.services import ToolkitService
 from zscripts.config import ToolkitConfig, clone_config
 from zscripts.configuration import (
@@ -35,6 +40,7 @@ from zscripts.extensions import (
 )
 from zscripts.infrastructure import build_toolkit_service
 from zscripts.infrastructure.adapters import AdapterRegistry
+from zscripts.infrastructure.repository_discovery import AnalysisCancelled
 from zscripts.observability.diagnostics import (
     DiagnosticsSnapshot,
     collect_runtime_diagnostics,
@@ -293,6 +299,67 @@ def _build_main_parser(
         help="Directory to place the generated module (defaults to CWD).",
     )
 
+    experimental_parser = subparsers.add_parser(
+        "experimental",
+        help="Use experimental repository-review commands.",
+    )
+    experimental_subparsers = experimental_parser.add_subparsers(
+        dest="experimental_command",
+        required=True,
+    )
+    analyze_parser = experimental_subparsers.add_parser(
+        "analyze",
+        help="Run a read-only metadata-only Python repository scan.",
+    )
+    analyze_parser.add_argument("repository", type=Path, help="Local repository directory.")
+    analyze_parser.add_argument("--app-data-dir", type=Path, help="Override local application data.")
+    analyze_parser.add_argument("--max-files", type=int, default=5_000)
+    analyze_parser.add_argument("--max-file-size", type=int, default=1_000_000)
+    analyze_parser.add_argument("--max-total-bytes", type=int, default=100_000_000)
+    analyze_parser.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="GLOB",
+        help="Additional repository-relative exclusion glob (repeatable).",
+    )
+    analyze_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit deterministic normalized evidence as JSON.",
+    )
+    analyze_parser.set_defaults(handler=_handle_experimental_analyze)
+
+    repositories_parser = experimental_subparsers.add_parser(
+        "repositories",
+        help="List repositories with completed local snapshots.",
+    )
+    repositories_parser.add_argument("--app-data-dir", type=Path)
+    repositories_parser.add_argument("--json", action="store_true")
+    repositories_parser.set_defaults(handler=_handle_experimental_repositories)
+
+    snapshots_parser = experimental_subparsers.add_parser(
+        "snapshots",
+        help="List completed snapshots for a repository identity.",
+    )
+    snapshots_parser.add_argument("repository_id")
+    snapshots_parser.add_argument("--app-data-dir", type=Path)
+    snapshots_parser.add_argument("--json", action="store_true")
+    snapshots_parser.set_defaults(handler=_handle_experimental_snapshots)
+
+    workspace_parser = subparsers.add_parser(
+        "workspace",
+        help="Start the experimental localhost-only repository review workspace.",
+    )
+    workspace_parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Binding host; the MVP accepts only 127.0.0.1.",
+    )
+    workspace_parser.add_argument("--port", type=int, default=8765)
+    workspace_parser.add_argument("--app-data-dir", type=Path)
+    workspace_parser.set_defaults(handler=_handle_workspace)
+
     for extension in extensions:
         try:
             extension.register_cli(subparsers, context)
@@ -498,6 +565,92 @@ def _handler_accepts_service(callback: Callable[..., Any]) -> bool:
 def _handle_collect(args: argparse.Namespace, runtime: RuntimeState) -> int:
     payload = _collect_raw_logs(args, runtime, redact=getattr(args, "redact", False))
     print(payload)
+    return 0
+
+
+def _handle_experimental_analyze(args: argparse.Namespace, runtime: RuntimeState) -> int:
+    from zscripts.domain.repository_review import ScanLimits
+
+    limits = ScanLimits(
+        max_files=args.max_files,
+        max_file_size_bytes=args.max_file_size,
+        max_total_bytes=args.max_total_bytes,
+    )
+    service = RepositoryReviewService(
+        data_directory=args.app_data_dir,
+        limits=limits,
+        configured_excludes=args.exclude,
+    )
+
+    def progress(update: object) -> None:
+        if args.json:
+            return
+        phase = getattr(update, "phase", "analysis")
+        completed = getattr(update, "completed", 0)
+        total = getattr(update, "total", 0)
+        print(f"{phase}: {completed}/{total}", file=sys.stderr)
+
+    try:
+        evidence = service.analyze(args.repository, progress=progress)
+    except AnalysisCancelled:
+        print("Repository analysis was cancelled.", file=sys.stderr)
+        return 130
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(f"Repository analysis failed: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(evidence.canonical_payload(), indent=2, sort_keys=True))
+    else:
+        print(f"Repository: {evidence.repository.display_name}")
+        print(f"Snapshot: {evidence.snapshot.snapshot_id}")
+        print(f"Files analyzed: {evidence.snapshot.included_file_count}")
+        print(f"Symbols: {evidence.snapshot.symbol_count}")
+        print(f"Parse gaps: {evidence.snapshot.parse_gap_count}")
+        print(f"Truncated: {'yes' if evidence.snapshot.truncated else 'no'}")
+    return 0
+
+
+def _handle_experimental_repositories(args: argparse.Namespace, runtime: RuntimeState) -> int:
+    service = RepositoryReviewService(data_directory=args.app_data_dir)
+    records = [public_repository(item) for item in service.list_repositories()]
+    if args.json:
+        print(json.dumps({"repositories": records}, indent=2, sort_keys=True))
+    else:
+        for record in records:
+            print(f"{record['repository_id']}  {record['display_name']}")
+    return 0
+
+
+def _handle_experimental_snapshots(args: argparse.Namespace, runtime: RuntimeState) -> int:
+    service = RepositoryReviewService(data_directory=args.app_data_dir)
+    snapshots = [public_snapshot(item) for item in service.list_snapshots(args.repository_id)]
+    if args.json:
+        print(json.dumps({"snapshots": snapshots}, indent=2, sort_keys=True))
+    else:
+        for snapshot in snapshots:
+            print(
+                f"{snapshot['snapshot_id']}  {snapshot['completed_at']}  {snapshot['symbol_count']} symbols"
+            )
+    return 0
+
+
+def _handle_workspace(args: argparse.Namespace, runtime: RuntimeState) -> int:
+    try:
+        from zscripts.interfaces.workspace_api import run_workspace
+    except ModuleNotFoundError as exc:
+        if exc.name in {"fastapi", "pydantic", "starlette", "uvicorn"}:
+            print(
+                "The experimental workspace dependencies are not installed. "
+                "Install them with: python -m pip install 'zscripts[workspace]'",
+                file=sys.stderr,
+            )
+            return 2
+        raise
+    run_workspace(
+        host=args.host,
+        port=args.port,
+        data_directory=args.app_data_dir,
+    )
     return 0
 
 

@@ -20,9 +20,39 @@ application orchestration, and infrastructure details isolated.
      Rust, .NET, Docker, and CI environments.
    - Wrap sandbox execution and redaction helpers with configuration sourced
      from `zscripts.config`.
-4. **Interface Layer** (`zscripts.cli`, `cli.py`)
+4. **Interface Layer** (`zscripts.cli`, `cli.py`, `zscripts.interfaces`)
    - Presents a user-friendly CLI with subcommands such as `collect`, `parse`,
      `summarize`, and `guardrails` that reuse the application service layer.
+
+## Repository Review Vertical Slice
+
+The experimental workspace follows the same dependency direction:
+
+```mermaid
+flowchart LR
+    A["Read-only repository discovery"] --> B["Python AST analyzer"]
+    B --> C["Versioned evidence dataclasses"]
+    C --> D["Atomic SQLite snapshot store"]
+    D --> E["RepositoryReviewService"]
+    E --> F["Experimental CLI"]
+    E --> G["Loopback FastAPI interface"]
+    G --> H["React Overview and Symbols workspace"]
+```
+
+- `zscripts.domain.repository_review` owns immutable evidence and version
+  contracts.
+- `zscripts.infrastructure.repository_discovery` and `python_analyzer` treat the
+  selected repository as untrusted input and never import it.
+- `zscripts.infrastructure.snapshot_store` persists only completed evidence
+  atomically outside the repository.
+- `zscripts.application.repository_review` is the single orchestration/query
+  surface used by CLI and API.
+- `zscripts.interfaces.workspace_api` is a same-origin, localhost-only transport.
+- `workspace-ui` renders evidence; it does not analyze source or construct SQL.
+
+Generated frontend assets are copied into package data during the quality/build
+flow. The existing zipapp remains a lightweight CLI artifact; the workspace is
+distributed and smoked through the wheel.
 
 ## Legacy Helper Boundary
 

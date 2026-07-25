@@ -713,6 +713,15 @@ runs/
 
 z-nobo-reports/
 .pytest-tmp/
+zscripts/workspace_static/
+
+# Keep the experimental workspace's reviewed manifests and analyzer fixtures tracked.
+!workspace-ui/package.json
+!workspace-ui/tsconfig.json
+!workspace-ui/.prettierrc.json
+!tests/fixtures/repository_review/ordinary/
+!tests/fixtures/repository_review/ordinary/pkg/
+!tests/fixtures/repository_review/ordinary/pkg/*.py
 
 # Keep release documentation fixtures tracked.
 !examples/raw_to_report/raw.log

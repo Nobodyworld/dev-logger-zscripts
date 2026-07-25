@@ -50,6 +50,8 @@ The hosted quality gate includes:
 - binary-file scanning;
 - pytest with an enforced coverage threshold;
 - editable-install, wheel, zipapp, and diagnostics smoke tests.
+- hostile repository fixtures, read-only/cancellation/rollback contracts,
+  localhost API validation, frontend tests, and packaged-workspace smoke tests.
 
 The local `release` profile additionally validates report redaction, requires
 Gitleaks scans of the tracked worktree and repository history, and verifies a
@@ -57,6 +59,28 @@ clean worktree. GitHub secret scanning, push protection,
 Dependabot alerts and security updates, CodeQL where eligible, and private
 vulnerability reporting should be enabled or verified immediately after the
 repository becomes public.
+
+## Repository-review threat model
+
+The experimental workspace treats every analyzed repository as hostile input.
+It uses bounded byte reads and Python AST parsing only, never imports target
+modules, never runs framework setup, and never derives a shell command from
+repository contents. Read-only Git metadata queries use a fixed no-shell
+allowlist with hooks and optional locks disabled. Symlinks are excluded.
+
+The only Bandit exemptions added for this slice cover that fixed Git invocation
+and SQL query fragments assembled from fixed, allowlisted column/direction
+tokens; all user values are bound parameters. Tests exercise inert fixtures that
+would write files, run commands, open sockets, perform HTTP requests, read
+environment secrets, invoke framework setup, and raise at import time if the
+analyzer ever executed them.
+
+The application stores metadata outside the repository and binds the workspace
+only to `127.0.0.1` with same-origin routes and restrictive browser headers.
+Source excerpts are explicit, bounded, hash-verified, never persisted, and may
+still contain sensitive source text in the local browser. Static analysis does
+not establish that a repository is safe. See
+[the repository-review privacy contract](docs/repository-review.md#read-only-and-privacy-contract).
 
 ## Responsible Disclosure
 

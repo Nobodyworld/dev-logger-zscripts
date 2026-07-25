@@ -191,7 +191,7 @@ def create_workspace_app(
     app = FastAPI(
         title="Zscripts Experimental Repository Review API",
         version="0.1-experimental",
-        docs_url="/api/docs",
+        docs_url=None,
         redoc_url=None,
         openapi_url="/api/openapi.json",
         lifespan=lifespan,
@@ -381,7 +381,7 @@ def create_workspace_app(
 
     @app.get("/{route:path}", include_in_schema=False)
     def workspace_route(route: str) -> Any:
-        if route == "api" or route.startswith("api/"):
+        if route == "redoc" or route == "api" or route.startswith("api/"):
             raise HTTPException(status_code=404, detail="API route was not found.")
         index = static_root / "index.html"
         if not index.is_file():

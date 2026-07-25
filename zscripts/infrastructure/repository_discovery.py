@@ -414,7 +414,13 @@ class RepositoryDiscovery:
         dirty = False
         staged = False
         untracked = False
-        identity_material: object = {"kind": "directory", "name": root.name.casefold()}
+        identity_material: object = {
+            "kind": "directory",
+            "name": root.name.casefold(),
+            "path_digest": hashlib.sha256(
+                os.path.normcase(os.path.normpath(str(root))).encode("utf-8")
+            ).hexdigest(),
+        }
         if git_root is not None:
             branch = self._optional_git(git_root, "branch", "--show-current") or None
             git_sha = self._optional_git(git_root, "rev-parse", "HEAD") or None

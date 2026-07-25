@@ -34,6 +34,11 @@ def test_workspace_api_end_to_end_and_security_headers(tmp_path: Path) -> None:
     app = create_workspace_app(service=service)
 
     with TestClient(app) as client:
+        assert client.get("/api/docs").status_code == 404
+        assert client.get("/redoc").status_code == 404
+        openapi = client.get("/api/openapi.json")
+        assert openapi.status_code == 200
+        assert openapi.json()["info"]["title"] == "Zscripts Experimental Repository Review API"
         health = client.get("/api/health")
         assert health.status_code == 200
         assert health.headers["content-security-policy"].startswith("default-src 'self'")

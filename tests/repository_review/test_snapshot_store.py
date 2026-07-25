@@ -13,6 +13,43 @@ from zscripts.infrastructure.snapshot_store import DATABASE_SCHEMA_VERSION, Snap
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "repository_review"
 
 
+def test_same_named_non_git_repositories_keep_distinct_identity_and_snapshots(
+    tmp_path: Path,
+) -> None:
+    first_repository = tmp_path / "first" / "shared-name"
+    second_repository = tmp_path / "second" / "shared-name"
+    shutil.copytree(FIXTURES / "ordinary", first_repository)
+    shutil.copytree(FIXTURES / "ordinary", second_repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+
+    first = service.analyze(first_repository)
+    repeated_first = service.analyze(first_repository)
+    second = service.analyze(second_repository)
+
+    assert first.repository.repository_id == repeated_first.repository.repository_id
+    assert first.repository.repository_id != second.repository.repository_id
+    assert {item.repository_id for item in service.list_repositories()} == {
+        first.repository.repository_id,
+        second.repository.repository_id,
+    }
+    assert {item.snapshot_id for item in service.list_snapshots(first.repository.repository_id)} == {
+        first.snapshot.snapshot_id
+    }
+    assert {item.snapshot_id for item in service.list_snapshots(second.repository.repository_id)} == {
+        second.snapshot.snapshot_id
+    }
+
+    public_payloads = (
+        first.canonical_bytes(),
+        second.canonical_bytes(),
+        str(service.overview(first.snapshot.snapshot_id)).encode(),
+        str(service.overview(second.snapshot.snapshot_id)).encode(),
+    )
+    for path in (first_repository.resolve(), second_repository.resolve()):
+        encoded_path = str(path).encode()
+        assert all(encoded_path not in payload for payload in public_payloads)
+
+
 def test_snapshot_round_trip_filters_and_source_evidence(tmp_path: Path) -> None:
     repository = tmp_path / "ordinary"
     shutil.copytree(FIXTURES / "ordinary", repository)

@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 
 import { ApiError, getSource, getSymbols } from "../api";
 import { SearchIcon, SortIcon } from "../icons";
@@ -35,6 +35,14 @@ export function SymbolsView({ snapshotId }: SymbolsViewProps) {
     const [source, setSource] = useState<SourceEvidence | null>(null);
     const [sourceLoading, setSourceLoading] = useState(false);
     const [sourceError, setSourceError] = useState<string | null>(null);
+    const sourceRequestGeneration = useRef(0);
+
+    useEffect(
+        () => () => {
+            sourceRequestGeneration.current += 1;
+        },
+        [],
+    );
 
     useEffect(() => {
         let active = true;
@@ -69,20 +77,32 @@ export function SymbolsView({ snapshotId }: SymbolsViewProps) {
     }, [deferredSearch, direction, kind, module, page, snapshotId, sort, visibility]);
 
     const selectSymbol = (symbol: SymbolRecord) => {
+        const requestGeneration = sourceRequestGeneration.current + 1;
+        sourceRequestGeneration.current = requestGeneration;
         setSelected(symbol);
         setSource(null);
         setSourceError(null);
         setSourceLoading(true);
         getSource(snapshotId, symbol.relative_path, symbol.start_line, symbol.end_line)
-            .then(setSource)
-            .catch((caught: unknown) => {
-                setSourceError(
-                    caught instanceof ApiError
-                        ? caught.message
-                        : "Source evidence could not be loaded.",
-                );
+            .then((result) => {
+                if (sourceRequestGeneration.current === requestGeneration) {
+                    setSource(result);
+                }
             })
-            .finally(() => setSourceLoading(false));
+            .catch((caught: unknown) => {
+                if (sourceRequestGeneration.current === requestGeneration) {
+                    setSourceError(
+                        caught instanceof ApiError
+                            ? caught.message
+                            : "Source evidence could not be loaded.",
+                    );
+                }
+            })
+            .finally(() => {
+                if (sourceRequestGeneration.current === requestGeneration) {
+                    setSourceLoading(false);
+                }
+            });
     };
 
     const changeSort = (field: SortField) => {
@@ -255,8 +275,11 @@ export function SymbolsView({ snapshotId }: SymbolsViewProps) {
                     loading={sourceLoading}
                     error={sourceError}
                     onClose={() => {
+                        sourceRequestGeneration.current += 1;
                         setSelected(null);
                         setSource(null);
+                        setSourceError(null);
+                        setSourceLoading(false);
                     }}
                 />
             ) : null}

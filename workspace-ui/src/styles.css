@@ -293,17 +293,22 @@ select {
     font-size: 12px;
 }
 
-.scan-progress__track {
+.scan-progress progress {
+    width: 100%;
     height: 3px;
-    overflow: hidden;
+    border: 0;
+    appearance: none;
+    background: #e2e7ec;
+    color: var(--teal);
+}
+
+.scan-progress progress::-webkit-progress-bar {
     background: #e2e7ec;
 }
 
-.scan-progress__track span {
-    display: block;
-    height: 100%;
+.scan-progress progress::-webkit-progress-value,
+.scan-progress progress::-moz-progress-bar {
     background: var(--teal);
-    transition: width 180ms ease;
 }
 
 .global-error,

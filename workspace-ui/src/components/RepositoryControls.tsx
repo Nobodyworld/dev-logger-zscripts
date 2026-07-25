@@ -23,6 +23,12 @@ export function RepositoryControls({
     onCancel,
 }: RepositoryControlsProps) {
     const running = job?.state === "started";
+    const progressValue =
+        job && job.total > 0
+            ? Math.min(job.completed, job.total)
+            : job && job.state !== "started"
+              ? 1
+              : undefined;
 
     const submit = (event: FormEvent) => {
         event.preventDefault();
@@ -84,18 +90,11 @@ export function RepositoryControls({
             ) : null}
             {job ? (
                 <div className="scan-progress" role="status" aria-live="polite">
-                    <div className="scan-progress__track">
-                        <span
-                            style={{
-                                width:
-                                    job.total > 0
-                                        ? `${Math.min(100, Math.round((job.completed / job.total) * 100))}%`
-                                        : job.state === "started"
-                                          ? "12%"
-                                          : "100%",
-                            }}
-                        />
-                    </div>
+                    <progress
+                        max={Math.max(job.total, 1)}
+                        value={progressValue}
+                        aria-label="Repository scan progress"
+                    />
                     <span>
                         {job.state === "started"
                             ? `${job.phase}: ${job.completed}/${job.total || "…"}`

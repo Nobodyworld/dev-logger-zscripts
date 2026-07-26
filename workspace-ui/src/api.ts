@@ -1,6 +1,11 @@
 import type {
     AnalysisJob,
     Overview,
+    CycleList,
+    GraphMode,
+    GraphNodePage,
+    RelationshipNeighborhood,
+    RelationshipSummary,
     Repository,
     Snapshot,
     SourceEvidence,
@@ -105,5 +110,73 @@ export function getSource(
     });
     return request<SourceEvidence>(
         `/api/snapshots/${encodeURIComponent(snapshotId)}/source?${parameters.toString()}`,
+    );
+}
+
+export function getRelationshipSummary(
+    snapshotId: string,
+    maxNodes = 200,
+): Promise<RelationshipSummary> {
+    const parameters = new URLSearchParams({ max_nodes: String(maxNodes) });
+    return request<RelationshipSummary>(
+        `/api/snapshots/${encodeURIComponent(snapshotId)}/relationships/summary?${parameters.toString()}`,
+    );
+}
+
+export function getRelationshipNodes(
+    snapshotId: string,
+    query: {
+        mode: GraphMode;
+        search?: string;
+        page?: number;
+        pageSize?: number;
+        nodeIds?: string[];
+    },
+): Promise<GraphNodePage> {
+    const parameters = new URLSearchParams({
+        mode: query.mode,
+        page: String(query.page ?? 1),
+        page_size: String(query.pageSize ?? 100),
+    });
+    if (query.search) parameters.set("search", query.search);
+    for (const nodeId of query.nodeIds ?? []) parameters.append("node_ids", nodeId);
+    return request<GraphNodePage>(
+        `/api/snapshots/${encodeURIComponent(snapshotId)}/relationships/nodes?${parameters.toString()}`,
+    );
+}
+
+export function getRelationshipNeighborhood(
+    snapshotId: string,
+    query: {
+        focusId: string;
+        mode: GraphMode;
+        depth: number;
+        relationshipType: string;
+        resolutionStatus: string;
+        maxNodes: number;
+        maxEdges: number;
+    },
+): Promise<RelationshipNeighborhood> {
+    const parameters = new URLSearchParams({
+        focus_id: query.focusId,
+        mode: query.mode,
+        depth: String(query.depth),
+        max_nodes: String(query.maxNodes),
+        max_edges: String(query.maxEdges),
+    });
+    if (query.relationshipType) {
+        parameters.set("relationship_type", query.relationshipType);
+    }
+    if (query.resolutionStatus) {
+        parameters.set("resolution_status", query.resolutionStatus);
+    }
+    return request<RelationshipNeighborhood>(
+        `/api/snapshots/${encodeURIComponent(snapshotId)}/relationships/neighborhood?${parameters.toString()}`,
+    );
+}
+
+export function getCycles(snapshotId: string): Promise<CycleList> {
+    return request<CycleList>(
+        `/api/snapshots/${encodeURIComponent(snapshotId)}/cycles?max_results=100`,
     );
 }

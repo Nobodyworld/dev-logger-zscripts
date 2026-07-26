@@ -1,7 +1,7 @@
 # Zscripts 0.2 Repository Review Workspace Roadmap
 
-Status: approved direction; Phase 1 Repository Review MVP implemented for review
-under `PUBLIC BETA — ACTIVE DEVELOPMENT`.
+Status: approved direction; Phases 1 and 2 implemented for review under
+`PUBLIC BETA — ACTIVE DEVELOPMENT`.
 
 Umbrella issue: #76
 
@@ -641,6 +641,8 @@ Exit criteria:
 ### Phase 2 — Relationships
 
 Issue: #78
+
+Status: implemented for review.
 
 Deliver:
 

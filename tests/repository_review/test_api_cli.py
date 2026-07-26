@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import sqlite3
 import time
 from pathlib import Path
 
@@ -97,6 +98,205 @@ def test_validation_is_generic_and_does_not_reflect_input(tmp_path: Path) -> Non
     assert response.status_code == 422
     assert response.json() == {"detail": "Request validation failed."}
     assert secret_path not in response.text
+
+
+def test_relationship_api_is_bounded_typed_and_path_redacted(tmp_path: Path) -> None:
+    repository = tmp_path / "relationships"
+    shutil.copytree(FIXTURES / "relationships", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    snapshot_id = evidence.snapshot.snapshot_id
+    app = create_workspace_app(service=service)
+
+    with TestClient(app) as client:
+        summary = client.get(
+            f"/api/snapshots/{snapshot_id}/relationships/summary",
+            params={"max_nodes": 200},
+        )
+        assert summary.status_code == 200
+        summary_payload = summary.json()
+        assert summary_payload["supported"] is True
+        assert summary_payload["relationship_types"]["imports"] >= 1
+        assert summary_payload["resolution_statuses"]["ambiguous"] >= 1
+        module = next(
+            item
+            for item in summary_payload["nodes"]
+            if item["node_type"] == "module" and item["qualified_name"] == "app.cycle_a"
+        )
+        bounded_summary = client.get(
+            f"/api/snapshots/{snapshot_id}/relationships/summary",
+            params={"max_nodes": 2},
+        ).json()
+        assert bounded_summary["truncated"] is True
+        assert len(bounded_summary["nodes"]) == 2
+        assert len(bounded_summary["fan_in"]) <= 2
+        assert len(bounded_summary["fan_out"]) <= 2
+        assert len(bounded_summary["inheritance_depth"]) <= 2
+
+        page = client.get(
+            f"/api/snapshots/{snapshot_id}/relationships",
+            params={"relationship_type": "imports", "page": 1, "page_size": 3},
+        )
+        assert page.status_code == 200
+        assert page.json()["page_size"] == 3
+        assert page.json()["total"] >= 3
+
+        neighborhood = client.get(
+            f"/api/snapshots/{snapshot_id}/relationships/neighborhood",
+            params={
+                "mode": "modules",
+                "focus_id": module["node_id"],
+                "depth": 1,
+                "max_nodes": 3,
+                "max_edges": 3,
+            },
+        )
+        assert neighborhood.status_code == 200
+        neighborhood_payload = neighborhood.json()
+        assert neighborhood_payload["focus_id"] == module["node_id"]
+        assert len(neighborhood_payload["nodes"]) <= 3
+        assert len(neighborhood_payload["relationships"]) <= 3
+
+        cycles = client.get(
+            f"/api/snapshots/{snapshot_id}/cycles",
+            params={"relationship_type": "imports", "max_results": 10},
+        )
+        assert cycles.status_code == 200
+        assert len(cycles.json()["items"]) == 1
+        assert len(cycles.json()["items"][0]["member_node_ids"]) == 2
+
+        invalid_mode = client.get(
+            f"/api/snapshots/{snapshot_id}/relationships/neighborhood",
+            params={"mode": "global", "focus_id": module["node_id"]},
+        )
+        assert invalid_mode.status_code == 422
+        assert invalid_mode.json() == {"detail": "Request validation failed."}
+        invalid_limit = client.get(
+            f"/api/snapshots/{snapshot_id}/relationships/summary",
+            params={"max_nodes": 0},
+        )
+        assert invalid_limit.status_code == 422
+        assert invalid_limit.json() == {"detail": "Request validation failed."}
+        assert str(repository.resolve()) not in json.dumps(
+            {
+                "summary": summary_payload,
+                "page": page.json(),
+                "neighborhood": neighborhood_payload,
+                "cycles": cycles.json(),
+            }
+        )
+
+
+def test_relationship_node_query_reaches_omitted_nodes_and_cycle_members(tmp_path: Path) -> None:
+    repository = tmp_path / "large-graph"
+    repository.mkdir()
+    for index in range(205):
+        (repository / f"module_{index:03}.py").write_text(
+            f"class Item{index:03}: pass\n",
+            encoding="utf-8",
+        )
+    (repository / "zcycle_a.py").write_text("import zcycle_b\n", encoding="utf-8")
+    (repository / "zcycle_b.py").write_text("import zcycle_a\n", encoding="utf-8")
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    snapshot_id = evidence.snapshot.snapshot_id
+    app = create_workspace_app(service=service)
+
+    with TestClient(app) as client:
+        summary = client.get(
+            f"/api/snapshots/{snapshot_id}/relationships/summary",
+            params={"max_nodes": 200},
+        ).json()
+        assert summary["node_count"] > 200
+        assert all(item["qualified_name"] != "zcycle_a" for item in summary["nodes"])
+
+        initial = client.get(
+            f"/api/snapshots/{snapshot_id}/relationships/nodes",
+            params={"mode": "modules", "page": 1, "page_size": 10},
+        )
+        assert initial.status_code == 200
+        assert initial.json()["total"] == 207
+        assert initial.json()["truncated"] is True
+
+        search = client.get(
+            f"/api/snapshots/{snapshot_id}/relationships/nodes",
+            params={"mode": "modules", "search": "ZCYCLE_A", "page_size": 10},
+        )
+        assert search.status_code == 200
+        assert search.json()["total"] == 1
+        omitted = search.json()["items"][0]
+        assert omitted["qualified_name"] == "zcycle_a"
+
+        neighborhood = client.get(
+            f"/api/snapshots/{snapshot_id}/relationships/neighborhood",
+            params={"mode": "modules", "focus_id": omitted["node_id"], "depth": 1},
+        )
+        assert neighborhood.status_code == 200
+        assert neighborhood.json()["focus_id"] == omitted["node_id"]
+        assert {item["qualified_name"] for item in neighborhood.json()["nodes"]} == {
+            "zcycle_a",
+            "zcycle_b",
+        }
+
+        cycle = client.get(
+            f"/api/snapshots/{snapshot_id}/cycles",
+            params={"relationship_type": "imports"},
+        ).json()["items"][0]
+        member_id = cycle["member_node_ids"][0]
+        assert all(item["node_id"] != member_id for item in summary["nodes"])
+        member = client.get(
+            f"/api/snapshots/{snapshot_id}/relationships/nodes",
+            params=[("mode", "modules"), ("node_ids", member_id), ("page_size", "10")],
+        )
+        assert member.status_code == 200
+        assert member.json()["total"] == 1
+        assert member.json()["items"][0]["node_id"] == member_id
+        assert str(repository.resolve()) not in json.dumps(
+            {"search": search.json(), "member": member.json(), "neighborhood": neighborhood.json()}
+        )
+
+
+def test_relationship_api_handles_old_snapshot_explicitly(tmp_path: Path) -> None:
+    repository = tmp_path / "ordinary"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    with sqlite3.connect(service.store.database_path) as connection:
+        connection.execute(
+            "UPDATE snapshots SET analyzer_version = '1', schema_version = '1' WHERE snapshot_id = ?",
+            (evidence.snapshot.snapshot_id,),
+        )
+        connection.execute(
+            "DELETE FROM relationships WHERE snapshot_id = ?",
+            (evidence.snapshot.snapshot_id,),
+        )
+        connection.execute(
+            "DELETE FROM graph_nodes WHERE snapshot_id = ?",
+            (evidence.snapshot.snapshot_id,),
+        )
+    app = create_workspace_app(service=service)
+
+    with TestClient(app) as client:
+        summary = client.get(f"/api/snapshots/{evidence.snapshot.snapshot_id}/relationships/summary")
+        relationships = client.get(f"/api/snapshots/{evidence.snapshot.snapshot_id}/relationships")
+        nodes = client.get(
+            f"/api/snapshots/{evidence.snapshot.snapshot_id}/relationships/nodes",
+            params={"mode": "modules"},
+        )
+        cycles = client.get(f"/api/snapshots/{evidence.snapshot.snapshot_id}/cycles")
+
+    assert summary.status_code == 200
+    assert summary.json()["supported"] is False
+    assert relationships.json()["items"] == []
+    assert nodes.json() == {
+        "supported": False,
+        "items": [],
+        "total": 0,
+        "page": 1,
+        "page_size": 100,
+        "truncated": False,
+    }
+    assert cycles.json()["items"] == []
 
 
 def test_cli_and_api_share_canonical_snapshot_contract(

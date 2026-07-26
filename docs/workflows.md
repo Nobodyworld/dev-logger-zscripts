@@ -72,9 +72,11 @@ permission errors before any partial files are left behind.
 2. Start `zscripts workspace` and open `http://127.0.0.1:8765`.
 3. Select a local Python repository and begin analysis.
 4. Watch bounded progress or cancel between files.
-5. Review counts and parse gaps in Overview.
+5. Review counts, parse gaps, and factual relationship totals in Overview.
 6. Search/filter/sort Symbols and request a bounded source excerpt when needed.
-7. Reopen the completed snapshot from the recent-repository/snapshot controls.
+7. Explore a focused import, package, containment, inheritance, or type graph;
+   inspect cycles, incoming/outgoing edges, and source evidence.
+8. Reopen the completed snapshot from the recent-repository/snapshot controls.
 
 No repository command, framework setup, migration, hook, plugin, or analyzed
 Python module is executed. Use the experimental CLI when a deterministic JSON

@@ -19,6 +19,9 @@ from zscripts.domain.repository_review import (
     SCHEMA_VERSION,
     AnalysisEvidence,
     AnalysisState,
+    CycleGroupRecord,
+    GraphNodeRecord,
+    RelationshipRecord,
     RepositoryRecord,
     ScanLimits,
     SnapshotRecord,
@@ -26,6 +29,11 @@ from zscripts.domain.repository_review import (
     stable_digest,
 )
 from zscripts.infrastructure.python_analyzer import PythonAnalyzer
+from zscripts.infrastructure.relationship_analysis import (
+    RelationshipAnalyzer,
+    bounded_neighborhood,
+    graph_metrics,
+)
 from zscripts.infrastructure.repository_discovery import (
     AnalysisCancelled,
     RepositoryDiscovery,
@@ -92,6 +100,7 @@ class RepositoryReviewService:
         store: SnapshotStore | None = None,
         discovery: RepositoryDiscovery | None = None,
         analyzer: PythonAnalyzer | None = None,
+        relationship_analyzer: RelationshipAnalyzer | None = None,
     ) -> None:
         self.limits = limits or ScanLimits()
         self.store = store or SnapshotStore(data_directory)
@@ -100,6 +109,7 @@ class RepositoryReviewService:
             configured_excludes=configured_excludes,
         )
         self.analyzer = analyzer or PythonAnalyzer()
+        self.relationship_analyzer = relationship_analyzer or RelationshipAnalyzer()
 
     def analyze(
         self,
@@ -156,6 +166,14 @@ class RepositoryReviewService:
             )
             if cancellation():
                 raise AnalysisCancelled("Repository analysis was cancelled.")
+            report("relationships", 0, len(analysis.modules), "")
+            relationship_analysis = self.relationship_analyzer.analyze(
+                analysis.modules,
+                analysis.symbols,
+                analysis.type_references,
+            )
+            if cancellation():
+                raise AnalysisCancelled("Repository analysis was cancelled.")
             report("storage", len(analysis.files), len(analysis.files), "")
             diagnostics = tuple(
                 sorted(
@@ -170,6 +188,9 @@ class RepositoryReviewService:
                 modules=analysis.modules,
                 symbols=analysis.symbols,
                 diagnostics=diagnostics,
+                graph_nodes=relationship_analysis.nodes,
+                relationships=relationship_analysis.relationships,
+                cycles=relationship_analysis.cycles,
                 truncated=discovery.truncated,
             )
             completed_at = _utc_now()
@@ -198,6 +219,9 @@ class RepositoryReviewService:
                 modules=analysis.modules,
                 symbols=analysis.symbols,
                 diagnostics=diagnostics,
+                graph_nodes=relationship_analysis.nodes,
+                relationships=relationship_analysis.relationships,
+                cycles=relationship_analysis.cycles,
             )
             self.store.save_completed_snapshot(job_id, evidence)
             report(
@@ -239,6 +263,7 @@ class RepositoryReviewService:
         snapshot = self.store.get_snapshot(snapshot_id)
         repository = self.store.get_snapshot_repository(snapshot_id)
         counts = self.store.overview_counts(snapshot_id)
+        relationship_counts = self.store.relationship_overview_counts(snapshot_id)
         return {
             "repository": _public_repository(repository),
             "snapshot": _public_snapshot(snapshot),
@@ -251,6 +276,7 @@ class RepositoryReviewService:
                 "functions": counts.get("function", 0),
                 "methods": counts.get("method", 0),
                 "parse_gaps": snapshot.parse_gap_count,
+                **relationship_counts,
             },
         }
 
@@ -284,6 +310,223 @@ class RepositoryReviewService:
 
     def diagnostics(self, snapshot_id: str) -> tuple[object, ...]:
         return self.store.list_diagnostics(snapshot_id)
+
+    def relationship_summary(
+        self,
+        snapshot_id: str,
+        *,
+        max_nodes: int = 200,
+    ) -> dict[str, object]:
+        if max_nodes < 1 or max_nodes > 500:
+            raise ValueError("Relationship node limit is outside the supported range.")
+        snapshot = self.store.get_snapshot(snapshot_id)
+        if not _version_at_least(snapshot.schema_version, 2):
+            return {
+                "supported": False,
+                "analyzer_version": snapshot.analyzer_version,
+                "schema_version": snapshot.schema_version,
+                "node_count": 0,
+                "relationship_count": 0,
+                "cycle_count": 0,
+                "largest_cycle_size": 0,
+                "truncated": False,
+                "nodes": [],
+                "relationship_types": {},
+                "resolution_statuses": {},
+                "fan_in": {},
+                "fan_out": {},
+                "inheritance_depth": {},
+            }
+        nodes = self.store.list_graph_nodes(snapshot_id)
+        relationships = self.store.all_relationships(snapshot_id)
+        cycles = self.store.list_cycles(snapshot_id, limit=200)
+        metrics = graph_metrics(nodes, relationships)
+        visible_nodes = nodes[:max_nodes]
+        visible_node_ids = {item.node_id for item in visible_nodes}
+        type_counts: dict[str, int] = {}
+        status_counts: dict[str, int] = {}
+        for relationship in relationships:
+            type_counts[relationship.relationship_type] = (
+                type_counts.get(relationship.relationship_type, 0) + 1
+            )
+            status_counts[relationship.resolution_status] = (
+                status_counts.get(relationship.resolution_status, 0) + 1
+            )
+        return {
+            "supported": True,
+            "analyzer_version": snapshot.analyzer_version,
+            "schema_version": snapshot.schema_version,
+            "node_count": len(nodes),
+            "relationship_count": len(relationships),
+            "cycle_count": len(cycles),
+            "largest_cycle_size": max((len(item.member_node_ids) for item in cycles), default=0),
+            "truncated": len(nodes) > max_nodes,
+            "nodes": [public_graph_node(item) for item in visible_nodes],
+            "relationship_types": dict(sorted(type_counts.items())),
+            "resolution_statuses": dict(sorted(status_counts.items())),
+            "fan_in": dict(item for item in metrics.fan_in if item[0] in visible_node_ids),
+            "fan_out": dict(item for item in metrics.fan_out if item[0] in visible_node_ids),
+            "inheritance_depth": dict(
+                item for item in metrics.inheritance_depth if item[0] in visible_node_ids
+            ),
+        }
+
+    def relationships(
+        self,
+        snapshot_id: str,
+        *,
+        relationship_type: str | None = None,
+        resolution_status: str | None = None,
+        page: int = 1,
+        page_size: int = 100,
+    ) -> dict[str, object]:
+        snapshot = self.store.get_snapshot(snapshot_id)
+        if not _version_at_least(snapshot.schema_version, 2):
+            return {
+                "supported": False,
+                "items": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+            }
+        result = self.store.list_relationships(
+            snapshot_id,
+            relationship_type=relationship_type,
+            resolution_status=resolution_status,
+            page=page,
+            page_size=page_size,
+        )
+        return {
+            "supported": True,
+            "items": [public_relationship(item) for item in result.items],
+            "total": result.total,
+            "page": result.page,
+            "page_size": result.page_size,
+        }
+
+    def relationship_nodes(
+        self,
+        snapshot_id: str,
+        *,
+        mode: str,
+        search: str = "",
+        node_ids: tuple[str, ...] = (),
+        page: int = 1,
+        page_size: int = 100,
+    ) -> dict[str, object]:
+        snapshot = self.store.get_snapshot(snapshot_id)
+        if not _version_at_least(snapshot.schema_version, 2):
+            return {
+                "supported": False,
+                "items": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+                "truncated": False,
+            }
+        result = self.store.query_graph_nodes(
+            snapshot_id,
+            mode=mode,
+            search=search,
+            node_ids=node_ids,
+            page=page,
+            page_size=page_size,
+        )
+        return {
+            "supported": True,
+            "items": [public_graph_node(item) for item in result.items],
+            "total": result.total,
+            "page": result.page,
+            "page_size": result.page_size,
+            "truncated": result.page * result.page_size < result.total,
+        }
+
+    def relationship_neighborhood(
+        self,
+        snapshot_id: str,
+        *,
+        focus_id: str,
+        mode: str,
+        depth: int,
+        max_nodes: int,
+        max_edges: int,
+        resolution_status: str | None = None,
+        relationship_type: str | None = None,
+    ) -> dict[str, object]:
+        if mode not in {"modules", "packages", "inheritance", "containment", "types"}:
+            raise ValueError("Unsupported relationship graph mode.")
+        if depth < 1 or depth > 3:
+            raise ValueError("Relationship depth is outside the supported range.")
+        if max_nodes < 1 or max_nodes > 100 or max_edges < 1 or max_edges > 200:
+            raise ValueError("Relationship graph limits are outside the supported range.")
+        snapshot = self.store.get_snapshot(snapshot_id)
+        if not _version_at_least(snapshot.schema_version, 2):
+            return {
+                "supported": False,
+                "focus_id": focus_id,
+                "mode": mode,
+                "depth": depth,
+                "nodes": [],
+                "relationships": [],
+                "distances": {},
+                "truncated": False,
+            }
+        nodes = self.store.list_graph_nodes(snapshot_id)
+        relationships = self.store.all_relationships(snapshot_id)
+        nodes, relationships = _select_graph_mode(nodes, relationships, mode)
+        if relationship_type is not None:
+            relationships = tuple(
+                item for item in relationships if item.relationship_type == relationship_type
+            )
+        if resolution_status is not None:
+            relationships = tuple(
+                item for item in relationships if item.resolution_status == resolution_status
+            )
+        try:
+            result = bounded_neighborhood(
+                nodes,
+                relationships,
+                focus_id=focus_id,
+                depth=depth,
+                max_nodes=max_nodes,
+                max_edges=max_edges,
+            )
+        except KeyError as exc:
+            raise ValueError("Focus node is not available in the selected graph mode.") from exc
+        return {
+            "supported": True,
+            "focus_id": focus_id,
+            "mode": mode,
+            "depth": depth,
+            "nodes": [public_graph_node(item) for item in result.nodes],
+            "relationships": [public_relationship(item) for item in result.relationships],
+            "distances": dict(result.distances),
+            "truncated": result.truncated,
+        }
+
+    def cycles(
+        self,
+        snapshot_id: str,
+        *,
+        relationship_type: str | None = None,
+        max_results: int = 100,
+    ) -> dict[str, object]:
+        snapshot = self.store.get_snapshot(snapshot_id)
+        if not _version_at_least(snapshot.schema_version, 2):
+            return {"supported": False, "items": [], "truncated": False}
+        requested_limit = max_results + 1
+        if max_results < 1 or max_results > 100:
+            raise ValueError("Cycle result limit is outside the supported range.")
+        items = self.store.list_cycles(
+            snapshot_id,
+            relationship_type=relationship_type,
+            limit=requested_limit,
+        )
+        return {
+            "supported": True,
+            "items": [public_cycle(item) for item in items[:max_results]],
+            "truncated": len(items) > max_results,
+        }
 
     def read_source(
         self,
@@ -460,6 +703,9 @@ def _snapshot_identifier(
     modules: Sequence[object],
     symbols: Sequence[SymbolRecord],
     diagnostics: Sequence[object],
+    graph_nodes: Sequence[GraphNodeRecord],
+    relationships: Sequence[RelationshipRecord],
+    cycles: Sequence[CycleGroupRecord],
     truncated: bool,
 ) -> str:
     return stable_digest(
@@ -475,6 +721,9 @@ def _snapshot_identifier(
             "modules": [getattr(item, "module_id") for item in modules],
             "symbols": [item.symbol_id for item in symbols],
             "diagnostics": [getattr(item, "diagnostic_id") for item in diagnostics],
+            "graph_nodes": [item.node_id for item in graph_nodes],
+            "relationships": [item.relationship_id for item in relationships],
+            "cycles": [item.cycle_id for item in cycles],
             "truncated": truncated,
         },
     )
@@ -555,6 +804,156 @@ def public_symbol(symbol: SymbolRecord) -> dict[str, object]:
     }
 
 
+def public_graph_node(node: GraphNodeRecord) -> dict[str, object]:
+    """Return a graph node without local-only repository state."""
+
+    return {
+        "node_id": node.node_id,
+        "node_type": node.node_type,
+        "display_name": node.display_name,
+        "qualified_name": node.qualified_name,
+        "relative_path": node.relative_path,
+        "symbol_kind": node.symbol_kind,
+    }
+
+
+def public_relationship(relationship: RelationshipRecord) -> dict[str, object]:
+    """Return canonical relationship evidence using repository-relative locations."""
+
+    return {
+        "relationship_id": relationship.relationship_id,
+        "relationship_type": relationship.relationship_type,
+        "source_id": relationship.source_id,
+        "target_id": relationship.target_id,
+        "unresolved_target": relationship.unresolved_target,
+        "resolution_status": relationship.resolution_status,
+        "confidence": relationship.confidence,
+        "relative_path": relationship.relative_path,
+        "line": relationship.line,
+        "column": relationship.column,
+        "analyzer_version": relationship.analyzer_version,
+        "evidence": relationship.evidence,
+    }
+
+
+def public_cycle(cycle: CycleGroupRecord) -> dict[str, object]:
+    """Return deterministic cycle membership and edge evidence."""
+
+    return {
+        "cycle_id": cycle.cycle_id,
+        "relationship_type": cycle.relationship_type,
+        "member_node_ids": cycle.member_node_ids,
+        "edge_ids": cycle.edge_ids,
+    }
+
+
+def _select_graph_mode(
+    nodes: Sequence[GraphNodeRecord],
+    relationships: Sequence[RelationshipRecord],
+    mode: str,
+) -> tuple[tuple[GraphNodeRecord, ...], tuple[RelationshipRecord, ...]]:
+    if mode == "modules":
+        selected_nodes = tuple(item for item in nodes if item.node_type == "module")
+        selected_edges = tuple(item for item in relationships if item.relationship_type == "imports")
+    elif mode == "packages":
+        selected_nodes, selected_edges = _package_dependency_graph(nodes, relationships)
+    elif mode == "inheritance":
+        selected_nodes = tuple(
+            item for item in nodes if item.node_type == "symbol" and item.symbol_kind == "class"
+        )
+        selected_edges = tuple(item for item in relationships if item.relationship_type == "inherits")
+    elif mode == "types":
+        selected_nodes = tuple(item for item in nodes if item.node_type == "symbol")
+        selected_edges = tuple(item for item in relationships if item.relationship_type == "references-type")
+    else:
+        selected_nodes = tuple(nodes)
+        selected_edges = tuple(item for item in relationships if item.relationship_type == "contains")
+    node_ids = {item.node_id for item in selected_nodes}
+    return (
+        tuple(sorted(selected_nodes, key=lambda item: (item.qualified_name, item.node_id))),
+        tuple(
+            sorted(
+                (
+                    item
+                    for item in selected_edges
+                    if item.source_id in node_ids and (item.target_id is None or item.target_id in node_ids)
+                ),
+                key=lambda item: item.relationship_id,
+            )
+        ),
+    )
+
+
+def _package_dependency_graph(
+    nodes: Sequence[GraphNodeRecord],
+    relationships: Sequence[RelationshipRecord],
+) -> tuple[tuple[GraphNodeRecord, ...], tuple[RelationshipRecord, ...]]:
+    package_nodes = {item.qualified_name: item for item in nodes if item.node_type == "package"}
+    module_nodes = {item.node_id: item for item in nodes if item.node_type == "module"}
+    packages_by_module: dict[str, GraphNodeRecord] = {}
+    for module_id, node in module_nodes.items():
+        if node.relative_path and PurePosixPath(node.relative_path).name == "__init__.py":
+            package_name = node.qualified_name
+        else:
+            package_name = node.qualified_name.rpartition(".")[0]
+        package = package_nodes.get(package_name)
+        if package is not None:
+            packages_by_module[module_id] = package
+    grouped: dict[tuple[str, str], list[RelationshipRecord]] = {}
+    for relationship in relationships:
+        if (
+            relationship.relationship_type != "imports"
+            or relationship.target_id is None
+            or relationship.resolution_status not in {"resolved-static", "probable-static"}
+        ):
+            continue
+        source = packages_by_module.get(relationship.source_id)
+        target = packages_by_module.get(relationship.target_id)
+        if source is None or target is None or source.node_id == target.node_id:
+            continue
+        grouped.setdefault((source.node_id, target.node_id), []).append(relationship)
+    edges: list[RelationshipRecord] = []
+    for (source_id, target_id), members in sorted(grouped.items()):
+        first = min(members, key=lambda item: item.relationship_id)
+        payload = {
+            "source_id": source_id,
+            "target_id": target_id,
+            "member_edges": sorted(item.relationship_id for item in members),
+        }
+        edges.append(
+            RelationshipRecord(
+                relationship_id=stable_digest("repository-review-package-dependency", payload),
+                relationship_type="imports",
+                source_id=source_id,
+                target_id=target_id,
+                unresolved_target=None,
+                resolution_status="resolved-static",
+                confidence="high",
+                relative_path=first.relative_path,
+                line=first.line,
+                column=first.column,
+                analyzer_version=first.analyzer_version,
+                evidence=f"{len(members)} resolved module import edge(s)",
+            )
+        )
+    return (
+        tuple(
+            sorted(
+                package_nodes.values(),
+                key=lambda item: (item.qualified_name, item.node_id),
+            )
+        ),
+        tuple(edges),
+    )
+
+
+def _version_at_least(value: str, minimum: int) -> bool:
+    try:
+        return int(value) >= minimum
+    except ValueError:
+        return False
+
+
 def _safe_relative_path(value: str) -> str:
     normalized = PurePosixPath(value.replace("\\", "/"))
     if normalized.is_absolute() or ".." in normalized.parts or not normalized.parts:
@@ -582,6 +981,9 @@ __all__ = [
     "RepositoryReviewService",
     "SourceEvidence",
     "SourceEvidenceError",
+    "public_cycle",
+    "public_graph_node",
+    "public_relationship",
     "public_repository",
     "public_snapshot",
     "public_symbol",

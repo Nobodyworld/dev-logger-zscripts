@@ -14,14 +14,17 @@ from pathlib import Path
 from zscripts.domain.repository_review import (
     AnalysisEvidence,
     AnalysisState,
+    CycleGroupRecord,
     DiagnosticRecord,
     FileRecord,
+    GraphNodeRecord,
+    RelationshipRecord,
     RepositoryRecord,
     SnapshotRecord,
     SymbolRecord,
 )
 
-DATABASE_SCHEMA_VERSION = 1
+DATABASE_SCHEMA_VERSION = 2
 SYMBOL_SORT_COLUMNS: dict[str, str] = {
     "qualified_name": "qualified_name",
     "kind": "kind",
@@ -38,6 +41,26 @@ class SymbolPage:
     """A bounded page of symbols returned by an allowlisted query."""
 
     items: tuple[SymbolRecord, ...]
+    total: int
+    page: int
+    page_size: int
+
+
+@dataclass(frozen=True, slots=True)
+class RelationshipPage:
+    """A bounded page of relationship evidence."""
+
+    items: tuple[RelationshipRecord, ...]
+    total: int
+    page: int
+    page_size: int
+
+
+@dataclass(frozen=True, slots=True)
+class GraphNodePage:
+    """A bounded page of graph nodes returned by an allowlisted query."""
+
+    items: tuple[GraphNodeRecord, ...]
     total: int
     page: int
     page_size: int
@@ -354,6 +377,268 @@ class SnapshotStore:
         counts["packages"] = package_count
         return counts
 
+    def relationship_overview_counts(self, snapshot_id: str) -> dict[str, int | bool]:
+        snapshot = self.get_snapshot(snapshot_id)
+        supported = _version_at_least(snapshot.schema_version, 2)
+        if not supported:
+            return {
+                "relationship_analysis_supported": False,
+                "resolved_import_edges": 0,
+                "inheritance_edges": 0,
+                "cycle_groups": 0,
+                "largest_cycle_size": 0,
+            }
+        with self._connect() as connection:
+            resolved_imports = int(
+                connection.execute(
+                    """
+                    SELECT COUNT(*) FROM relationships
+                    WHERE snapshot_id = ? AND relationship_type = 'imports'
+                      AND target_id IS NOT NULL
+                      AND resolution_status IN ('resolved-static', 'probable-static')
+                    """,
+                    (snapshot_id,),
+                ).fetchone()[0]
+            )
+            inheritance_edges = int(
+                connection.execute(
+                    """
+                    SELECT COUNT(*) FROM relationships
+                    WHERE snapshot_id = ? AND relationship_type = 'inherits'
+                      AND target_id IS NOT NULL
+                      AND resolution_status IN ('resolved-static', 'probable-static')
+                    """,
+                    (snapshot_id,),
+                ).fetchone()[0]
+            )
+            cycle_row = connection.execute(
+                """
+                SELECT COUNT(DISTINCT cycle_id) AS count,
+                       COALESCE(MAX(member_count), 0) AS largest
+                FROM (
+                    SELECT cycle_id, COUNT(*) AS member_count
+                    FROM cycle_members
+                    WHERE snapshot_id = ?
+                    GROUP BY cycle_id
+                )
+                """,
+                (snapshot_id,),
+            ).fetchone()
+        return {
+            "relationship_analysis_supported": True,
+            "resolved_import_edges": resolved_imports,
+            "inheritance_edges": inheritance_edges,
+            "cycle_groups": int(cycle_row["count"]),
+            "largest_cycle_size": int(cycle_row["largest"]),
+        }
+
+    def list_graph_nodes(self, snapshot_id: str) -> tuple[GraphNodeRecord, ...]:
+        self.get_snapshot(snapshot_id)
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM graph_nodes
+                WHERE snapshot_id = ?
+                ORDER BY qualified_name COLLATE NOCASE, node_id
+                """,
+                (snapshot_id,),
+            ).fetchall()
+        return tuple(_graph_node_from_row(row) for row in rows)
+
+    def query_graph_nodes(
+        self,
+        snapshot_id: str,
+        *,
+        mode: str,
+        search: str = "",
+        node_ids: tuple[str, ...] = (),
+        page: int = 1,
+        page_size: int = 100,
+    ) -> GraphNodePage:
+        self.get_snapshot(snapshot_id)
+        mode_clauses = {
+            "modules": "node_type = 'module'",
+            "packages": "node_type = 'package'",
+            "inheritance": "node_type = 'symbol' AND symbol_kind = 'class'",
+            "containment": "node_type IN ('package', 'module', 'symbol')",
+            "types": "node_type = 'symbol'",
+        }
+        if mode not in mode_clauses:
+            raise ValueError("Unsupported relationship graph mode.")
+        normalized_search = search.strip()
+        if len(normalized_search) > 200:
+            raise ValueError("Graph node search is outside the supported range.")
+        if page < 1 or page_size < 1 or page_size > 100:
+            raise ValueError("Graph node pagination is outside the supported range.")
+        if len(node_ids) > 100 or any(not 16 <= len(node_id) <= 128 for node_id in node_ids):
+            raise ValueError("Graph node identifiers are outside the supported range.")
+
+        clauses = ["snapshot_id = ?", mode_clauses[mode]]
+        parameters: list[object] = [snapshot_id]
+        if normalized_search:
+            clauses.append("instr(lower(qualified_name), lower(?)) > 0")
+            parameters.append(normalized_search)
+        if node_ids:
+            placeholders = ", ".join("?" for _ in node_ids)
+            clauses.append(f"node_id IN ({placeholders})")  # nosec B608
+            parameters.extend(node_ids)
+        where = " AND ".join(clauses)
+        offset = (page - 1) * page_size
+        with self._connect() as connection:
+            total = int(
+                connection.execute(
+                    f"SELECT COUNT(*) FROM graph_nodes WHERE {where}",  # nosec B608
+                    parameters,
+                ).fetchone()[0]
+            )
+            rows = connection.execute(
+                f"""
+                SELECT * FROM graph_nodes
+                WHERE {where}
+                ORDER BY qualified_name COLLATE NOCASE, qualified_name, node_id
+                LIMIT ? OFFSET ?
+                """,  # nosec B608
+                (*parameters, page_size, offset),
+            ).fetchall()
+        return GraphNodePage(
+            items=tuple(_graph_node_from_row(row) for row in rows),
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+
+    def list_relationships(
+        self,
+        snapshot_id: str,
+        *,
+        relationship_type: str | None = None,
+        resolution_status: str | None = None,
+        page: int = 1,
+        page_size: int = 100,
+    ) -> RelationshipPage:
+        self.get_snapshot(snapshot_id)
+        if relationship_type is not None and relationship_type not in {
+            "contains",
+            "imports",
+            "inherits",
+            "references-type",
+        }:
+            raise ValueError("Unsupported relationship type.")
+        if resolution_status is not None and resolution_status not in {
+            "resolved-static",
+            "probable-static",
+            "ambiguous",
+            "unresolved-dynamic",
+        }:
+            raise ValueError("Unsupported relationship resolution status.")
+        if page < 1 or page_size < 1 or page_size > 200:
+            raise ValueError("Relationship pagination is outside the supported range.")
+        clauses = ["snapshot_id = ?"]
+        parameters: list[object] = [snapshot_id]
+        if relationship_type is not None:
+            clauses.append("relationship_type = ?")
+            parameters.append(relationship_type)
+        if resolution_status is not None:
+            clauses.append("resolution_status = ?")
+            parameters.append(resolution_status)
+        where = " AND ".join(clauses)
+        offset = (page - 1) * page_size
+        with self._connect() as connection:
+            total = int(
+                connection.execute(
+                    f"SELECT COUNT(*) FROM relationships WHERE {where}",  # nosec B608
+                    parameters,
+                ).fetchone()[0]
+            )
+            rows = connection.execute(
+                f"""
+                SELECT * FROM relationships
+                WHERE {where}
+                ORDER BY relationship_type, source_id,
+                         COALESCE(target_id, unresolved_target, ''),
+                         relative_path, line, column_number, relationship_id
+                LIMIT ? OFFSET ?
+                """,  # nosec B608
+                (*parameters, page_size, offset),
+            ).fetchall()
+        return RelationshipPage(
+            items=tuple(_relationship_from_row(row) for row in rows),
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+
+    def all_relationships(self, snapshot_id: str) -> tuple[RelationshipRecord, ...]:
+        self.get_snapshot(snapshot_id)
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM relationships
+                WHERE snapshot_id = ?
+                ORDER BY relationship_type, source_id,
+                         COALESCE(target_id, unresolved_target, ''),
+                         relative_path, line, column_number, relationship_id
+                """,
+                (snapshot_id,),
+            ).fetchall()
+        return tuple(_relationship_from_row(row) for row in rows)
+
+    def list_cycles(
+        self,
+        snapshot_id: str,
+        *,
+        relationship_type: str | None = None,
+        limit: int = 100,
+    ) -> tuple[CycleGroupRecord, ...]:
+        self.get_snapshot(snapshot_id)
+        if relationship_type is not None and relationship_type not in {"imports", "inherits"}:
+            raise ValueError("Unsupported cycle relationship type.")
+        if limit < 1 or limit > 200:
+            raise ValueError("Cycle result limit is outside the supported range.")
+        clauses = ["snapshot_id = ?"]
+        parameters: list[object] = [snapshot_id]
+        if relationship_type is not None:
+            clauses.append("relationship_type = ?")
+            parameters.append(relationship_type)
+        where = " AND ".join(clauses)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT * FROM cycle_groups
+                WHERE {where}
+                ORDER BY cycle_id
+                LIMIT ?
+                """,  # nosec B608
+                (*parameters, limit),
+            ).fetchall()
+            groups: list[CycleGroupRecord] = []
+            for row in rows:
+                members = connection.execute(
+                    """
+                    SELECT node_id FROM cycle_members
+                    WHERE snapshot_id = ? AND cycle_id = ?
+                    ORDER BY node_id
+                    """,
+                    (snapshot_id, row["cycle_id"]),
+                ).fetchall()
+                edges = connection.execute(
+                    """
+                    SELECT relationship_id FROM cycle_edges
+                    WHERE snapshot_id = ? AND cycle_id = ?
+                    ORDER BY relationship_id
+                    """,
+                    (snapshot_id, row["cycle_id"]),
+                ).fetchall()
+                groups.append(
+                    CycleGroupRecord(
+                        cycle_id=str(row["cycle_id"]),
+                        relationship_type=str(row["relationship_type"]),
+                        member_node_ids=tuple(str(item["node_id"]) for item in members),
+                        edge_ids=tuple(str(item["relationship_id"]) for item in edges),
+                    )
+                )
+        return tuple(groups)
+
     def get_file(self, snapshot_id: str, relative_path: str) -> FileRecord | None:
         with self._connect() as connection:
             row = connection.execute(
@@ -399,8 +684,11 @@ class SnapshotStore:
     @staticmethod
     def _migrate(connection: sqlite3.Connection, current: int) -> None:
         if current < 1:
-            connection.executescript(_SCHEMA_V1)
+            _execute_schema(connection, _SCHEMA_V1)
             connection.execute("UPDATE schema_version SET version = 1")
+        if current < 2:
+            _execute_schema(connection, _SCHEMA_V2)
+            connection.execute("UPDATE schema_version SET version = 2")
 
     @staticmethod
     def _upsert_repository(
@@ -524,6 +812,8 @@ class SnapshotStore:
                 item.imported_name,
                 item.alias,
                 item.level,
+                item.line,
+                item.column,
             )
             for module in evidence.modules
             for item in module.imports
@@ -532,8 +822,9 @@ class SnapshotStore:
             connection.executemany(
                 """
                 INSERT INTO module_imports (
-                    snapshot_id, module_id, imported_module, imported_name, alias, level
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                    snapshot_id, module_id, imported_module, imported_name, alias, level,
+                    line, column_number
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 imports,
             )
@@ -595,6 +886,83 @@ class SnapshotStore:
                     item.category,
                 )
                 for item in evidence.diagnostics
+            ],
+        )
+        connection.executemany(
+            """
+            INSERT INTO graph_nodes (
+                snapshot_id, node_id, node_type, display_name, qualified_name,
+                relative_path, symbol_kind
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    snapshot.snapshot_id,
+                    item.node_id,
+                    item.node_type,
+                    item.display_name,
+                    item.qualified_name,
+                    item.relative_path,
+                    item.symbol_kind,
+                )
+                for item in evidence.graph_nodes
+            ],
+        )
+        connection.executemany(
+            """
+            INSERT INTO relationships (
+                snapshot_id, relationship_id, relationship_type, source_id,
+                target_id, unresolved_target, resolution_status, confidence,
+                relative_path, line, column_number, analyzer_version, evidence
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    snapshot.snapshot_id,
+                    item.relationship_id,
+                    item.relationship_type,
+                    item.source_id,
+                    item.target_id,
+                    item.unresolved_target,
+                    item.resolution_status,
+                    item.confidence,
+                    item.relative_path,
+                    item.line,
+                    item.column,
+                    item.analyzer_version,
+                    item.evidence,
+                )
+                for item in evidence.relationships
+            ],
+        )
+        connection.executemany(
+            """
+            INSERT INTO cycle_groups (
+                snapshot_id, cycle_id, relationship_type
+            ) VALUES (?, ?, ?)
+            """,
+            [(snapshot.snapshot_id, item.cycle_id, item.relationship_type) for item in evidence.cycles],
+        )
+        connection.executemany(
+            """
+            INSERT INTO cycle_members (snapshot_id, cycle_id, node_id)
+            VALUES (?, ?, ?)
+            """,
+            [
+                (snapshot.snapshot_id, cycle.cycle_id, node_id)
+                for cycle in evidence.cycles
+                for node_id in cycle.member_node_ids
+            ],
+        )
+        connection.executemany(
+            """
+            INSERT INTO cycle_edges (snapshot_id, cycle_id, relationship_id)
+            VALUES (?, ?, ?)
+            """,
+            [
+                (snapshot.snapshot_id, cycle.cycle_id, relationship_id)
+                for cycle in evidence.cycles
+                for relationship_id in cycle.edge_ids
             ],
         )
 
@@ -748,6 +1116,49 @@ def _diagnostic_from_row(row: sqlite3.Row) -> DiagnosticRecord:
     )
 
 
+def _graph_node_from_row(row: sqlite3.Row) -> GraphNodeRecord:
+    return GraphNodeRecord(
+        node_id=str(row["node_id"]),
+        node_type=str(row["node_type"]),
+        display_name=str(row["display_name"]),
+        qualified_name=str(row["qualified_name"]),
+        relative_path=str(row["relative_path"]) if row["relative_path"] is not None else None,
+        symbol_kind=str(row["symbol_kind"]) if row["symbol_kind"] is not None else None,
+    )
+
+
+def _relationship_from_row(row: sqlite3.Row) -> RelationshipRecord:
+    return RelationshipRecord(
+        relationship_id=str(row["relationship_id"]),
+        relationship_type=str(row["relationship_type"]),
+        source_id=str(row["source_id"]),
+        target_id=str(row["target_id"]) if row["target_id"] is not None else None,
+        unresolved_target=(str(row["unresolved_target"]) if row["unresolved_target"] is not None else None),
+        resolution_status=str(row["resolution_status"]),
+        confidence=str(row["confidence"]),
+        relative_path=str(row["relative_path"]),
+        line=int(row["line"]),
+        column=int(row["column_number"]),
+        analyzer_version=str(row["analyzer_version"]),
+        evidence=str(row["evidence"]),
+    )
+
+
+def _version_at_least(value: str, minimum: int) -> bool:
+    try:
+        return int(value) >= minimum
+    except ValueError:
+        return False
+
+
+def _execute_schema(connection: sqlite3.Connection, schema: str) -> None:
+    """Execute simple DDL statements without ``executescript``'s implicit commit."""
+
+    for statement in schema.split(";"):
+        if normalized := statement.strip():
+            connection.execute(normalized)
+
+
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS analysis_sequence (
     id INTEGER PRIMARY KEY AUTOINCREMENT
@@ -889,9 +1300,100 @@ CREATE INDEX IF NOT EXISTS idx_files_snapshot_path
 """
 
 
+_SCHEMA_V2 = """
+ALTER TABLE module_imports ADD COLUMN line INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE module_imports ADD COLUMN column_number INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS graph_nodes (
+    snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id) ON DELETE CASCADE,
+    node_id TEXT NOT NULL,
+    node_type TEXT NOT NULL CHECK (node_type IN ('package', 'module', 'symbol')),
+    display_name TEXT NOT NULL,
+    qualified_name TEXT NOT NULL,
+    relative_path TEXT,
+    symbol_kind TEXT,
+    PRIMARY KEY (snapshot_id, node_id)
+);
+
+CREATE TABLE IF NOT EXISTS relationships (
+    snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id) ON DELETE CASCADE,
+    relationship_id TEXT NOT NULL,
+    relationship_type TEXT NOT NULL
+        CHECK (relationship_type IN ('contains', 'imports', 'inherits', 'references-type')),
+    source_id TEXT NOT NULL,
+    target_id TEXT,
+    unresolved_target TEXT,
+    resolution_status TEXT NOT NULL
+        CHECK (
+            resolution_status IN (
+                'resolved-static', 'probable-static', 'ambiguous', 'unresolved-dynamic'
+            )
+        ),
+    confidence TEXT NOT NULL CHECK (confidence IN ('high', 'medium', 'low')),
+    relative_path TEXT NOT NULL,
+    line INTEGER NOT NULL,
+    column_number INTEGER NOT NULL,
+    analyzer_version TEXT NOT NULL,
+    evidence TEXT NOT NULL,
+    PRIMARY KEY (snapshot_id, relationship_id),
+    FOREIGN KEY (snapshot_id, source_id)
+        REFERENCES graph_nodes(snapshot_id, node_id) ON DELETE CASCADE,
+    FOREIGN KEY (snapshot_id, target_id)
+        REFERENCES graph_nodes(snapshot_id, node_id) ON DELETE CASCADE,
+    CHECK (
+        (target_id IS NOT NULL AND unresolved_target IS NULL
+            AND resolution_status IN ('resolved-static', 'probable-static'))
+        OR
+        (target_id IS NULL AND unresolved_target IS NOT NULL
+            AND resolution_status IN ('ambiguous', 'unresolved-dynamic'))
+    )
+);
+
+CREATE TABLE IF NOT EXISTS cycle_groups (
+    snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id) ON DELETE CASCADE,
+    cycle_id TEXT NOT NULL,
+    relationship_type TEXT NOT NULL CHECK (relationship_type IN ('imports', 'inherits')),
+    PRIMARY KEY (snapshot_id, cycle_id)
+);
+
+CREATE TABLE IF NOT EXISTS cycle_members (
+    snapshot_id TEXT NOT NULL,
+    cycle_id TEXT NOT NULL,
+    node_id TEXT NOT NULL,
+    PRIMARY KEY (snapshot_id, cycle_id, node_id),
+    FOREIGN KEY (snapshot_id, cycle_id)
+        REFERENCES cycle_groups(snapshot_id, cycle_id) ON DELETE CASCADE,
+    FOREIGN KEY (snapshot_id, node_id)
+        REFERENCES graph_nodes(snapshot_id, node_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS cycle_edges (
+    snapshot_id TEXT NOT NULL,
+    cycle_id TEXT NOT NULL,
+    relationship_id TEXT NOT NULL,
+    PRIMARY KEY (snapshot_id, cycle_id, relationship_id),
+    FOREIGN KEY (snapshot_id, cycle_id)
+        REFERENCES cycle_groups(snapshot_id, cycle_id) ON DELETE CASCADE,
+    FOREIGN KEY (snapshot_id, relationship_id)
+        REFERENCES relationships(snapshot_id, relationship_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_graph_nodes_snapshot_name
+    ON graph_nodes(snapshot_id, qualified_name);
+CREATE INDEX IF NOT EXISTS idx_relationships_snapshot_type
+    ON relationships(snapshot_id, relationship_type, resolution_status);
+CREATE INDEX IF NOT EXISTS idx_relationships_snapshot_source
+    ON relationships(snapshot_id, source_id);
+CREATE INDEX IF NOT EXISTS idx_relationships_snapshot_target
+    ON relationships(snapshot_id, target_id);
+"""
+
+
 __all__ = [
     "AnalysisStatusRecord",
     "DATABASE_SCHEMA_VERSION",
+    "GraphNodePage",
+    "RelationshipPage",
     "SnapshotNotFoundError",
     "SnapshotStore",
     "SymbolPage",

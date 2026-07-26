@@ -44,6 +44,11 @@ export interface Overview {
         functions: number;
         methods: number;
         parse_gaps: number;
+        relationship_analysis_supported: boolean;
+        resolved_import_edges: number;
+        inheritance_edges: number;
+        cycle_groups: number;
+        largest_cycle_size: number;
     };
 }
 
@@ -103,4 +108,80 @@ export interface SourceEvidence {
     content_hash: string;
 }
 
-export type ViewName = "overview" | "symbols";
+export type GraphMode = "modules" | "packages" | "inheritance" | "containment" | "types";
+
+export interface GraphNode {
+    node_id: string;
+    node_type: "package" | "module" | "symbol";
+    display_name: string;
+    qualified_name: string;
+    relative_path: string | null;
+    symbol_kind: string | null;
+}
+
+export interface Relationship {
+    relationship_id: string;
+    relationship_type: "contains" | "imports" | "inherits" | "references-type";
+    source_id: string;
+    target_id: string | null;
+    unresolved_target: string | null;
+    resolution_status: "resolved-static" | "probable-static" | "ambiguous" | "unresolved-dynamic";
+    confidence: "high" | "medium" | "low";
+    relative_path: string;
+    line: number;
+    column: number;
+    analyzer_version: string;
+    evidence: string;
+}
+
+export interface RelationshipSummary {
+    supported: boolean;
+    analyzer_version: string;
+    schema_version: string;
+    node_count: number;
+    relationship_count: number;
+    cycle_count: number;
+    largest_cycle_size: number;
+    truncated: boolean;
+    nodes: GraphNode[];
+    relationship_types: Record<string, number>;
+    resolution_statuses: Record<string, number>;
+    fan_in: Record<string, number>;
+    fan_out: Record<string, number>;
+    inheritance_depth: Record<string, number | null>;
+}
+
+export interface GraphNodePage {
+    supported: boolean;
+    items: GraphNode[];
+    total: number;
+    page: number;
+    page_size: number;
+    truncated: boolean;
+}
+
+export interface RelationshipNeighborhood {
+    supported: boolean;
+    focus_id: string;
+    mode: GraphMode;
+    depth: number;
+    nodes: GraphNode[];
+    relationships: Relationship[];
+    distances: Record<string, number>;
+    truncated: boolean;
+}
+
+export interface CycleGroup {
+    cycle_id: string;
+    relationship_type: "imports" | "inherits";
+    member_node_ids: string[];
+    edge_ids: string[];
+}
+
+export interface CycleList {
+    supported: boolean;
+    items: CycleGroup[];
+    truncated: boolean;
+}
+
+export type ViewName = "overview" | "symbols" | "relationships";

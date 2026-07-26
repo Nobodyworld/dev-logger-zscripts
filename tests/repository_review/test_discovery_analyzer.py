@@ -24,7 +24,11 @@ def test_python_analyzer_extracts_packages_imports_and_nested_symbols(
     assert set(modules) == {"pkg", "pkg.module"}
     assert modules["pkg"].public_exports == ("Example", "top_level")
     assert any(
-        item.module == "pathlib" and item.imported_name == "Path" and item.alias == "FilePath"
+        item.module == "pathlib"
+        and item.imported_name == "Path"
+        and item.alias == "FilePath"
+        and item.line == 7
+        and item.column == 0
         for item in modules["pkg.module"].imports
     )
     assert any(
@@ -51,6 +55,10 @@ def test_python_analyzer_extracts_packages_imports_and_nested_symbols(
     assert nested_class.parent_symbol_id == example.symbol_id
     assert nested_function.parent_symbol_id == method.symbol_id
     assert all(item.start_line <= item.end_line for item in result.symbols)
+    candidates = {(item.source_symbol_id, item.textual_name) for item in result.type_references}
+    assert (method.symbol_id, "cabc.Sequence") in candidates
+    assert (nested_function.symbol_id, "FilePath") in candidates
+    assert (example.symbol_id, "BaseExample") in candidates
 
 
 def test_malformed_python_isolated_to_diagnostic(tmp_path: Path) -> None:
@@ -66,6 +74,26 @@ def test_malformed_python_isolated_to_diagnostic(tmp_path: Path) -> None:
         item.code == "PY_PARSE_ERROR" and item.relative_path == "malformed.py" for item in result.diagnostics
     )
     assert any(item.qualified_name == "effects.public_function" for item in result.symbols)
+
+
+def test_annotation_special_forms_exclude_values_and_metadata(tmp_path: Path) -> None:
+    repository = tmp_path / "annotations"
+    shutil.copytree(FIXTURES / "relationship_corrections", repository)
+
+    discovery = RepositoryDiscovery().discover(repository)
+    result = PythonAnalyzer().analyze(discovery.files)
+    function = next(item for item in result.symbols if item.qualified_name == "annotations.inspect")
+    names = [
+        item.textual_name for item in result.type_references if item.source_symbol_id == function.symbol_id
+    ]
+
+    assert names.count("Customer") >= 7
+    assert names.count("Order") == 2
+    assert "active" not in names
+    assert "extension" not in names
+    assert "Customer.VALUE" not in names
+    assert "SomeMetadata" not in names
+    assert "str" in names
 
 
 def test_discovery_records_safe_exclusions_and_resource_limits(tmp_path: Path) -> None:

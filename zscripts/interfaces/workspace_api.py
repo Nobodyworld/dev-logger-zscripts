@@ -221,6 +221,15 @@ class RelationshipPageResponse(_StrictModel):
     page_size: int
 
 
+class GraphNodePageResponse(_StrictModel):
+    supported: bool
+    items: list[GraphNodeResponse]
+    total: int
+    page: int
+    page_size: int
+    truncated: bool
+
+
 class RelationshipNeighborhoodResponse(_StrictModel):
     supported: bool
     focus_id: str
@@ -467,6 +476,32 @@ def create_workspace_app(
                 snapshot_id,
                 relationship_type=relationship_type,
                 resolution_status=resolution_status,
+                page=page,
+                page_size=page_size,
+            )
+        except SnapshotNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Snapshot was not found.") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Relationship query is invalid.") from exc
+
+    @app.get(
+        "/api/snapshots/{snapshot_id}/relationships/nodes",
+        response_model=GraphNodePageResponse,
+    )
+    def relationship_nodes(
+        snapshot_id: str,
+        mode: Literal["modules", "packages", "inheritance", "containment", "types"] = "modules",
+        search: Annotated[str, Query(max_length=200)] = "",
+        node_ids: Annotated[list[str] | None, Query()] = None,
+        page: Annotated[int, Query(ge=1)] = 1,
+        page_size: Annotated[int, Query(ge=1, le=100)] = 100,
+    ) -> dict[str, object]:
+        try:
+            return review_service.relationship_nodes(
+                snapshot_id,
+                mode=mode,
+                search=search,
+                node_ids=tuple(node_ids or ()),
                 page=page,
                 page_size=page_size,
             )

@@ -593,6 +593,11 @@ def _bounded_type_names(node: ast.AST) -> list[tuple[ast.AST, str]]:
         return [(node, dotted)]
     if isinstance(node, ast.Subscript):
         outer = _dotted_name(node.value)
+        if outer in _LITERAL_SPECIAL_FORMS:
+            return []
+        if outer in _ANNOTATED_SPECIAL_FORMS:
+            annotated_type = node.slice.elts[0] if isinstance(node.slice, ast.Tuple) else node.slice
+            return _bounded_type_names(annotated_type)
         results: list[tuple[ast.AST, str]] = []
         if outer and outer not in _GENERIC_CONTAINER_NAMES:
             results.append((node.value, outer))
@@ -647,6 +652,18 @@ def _deduplicate_references(
     return result
 
 
+_LITERAL_SPECIAL_FORMS = {
+    "Literal",
+    "typing.Literal",
+    "typing_extensions.Literal",
+}
+
+_ANNOTATED_SPECIAL_FORMS = {
+    "Annotated",
+    "typing.Annotated",
+    "typing_extensions.Annotated",
+}
+
 _GENERIC_CONTAINER_NAMES = {
     "Annotated",
     "Callable",
@@ -675,6 +692,8 @@ _GENERIC_CONTAINER_NAMES = {
     "typing.Sequence",
     "typing.Type",
     "typing.Union",
+    "typing_extensions.Annotated",
+    "typing_extensions.Literal",
 }
 
 

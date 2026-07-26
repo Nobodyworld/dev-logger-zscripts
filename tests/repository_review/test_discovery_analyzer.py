@@ -76,6 +76,26 @@ def test_malformed_python_isolated_to_diagnostic(tmp_path: Path) -> None:
     assert any(item.qualified_name == "effects.public_function" for item in result.symbols)
 
 
+def test_annotation_special_forms_exclude_values_and_metadata(tmp_path: Path) -> None:
+    repository = tmp_path / "annotations"
+    shutil.copytree(FIXTURES / "relationship_corrections", repository)
+
+    discovery = RepositoryDiscovery().discover(repository)
+    result = PythonAnalyzer().analyze(discovery.files)
+    function = next(item for item in result.symbols if item.qualified_name == "annotations.inspect")
+    names = [
+        item.textual_name for item in result.type_references if item.source_symbol_id == function.symbol_id
+    ]
+
+    assert names.count("Customer") >= 7
+    assert names.count("Order") == 2
+    assert "active" not in names
+    assert "extension" not in names
+    assert "Customer.VALUE" not in names
+    assert "SomeMetadata" not in names
+    assert "str" in names
+
+
 def test_discovery_records_safe_exclusions_and_resource_limits(tmp_path: Path) -> None:
     repository = tmp_path / "bounded"
     repository.mkdir()

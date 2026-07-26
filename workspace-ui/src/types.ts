@@ -151,6 +151,15 @@ export interface RelationshipSummary {
     inheritance_depth: Record<string, number | null>;
 }
 
+export interface GraphNodePage {
+    supported: boolean;
+    items: GraphNode[];
+    total: number;
+    page: number;
+    page_size: number;
+    truncated: boolean;
+}
+
 export interface RelationshipNeighborhood {
     supported: boolean;
     focus_id: string;

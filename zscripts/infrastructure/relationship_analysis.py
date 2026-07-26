@@ -549,9 +549,9 @@ def _import_aliases(
                 continue
             if imported.imported_name is None:
                 binding = imported.alias or base_name.split(".")[0]
-                target_name = base_name if imported.alias else binding
-                if target_name in module_index:
-                    alias_map[binding].append(_AliasTarget("module", target_name))
+                if base_name in module_index:
+                    target_type = "module" if imported.alias else "module-import"
+                    alias_map[binding].append(_AliasTarget(target_type, base_name))
                 continue
             binding = imported.alias or imported.imported_name
             submodule_name = f"{base_name}.{imported.imported_name}"
@@ -580,13 +580,16 @@ def _resolve_symbol_reference(
         matches = symbol_index.get(qualified_name, [])
         return [item for item in matches if not class_only or item.kind == "class"]
 
-    direct = matching(candidate.textual_name)
-    if direct:
-        return _from_symbol_matches(direct, "resolved-static", "high")
-
     local = matching(f"{candidate.module_name}.{candidate.textual_name}")
     if local:
         return _from_symbol_matches(local, "resolved-static", "high")
+
+    if candidate.textual_name.startswith(f"{candidate.module_name}."):
+        same_module = [
+            item for item in matching(candidate.textual_name) if item.module_name == candidate.module_name
+        ]
+        if same_module:
+            return _from_symbol_matches(same_module, "resolved-static", "high")
 
     head, separator, tail = candidate.textual_name.partition(".")
     alias_targets = aliases.get(candidate.relative_path, {}).get(head, ())
@@ -594,9 +597,21 @@ def _resolve_symbol_reference(
     for target in alias_targets:
         if target.target_type == "symbol":
             qualified = target.qualified_name + (f".{tail}" if separator else "")
+            alias_matches.extend(matching(qualified))
+        elif target.target_type == "module-import":
+            if not (
+                candidate.textual_name == target.qualified_name
+                or candidate.textual_name.startswith(f"{target.qualified_name}.")
+            ):
+                continue
+            alias_matches.extend(
+                item for item in matching(candidate.textual_name) if item.module_name == target.qualified_name
+            )
         else:
             qualified = target.qualified_name + (f".{tail}" if separator else "")
-        alias_matches.extend(matching(qualified))
+            alias_matches.extend(
+                item for item in matching(qualified) if item.module_name == target.qualified_name
+            )
     if alias_matches:
         return _from_symbol_matches(alias_matches, "resolved-static", "high")
 

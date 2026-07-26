@@ -125,6 +125,58 @@ def test_bounded_type_references_are_conservative(tmp_path: Path) -> None:
     )
 
 
+def test_qualified_symbol_resolution_requires_a_proven_binding(tmp_path: Path) -> None:
+    repository = tmp_path / "bindings"
+    shutil.copytree(FIXTURES / "relationship_corrections", repository)
+
+    evidence = RepositoryReviewService(data_directory=tmp_path / "data").analyze(repository)
+    names = {item.node_id: item.qualified_name for item in evidence.graph_nodes}
+    relationships = {
+        (names[item.source_id], item.relationship_type, item.unresolved_target): item
+        for item in evidence.relationships
+        if item.relationship_type in {"inherits", "references-type"}
+    }
+
+    for relationship_type in ("inherits", "references-type"):
+        unbound = relationships[("unbound.Broken", relationship_type, "app.models.Customer")]
+        assert unbound.target_id is None
+        assert unbound.resolution_status == "unresolved-dynamic"
+
+    resolved = {
+        (names[item.source_id], item.relationship_type, names.get(item.target_id or ""))
+        for item in evidence.relationships
+        if item.target_id is not None
+    }
+    assert ("imported.Valid", "inherits", "app.models.Customer") in resolved
+    assert ("imported.Valid", "references-type", "app.models.Customer") in resolved
+    assert ("aliased.ValidAlias", "inherits", "app.models.Customer") in resolved
+    assert ("aliased.ValidAlias", "references-type", "app.models.Customer") in resolved
+    assert ("local.Child", "inherits", "local.Base") in resolved
+    assert ("local.Child", "references-type", "local.Base") in resolved
+
+
+def test_annotation_special_forms_do_not_create_false_relationships(tmp_path: Path) -> None:
+    repository = tmp_path / "special-forms"
+    shutil.copytree(FIXTURES / "relationship_corrections", repository)
+
+    evidence = RepositoryReviewService(data_directory=tmp_path / "data").analyze(repository)
+    names = {item.node_id: item.qualified_name for item in evidence.graph_nodes}
+    references = [
+        item
+        for item in evidence.relationships
+        if item.relationship_type == "references-type" and names[item.source_id] == "annotations.inspect"
+    ]
+    targets = [names.get(item.target_id or "", item.unresolved_target) for item in references]
+
+    assert targets.count("annotations.Customer") >= 7
+    assert targets.count("annotations.Order") == 2
+    assert "active" not in targets
+    assert "extension" not in targets
+    assert "Customer.VALUE" not in targets
+    assert "annotations.SomeMetadata" not in targets
+    assert "SomeMetadata" not in targets
+
+
 def test_scc_metrics_and_cycle_safe_inheritance_are_deterministic() -> None:
     nodes = tuple(_node(name) for name in ("a", "b", "c", "d", "e", "self"))
     edges = (

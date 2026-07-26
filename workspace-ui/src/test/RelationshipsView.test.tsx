@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -8,9 +8,11 @@ import {
     classNode,
     cycleGroup,
     importRelationship,
+    moduleA,
     moduleB,
     packageNode,
     relationshipNeighborhood,
+    relationshipNodePage,
     relationshipSummary,
     response,
     snapshot,
@@ -112,6 +114,9 @@ describe("RelationshipsView", () => {
                 if (url.includes("/relationships/summary")) {
                     return Promise.resolve(response(relationshipSummary));
                 }
+                if (url.includes("/relationships/nodes")) {
+                    return Promise.resolve(response(relationshipNodePage));
+                }
                 if (url.includes("/cycles")) {
                     return Promise.resolve(
                         response({ supported: true, items: [], truncated: false }),
@@ -129,6 +134,7 @@ describe("RelationshipsView", () => {
         render(<RelationshipsView snapshotId={snapshot.snapshot_id} />);
 
         const focus = await screen.findByLabelText("Focus node");
+        await within(focus).findByText("pkg.b");
         await user.selectOptions(focus, moduleB.node_id);
         secondGraph.resolve(
             response({
@@ -163,6 +169,9 @@ describe("RelationshipsView", () => {
                 if (url.includes("/relationships/summary")) {
                     return Promise.resolve(response(relationshipSummary));
                 }
+                if (url.includes("/relationships/nodes")) {
+                    return Promise.resolve(response(relationshipNodePage));
+                }
                 if (url.includes("/cycles")) {
                     return Promise.resolve(
                         response({ supported: true, items: [], truncated: false }),
@@ -179,7 +188,9 @@ describe("RelationshipsView", () => {
         const user = userEvent.setup();
         render(<RelationshipsView snapshotId={snapshot.snapshot_id} />);
 
-        await user.selectOptions(await screen.findByLabelText("Focus node"), moduleB.node_id);
+        const focus = await screen.findByLabelText("Focus node");
+        await within(focus).findByText("pkg.b");
+        await user.selectOptions(focus, moduleB.node_id);
         secondGraph.resolve(
             response({
                 ...relationshipNeighborhood,
@@ -200,6 +211,222 @@ describe("RelationshipsView", () => {
         expect(
             screen.queryByText("The focused relationship graph could not be loaded."),
         ).toBeNull();
+    });
+
+    it("searches and focuses a node and cycle member omitted from the summary", async () => {
+        const omittedNode = {
+            ...moduleB,
+            node_id: "node-omitted-0123456789abcdef",
+            display_name: "omitted",
+            qualified_name: "pkg.omitted",
+            relative_path: "pkg/omitted.py",
+        };
+        const omittedCycle = {
+            ...cycleGroup,
+            cycle_id: "cycle-omitted-0123456789abcdef",
+            member_node_ids: [omittedNode.node_id],
+        };
+        const fetchMock = vi.fn((input: RequestInfo | URL) => {
+            const url = String(input);
+            if (url.includes("/relationships/summary")) {
+                return Promise.resolve(
+                    response({
+                        ...relationshipSummary,
+                        node_count: 250,
+                        nodes: [moduleA],
+                        truncated: true,
+                    }),
+                );
+            }
+            if (url.includes("/cycles")) {
+                return Promise.resolve(
+                    response({ supported: true, items: [omittedCycle], truncated: false }),
+                );
+            }
+            if (url.includes("/relationships/nodes")) {
+                const parameters = new URL(url, "http://localhost").searchParams;
+                const isOmitted =
+                    parameters.get("search") === "pkg.omitted" ||
+                    parameters.getAll("node_ids").includes(omittedNode.node_id);
+                const items = isOmitted ? [omittedNode] : [moduleA];
+                return Promise.resolve(
+                    response({
+                        ...relationshipNodePage,
+                        items,
+                        total: items.length,
+                    }),
+                );
+            }
+            if (url.includes("/relationships/neighborhood")) {
+                const focusId = new URL(url, "http://localhost").searchParams.get("focus_id");
+                const node = focusId === omittedNode.node_id ? omittedNode : moduleA;
+                return Promise.resolve(
+                    response({
+                        ...relationshipNeighborhood,
+                        focus_id: node.node_id,
+                        nodes: [node],
+                        relationships: [],
+                        distances: { [node.node_id]: 0 },
+                    }),
+                );
+            }
+            return Promise.resolve(response({ detail: "Unexpected request" }, 500));
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        const user = userEvent.setup();
+        render(<RelationshipsView snapshotId={snapshot.snapshot_id} />);
+
+        await screen.findByLabelText("Focus node");
+        await user.type(screen.getByPlaceholderText("Search nodes"), "pkg.omitted");
+        expect(
+            await within(screen.getByLabelText("Focus node")).findByText("pkg.omitted"),
+        ).toBeTruthy();
+        expect(
+            await screen
+                .findByText("Selected node:")
+                .then((item) => item.parentElement?.textContent),
+        ).toContain("pkg.omitted");
+        expect(
+            fetchMock.mock.calls.some(([input]) => String(input).includes("search=pkg.omitted")),
+        ).toBe(true);
+
+        await user.selectOptions(screen.getByLabelText("Cycle group"), omittedCycle.cycle_id);
+        await waitFor(() => {
+            expect(screen.getByText("Selected node:").parentElement?.textContent).toContain(
+                "pkg.omitted",
+            );
+            expect(
+                fetchMock.mock.calls.some(([input]) =>
+                    String(input).includes(`node_ids=${omittedNode.node_id}`),
+                ),
+            ).toBe(true);
+        });
+    });
+
+    it("ignores stale node-search results and reports empty and failed searches", async () => {
+        const firstSearch = deferred<Response>();
+        const secondSearch = deferred<Response>();
+        const omittedNode = {
+            ...moduleB,
+            node_id: "node-second-0123456789abcdef",
+            qualified_name: "pkg.second",
+        };
+        vi.stubGlobal(
+            "fetch",
+            vi.fn((input: RequestInfo | URL) => {
+                const url = String(input);
+                if (url.includes("/relationships/summary")) {
+                    return Promise.resolve(response(relationshipSummary));
+                }
+                if (url.includes("/cycles")) {
+                    return Promise.resolve(
+                        response({ supported: true, items: [], truncated: false }),
+                    );
+                }
+                if (url.includes("/relationships/nodes")) {
+                    const search = new URL(url, "http://localhost").searchParams.get("search");
+                    if (search === "first") return firstSearch.promise;
+                    if (search === "second") return secondSearch.promise;
+                    if (search === "missing") {
+                        return Promise.resolve(
+                            response({ ...relationshipNodePage, items: [], total: 0 }),
+                        );
+                    }
+                    if (search === "failed") {
+                        return Promise.resolve(response({ detail: "Node search failed." }, 500));
+                    }
+                    return Promise.resolve(response(relationshipNodePage));
+                }
+                if (url.includes("/relationships/neighborhood")) {
+                    return Promise.resolve(response(relationshipNeighborhood));
+                }
+                return Promise.resolve(response({ detail: "Unexpected request" }, 500));
+            }),
+        );
+        render(<RelationshipsView snapshotId={snapshot.snapshot_id} />);
+
+        const input = await screen.findByPlaceholderText("Search nodes");
+        fireEvent.change(input, { target: { value: "first" } });
+        expect(await screen.findByText("Searching relationship nodes…")).toBeTruthy();
+        fireEvent.change(input, { target: { value: "second" } });
+        secondSearch.resolve(response({ ...relationshipNodePage, items: [omittedNode], total: 1 }));
+        expect(
+            await within(screen.getByLabelText("Focus node")).findByText("pkg.second"),
+        ).toBeTruthy();
+        firstSearch.resolve(response({ ...relationshipNodePage, items: [moduleA], total: 1 }));
+        await waitFor(() => {
+            expect(within(screen.getByLabelText("Focus node")).queryByText("pkg.a")).toBeNull();
+            expect(
+                within(screen.getByLabelText("Focus node")).getByText("pkg.second"),
+            ).toBeTruthy();
+        });
+
+        fireEvent.change(input, { target: { value: "missing" } });
+        expect(await screen.findByText("No relationship nodes match this search.")).toBeTruthy();
+        fireEvent.change(input, { target: { value: "failed" } });
+        expect(await screen.findByRole("alert")).toHaveProperty(
+            "textContent",
+            "Node search failed.",
+        );
+    });
+
+    it.each([
+        ["depth", "Depth", "2"],
+        ["resolution", "Resolution", "resolved-static"],
+    ])(
+        "clears stale graph and source evidence when a same-focus %s request fails",
+        async (_caseName, label, value) => {
+            const fetchMock = relationshipFetch(undefined, relationshipNeighborhood, (url) => {
+                const parameters = new URL(url, "http://localhost").searchParams;
+                if (
+                    parameters.get("depth") === "2" ||
+                    parameters.get("resolution_status") === "resolved-static"
+                ) {
+                    return Promise.resolve(response({ detail: "Changed graph failed." }, 500));
+                }
+                return null;
+            });
+            vi.stubGlobal("fetch", fetchMock);
+            const user = userEvent.setup();
+            render(<RelationshipsView snapshotId={snapshot.snapshot_id} />);
+
+            const relationshipButton = await screen.findByRole("button", {
+                name: /resolved-static/,
+            });
+            await user.click(relationshipButton);
+            expect(await screen.findByLabelText("Relationship source excerpt")).toBeTruthy();
+
+            await user.selectOptions(screen.getByLabelText(label), value);
+            expect(await screen.findByRole("alert")).toHaveProperty(
+                "textContent",
+                "Changed graph failed.",
+            );
+            expect(
+                screen.queryByRole("img", { name: "Focused relationship neighborhood" }),
+            ).toBeNull();
+            expect(screen.queryByRole("button", { name: /resolved-static/ })).toBeNull();
+            expect(screen.queryByLabelText("Relationship source excerpt")).toBeNull();
+            expect(screen.getByText(/Select an incoming or outgoing relationship/)).toBeTruthy();
+        },
+    );
+
+    it("invalidates selected evidence when server search changes effective focus", async () => {
+        vi.stubGlobal("fetch", relationshipFetch());
+        const user = userEvent.setup();
+        render(<RelationshipsView snapshotId={snapshot.snapshot_id} />);
+
+        await user.click(await screen.findByRole("button", { name: /resolved-static/ }));
+        expect(await screen.findByLabelText("Relationship source excerpt")).toBeTruthy();
+        await user.type(screen.getByPlaceholderText("Search nodes"), "pkg.b");
+
+        await waitFor(() => {
+            expect(screen.getByText("Selected node:").parentElement?.textContent).toContain(
+                "pkg.b",
+            );
+            expect(screen.queryByLabelText("Relationship source excerpt")).toBeNull();
+            expect(screen.queryByRole("button", { name: /resolved-static/ })).toBeNull();
+        });
+        expect(screen.getByText(/Select an incoming or outgoing relationship/)).toBeTruthy();
     });
 
     it("keeps later relationship source when an earlier source resolves afterward", async () => {
@@ -312,11 +539,39 @@ describe("RelationshipsView", () => {
 function relationshipFetch(
     sourceOverride?: (url: string) => Promise<Response> | null,
     neighborhood: RelationshipNeighborhood = relationshipNeighborhood,
+    graphOverride?: (url: string) => Promise<Response> | null,
 ) {
     return vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
         if (url.includes("/relationships/summary")) {
             return Promise.resolve(response(relationshipSummary));
+        }
+        if (url.includes("/relationships/nodes")) {
+            const parameters = new URL(url, "http://localhost").searchParams;
+            const mode = parameters.get("mode");
+            const search = parameters.get("search")?.toLocaleLowerCase() ?? "";
+            const nodeIds = parameters.getAll("node_ids");
+            let items =
+                mode === "packages"
+                    ? [packageNode]
+                    : mode === "inheritance"
+                      ? [classNode]
+                      : relationshipNodePage.items;
+            if (nodeIds.length > 0) {
+                items = items.filter((node) => nodeIds.includes(node.node_id));
+            } else if (search) {
+                items = items.filter((node) =>
+                    node.qualified_name.toLocaleLowerCase().includes(search),
+                );
+            }
+            return Promise.resolve(
+                response({
+                    ...relationshipNodePage,
+                    items,
+                    total: items.length,
+                    truncated: false,
+                }),
+            );
         }
         if (url.includes("/cycles")) {
             return Promise.resolve(
@@ -324,6 +579,9 @@ function relationshipFetch(
             );
         }
         if (url.includes("/relationships/neighborhood")) {
+            const overridden = graphOverride?.(url);
+            if (overridden) return overridden;
+            const parameters = new URL(url, "http://localhost").searchParams;
             const mode = new URL(url, "http://localhost").searchParams.get("mode");
             if (mode === "packages") {
                 return Promise.resolve(
@@ -346,6 +604,18 @@ function relationshipFetch(
                         nodes: [classNode],
                         relationships: [],
                         distances: { [classNode.node_id]: 0 },
+                    }),
+                );
+            }
+            const focusId = parameters.get("focus_id");
+            if (focusId === moduleB.node_id) {
+                return Promise.resolve(
+                    response({
+                        ...neighborhood,
+                        focus_id: moduleB.node_id,
+                        nodes: [moduleB],
+                        relationships: [],
+                        distances: { [moduleB.node_id]: 0 },
                     }),
                 );
             }

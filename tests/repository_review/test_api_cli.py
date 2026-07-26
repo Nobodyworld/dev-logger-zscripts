@@ -187,6 +187,75 @@ def test_relationship_api_is_bounded_typed_and_path_redacted(tmp_path: Path) -> 
         )
 
 
+def test_relationship_node_query_reaches_omitted_nodes_and_cycle_members(tmp_path: Path) -> None:
+    repository = tmp_path / "large-graph"
+    repository.mkdir()
+    for index in range(205):
+        (repository / f"module_{index:03}.py").write_text(
+            f"class Item{index:03}: pass\n",
+            encoding="utf-8",
+        )
+    (repository / "zcycle_a.py").write_text("import zcycle_b\n", encoding="utf-8")
+    (repository / "zcycle_b.py").write_text("import zcycle_a\n", encoding="utf-8")
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    snapshot_id = evidence.snapshot.snapshot_id
+    app = create_workspace_app(service=service)
+
+    with TestClient(app) as client:
+        summary = client.get(
+            f"/api/snapshots/{snapshot_id}/relationships/summary",
+            params={"max_nodes": 200},
+        ).json()
+        assert summary["node_count"] > 200
+        assert all(item["qualified_name"] != "zcycle_a" for item in summary["nodes"])
+
+        initial = client.get(
+            f"/api/snapshots/{snapshot_id}/relationships/nodes",
+            params={"mode": "modules", "page": 1, "page_size": 10},
+        )
+        assert initial.status_code == 200
+        assert initial.json()["total"] == 207
+        assert initial.json()["truncated"] is True
+
+        search = client.get(
+            f"/api/snapshots/{snapshot_id}/relationships/nodes",
+            params={"mode": "modules", "search": "ZCYCLE_A", "page_size": 10},
+        )
+        assert search.status_code == 200
+        assert search.json()["total"] == 1
+        omitted = search.json()["items"][0]
+        assert omitted["qualified_name"] == "zcycle_a"
+
+        neighborhood = client.get(
+            f"/api/snapshots/{snapshot_id}/relationships/neighborhood",
+            params={"mode": "modules", "focus_id": omitted["node_id"], "depth": 1},
+        )
+        assert neighborhood.status_code == 200
+        assert neighborhood.json()["focus_id"] == omitted["node_id"]
+        assert {item["qualified_name"] for item in neighborhood.json()["nodes"]} == {
+            "zcycle_a",
+            "zcycle_b",
+        }
+
+        cycle = client.get(
+            f"/api/snapshots/{snapshot_id}/cycles",
+            params={"relationship_type": "imports"},
+        ).json()["items"][0]
+        member_id = cycle["member_node_ids"][0]
+        assert all(item["node_id"] != member_id for item in summary["nodes"])
+        member = client.get(
+            f"/api/snapshots/{snapshot_id}/relationships/nodes",
+            params=[("mode", "modules"), ("node_ids", member_id), ("page_size", "10")],
+        )
+        assert member.status_code == 200
+        assert member.json()["total"] == 1
+        assert member.json()["items"][0]["node_id"] == member_id
+        assert str(repository.resolve()) not in json.dumps(
+            {"search": search.json(), "member": member.json(), "neighborhood": neighborhood.json()}
+        )
+
+
 def test_relationship_api_handles_old_snapshot_explicitly(tmp_path: Path) -> None:
     repository = tmp_path / "ordinary"
     shutil.copytree(FIXTURES / "ordinary", repository)
@@ -210,11 +279,23 @@ def test_relationship_api_handles_old_snapshot_explicitly(tmp_path: Path) -> Non
     with TestClient(app) as client:
         summary = client.get(f"/api/snapshots/{evidence.snapshot.snapshot_id}/relationships/summary")
         relationships = client.get(f"/api/snapshots/{evidence.snapshot.snapshot_id}/relationships")
+        nodes = client.get(
+            f"/api/snapshots/{evidence.snapshot.snapshot_id}/relationships/nodes",
+            params={"mode": "modules"},
+        )
         cycles = client.get(f"/api/snapshots/{evidence.snapshot.snapshot_id}/cycles")
 
     assert summary.status_code == 200
     assert summary.json()["supported"] is False
     assert relationships.json()["items"] == []
+    assert nodes.json() == {
+        "supported": False,
+        "items": [],
+        "total": 0,
+        "page": 1,
+        "page_size": 100,
+        "truncated": False,
+    }
     assert cycles.json()["items"] == []
 
 

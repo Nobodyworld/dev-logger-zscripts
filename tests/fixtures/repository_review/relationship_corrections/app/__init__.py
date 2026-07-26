@@ -1,0 +1,1 @@
+"""Binding-resolution fixture package."""

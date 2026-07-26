@@ -8,9 +8,9 @@ from dataclasses import asdict, dataclass
 from enum import StrEnum
 from typing import Any, cast
 
-ANALYZER_VERSION = "2"
+ANALYZER_VERSION = "3"
 SCHEMA_VERSION = "2"
-RULE_SET_VERSION = "2"
+RULE_SET_VERSION = "3"
 
 
 class AnalysisState(StrEnum):

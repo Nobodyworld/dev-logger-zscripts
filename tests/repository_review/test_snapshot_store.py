@@ -84,6 +84,15 @@ def test_snapshot_round_trip_filters_and_source_evidence(tmp_path: Path) -> None
     assert first.relationships
     assert service.store.list_graph_nodes(first.snapshot.snapshot_id)
     assert service.store.all_relationships(first.snapshot.snapshot_id) == first.relationships
+    node_page = service.store.query_graph_nodes(
+        first.snapshot.snapshot_id,
+        mode="inheritance",
+        search="example",
+        page=1,
+        page_size=1,
+    )
+    assert node_page.total == 2
+    assert node_page.items[0].qualified_name == "pkg.module.Example"
 
     page = service.symbols(
         first.snapshot.snapshot_id,

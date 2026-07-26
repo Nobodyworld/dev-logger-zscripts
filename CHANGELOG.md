@@ -4,6 +4,10 @@
 
 ### Added
 
+- Correct bounded relationship discovery and resolution with server-side node
+  search, complete neighborhood request identities, proven qualified-name
+  bindings, and conservative `Literal`/`Annotated` handling. Analyzer and
+  rule-set versions advance to 3 while evidence and database schemas remain 2.
 - Deterministic import, containment, inheritance, and bounded type-reference
   evidence for Repository Review, including explicit ambiguous/unresolved
   records, SCC/cycle analysis, fan-in/fan-out, bounded graph APIs, and the

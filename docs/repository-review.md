@@ -146,9 +146,14 @@ roadmap phases.
 
 ## Determinism and persistence
 
-Version `2` of the analyzer, evidence schema, and rule set produces content-based
-repository, file, module, symbol, diagnostic, graph-node, relationship, cycle,
-and snapshot identifiers.
+Analyzer and rule-set version `3` produce content-based repository, file,
+module, symbol, diagnostic, graph-node, relationship, cycle, and snapshot
+identifiers using evidence schema version `2`. Version 3 requires a proven
+same-module, import, alias, or supported static-export binding before resolving
+a qualified symbol name. It also excludes `Literal` values and all but the
+first type argument of `Annotated` from type-reference evidence. These
+corrections intentionally change snapshot identity without changing the stored
+evidence shape or database schema.
 Canonical JSON uses sorted keys/records and LF termination. For unchanged source,
 configuration, and analyzer versions, core evidence is byte-identical; wall-clock
 timestamps and duration are deliberately outside the canonical payload.
@@ -168,6 +173,14 @@ import source locations. Migration is versioned, transactional, idempotent, and
 does not reset existing local data. Snapshots created by analyzer/schema v1
 remain openable and retain their original identity; relationship routes report
 `supported: false` with empty data instead of reinterpreting them.
+
+The Relationships workspace discovers focus nodes through a bounded server-side
+query rather than only the summary sample. Search is case-insensitive over
+qualified names, returns at most 100 deterministic results at a time, and
+reports total matches and truncation. Cycle selection uses bounded exact node
+lookup, so an omitted cycle member remains focusable. Neighborhood results and
+source evidence are keyed to the complete snapshot, focus, mode, depth,
+relationship filter, resolution filter, and node/edge-limit request.
 
 The application database lives outside analyzed repositories:
 

@@ -1,6 +1,7 @@
 import type {
     CycleGroup,
     GraphNode,
+    GraphNodePage,
     Overview,
     Relationship,
     RelationshipNeighborhood,
@@ -168,6 +169,15 @@ export const relationshipSummary: RelationshipSummary = {
     fan_in: { [moduleA.node_id]: 0, [moduleB.node_id]: 1 },
     fan_out: { [moduleA.node_id]: 1, [moduleB.node_id]: 0 },
     inheritance_depth: {},
+};
+
+export const relationshipNodePage: GraphNodePage = {
+    supported: true,
+    items: [moduleA, moduleB],
+    total: 2,
+    page: 1,
+    page_size: 100,
+    truncated: false,
 };
 
 export const relationshipNeighborhood: RelationshipNeighborhood = {

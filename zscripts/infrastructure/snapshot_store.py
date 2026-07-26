@@ -57,6 +57,16 @@ class RelationshipPage:
 
 
 @dataclass(frozen=True, slots=True)
+class GraphNodePage:
+    """A bounded page of graph nodes returned by an allowlisted query."""
+
+    items: tuple[GraphNodeRecord, ...]
+    total: int
+    page: int
+    page_size: int
+
+
+@dataclass(frozen=True, slots=True)
 class AnalysisStatusRecord:
     """Persisted state for an in-process analysis job."""
 
@@ -434,6 +444,68 @@ class SnapshotStore:
                 (snapshot_id,),
             ).fetchall()
         return tuple(_graph_node_from_row(row) for row in rows)
+
+    def query_graph_nodes(
+        self,
+        snapshot_id: str,
+        *,
+        mode: str,
+        search: str = "",
+        node_ids: tuple[str, ...] = (),
+        page: int = 1,
+        page_size: int = 100,
+    ) -> GraphNodePage:
+        self.get_snapshot(snapshot_id)
+        mode_clauses = {
+            "modules": "node_type = 'module'",
+            "packages": "node_type = 'package'",
+            "inheritance": "node_type = 'symbol' AND symbol_kind = 'class'",
+            "containment": "node_type IN ('package', 'module', 'symbol')",
+            "types": "node_type = 'symbol'",
+        }
+        if mode not in mode_clauses:
+            raise ValueError("Unsupported relationship graph mode.")
+        normalized_search = search.strip()
+        if len(normalized_search) > 200:
+            raise ValueError("Graph node search is outside the supported range.")
+        if page < 1 or page_size < 1 or page_size > 100:
+            raise ValueError("Graph node pagination is outside the supported range.")
+        if len(node_ids) > 100 or any(not 16 <= len(node_id) <= 128 for node_id in node_ids):
+            raise ValueError("Graph node identifiers are outside the supported range.")
+
+        clauses = ["snapshot_id = ?", mode_clauses[mode]]
+        parameters: list[object] = [snapshot_id]
+        if normalized_search:
+            clauses.append("instr(lower(qualified_name), lower(?)) > 0")
+            parameters.append(normalized_search)
+        if node_ids:
+            placeholders = ", ".join("?" for _ in node_ids)
+            clauses.append(f"node_id IN ({placeholders})")  # nosec B608
+            parameters.extend(node_ids)
+        where = " AND ".join(clauses)
+        offset = (page - 1) * page_size
+        with self._connect() as connection:
+            total = int(
+                connection.execute(
+                    f"SELECT COUNT(*) FROM graph_nodes WHERE {where}",  # nosec B608
+                    parameters,
+                ).fetchone()[0]
+            )
+            rows = connection.execute(
+                f"""
+                SELECT * FROM graph_nodes
+                WHERE {where}
+                ORDER BY qualified_name COLLATE NOCASE, qualified_name, node_id
+                LIMIT ? OFFSET ?
+                """,  # nosec B608
+                (*parameters, page_size, offset),
+            ).fetchall()
+        return GraphNodePage(
+            items=tuple(_graph_node_from_row(row) for row in rows),
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
 
     def list_relationships(
         self,
@@ -1320,6 +1392,7 @@ CREATE INDEX IF NOT EXISTS idx_relationships_snapshot_target
 __all__ = [
     "AnalysisStatusRecord",
     "DATABASE_SCHEMA_VERSION",
+    "GraphNodePage",
     "RelationshipPage",
     "SnapshotNotFoundError",
     "SnapshotStore",

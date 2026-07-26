@@ -1,10 +1,11 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import {
     ApiError,
     getCycles,
     getRelationshipNeighborhood,
+    getRelationshipNodes,
     getRelationshipSummary,
     getSource,
 } from "../api";
@@ -13,6 +14,7 @@ import type {
     CycleGroup,
     GraphMode,
     GraphNode,
+    GraphNodePage,
     Relationship,
     RelationshipNeighborhood,
     RelationshipSummary,
@@ -36,21 +38,46 @@ export function RelationshipsView({ snapshotId }: RelationshipsViewProps) {
     const [cycles, setCycles] = useState<CycleGroup[]>([]);
     const [mode, setMode] = useState<GraphMode>("modules");
     const [search, setSearch] = useState("");
-    const deferredSearch = useDeferredValue(search);
+    const [requestedNodeIds, setRequestedNodeIds] = useState<string[]>([]);
     const [focusId, setFocusId] = useState("");
     const [depth, setDepth] = useState(1);
     const [relationshipType, setRelationshipType] = useState("");
     const [resolutionStatus, setResolutionStatus] = useState("");
-    const [neighborhood, setNeighborhood] = useState<RelationshipNeighborhood | null>(null);
+    const [nodeResult, setNodeResult] = useState<{
+        key: string;
+        value: GraphNodePage;
+    } | null>(null);
+    const [nodeErrorResult, setNodeErrorResult] = useState<{
+        key: string;
+        message: string;
+    } | null>(null);
+    const [graphResult, setGraphResult] = useState<{
+        key: string;
+        value: RelationshipNeighborhood;
+    } | null>(null);
+    const [graphErrorResult, setGraphErrorResult] = useState<{
+        key: string;
+        message: string;
+    } | null>(null);
     const [selectedRelationship, setSelectedRelationship] = useState<Relationship | null>(null);
+    const [selectedRelationshipKey, setSelectedRelationshipKey] = useState("");
     const [source, setSource] = useState<SourceEvidence | null>(null);
     const [sourceLoading, setSourceLoading] = useState(false);
     const [sourceError, setSourceError] = useState<string | null>(null);
-    const [completedGraphKey, setCompletedGraphKey] = useState("");
-    const [error, setError] = useState<string | null>(null);
+    const [summaryError, setSummaryError] = useState<string | null>(null);
     const summaryGeneration = useRef(0);
+    const nodeGeneration = useRef(0);
     const graphGeneration = useRef(0);
     const sourceGeneration = useRef(0);
+
+    const invalidateEvidence = useCallback(() => {
+        sourceGeneration.current += 1;
+        setSelectedRelationship(null);
+        setSelectedRelationshipKey("");
+        setSource(null);
+        setSourceError(null);
+        setSourceLoading(false);
+    }, []);
 
     useEffect(() => {
         const generation = summaryGeneration.current + 1;
@@ -60,11 +87,13 @@ export function RelationshipsView({ snapshotId }: RelationshipsViewProps) {
                 if (summaryGeneration.current !== generation) return;
                 setSummary(nextSummary);
                 setCycles(nextCycles.items);
-                setError(null);
+                setSummaryError(null);
             })
             .catch((caught: unknown) => {
                 if (summaryGeneration.current === generation) {
-                    setError(messageFrom(caught, "Relationship evidence could not be loaded."));
+                    setSummaryError(
+                        messageFrom(caught, "Relationship evidence could not be loaded."),
+                    );
                 }
             });
         return () => {
@@ -72,7 +101,49 @@ export function RelationshipsView({ snapshotId }: RelationshipsViewProps) {
         };
     }, [snapshotId]);
 
-    const modeNodes = useMemo(() => nodesForMode(summary?.nodes ?? [], mode), [mode, summary]);
+    const nodeRequestKey = JSON.stringify({
+        snapshotId,
+        mode,
+        search: search.trim(),
+        nodeIds: requestedNodeIds,
+        page: 1,
+        pageSize: 100,
+    });
+
+    useEffect(() => {
+        if (!summary?.supported) return;
+        const generation = nodeGeneration.current + 1;
+        nodeGeneration.current = generation;
+        getRelationshipNodes(snapshotId, {
+            mode,
+            search: requestedNodeIds.length > 0 ? "" : search.trim(),
+            page: 1,
+            pageSize: 100,
+            nodeIds: requestedNodeIds,
+        })
+            .then((result) => {
+                if (nodeGeneration.current === generation) {
+                    setNodeResult({ key: nodeRequestKey, value: result });
+                }
+            })
+            .catch((caught: unknown) => {
+                if (nodeGeneration.current === generation) {
+                    setNodeErrorResult({
+                        key: nodeRequestKey,
+                        message: messageFrom(caught, "Relationship nodes could not be loaded."),
+                    });
+                }
+            });
+        return () => {
+            nodeGeneration.current += 1;
+        };
+    }, [mode, nodeRequestKey, requestedNodeIds, search, snapshotId, summary?.supported]);
+
+    const displayedNodePage = nodeResult?.key === nodeRequestKey ? nodeResult.value : null;
+    const displayedNodeError =
+        nodeErrorResult?.key === nodeRequestKey ? nodeErrorResult.message : null;
+    const nodeLoading = Boolean(summary?.supported && !displayedNodePage && !displayedNodeError);
+    const modeNodes = useMemo(() => displayedNodePage?.items ?? [], [displayedNodePage]);
     const duplicateNodeNames = useMemo(() => {
         const counts = new Map<string, number>();
         for (const node of modeNodes) {
@@ -84,27 +155,26 @@ export function RelationshipsView({ snapshotId }: RelationshipsViewProps) {
                 .map(([qualifiedName]) => qualifiedName),
         );
     }, [modeNodes]);
-    const visibleNodes = useMemo(() => {
-        const query = deferredSearch.trim().toLocaleLowerCase();
-        return query
-            ? modeNodes.filter((node) => node.qualified_name.toLocaleLowerCase().includes(query))
-            : modeNodes;
-    }, [deferredSearch, modeNodes]);
 
-    const effectiveFocusId = visibleNodes.some((node) => node.node_id === focusId)
+    const effectiveFocusId = modeNodes.some((node) => node.node_id === focusId)
         ? focusId
-        : (visibleNodes[0]?.node_id ?? "");
-    const graphRequestKey = [
+        : (modeNodes[0]?.node_id ?? "");
+    const graphRequestKey = JSON.stringify({
         snapshotId,
-        effectiveFocusId,
+        focusId: effectiveFocusId,
         mode,
         depth,
         relationshipType,
         resolutionStatus,
-    ].join(":");
+        maxNodes: graphLimits.maxNodes,
+        maxEdges: graphLimits.maxEdges,
+    });
 
     useEffect(() => {
-        if (!effectiveFocusId) return;
+        if (!effectiveFocusId) {
+            graphGeneration.current += 1;
+            return;
+        }
         const generation = graphGeneration.current + 1;
         graphGeneration.current = generation;
         getRelationshipNeighborhood(snapshotId, {
@@ -117,20 +187,18 @@ export function RelationshipsView({ snapshotId }: RelationshipsViewProps) {
         })
             .then((result) => {
                 if (graphGeneration.current === generation) {
-                    setNeighborhood(result);
-                    setError(null);
+                    setGraphResult({ key: graphRequestKey, value: result });
                 }
             })
             .catch((caught: unknown) => {
                 if (graphGeneration.current === generation) {
-                    setError(
-                        messageFrom(caught, "The focused relationship graph could not be loaded."),
-                    );
-                }
-            })
-            .finally(() => {
-                if (graphGeneration.current === generation) {
-                    setCompletedGraphKey(graphRequestKey);
+                    setGraphErrorResult({
+                        key: graphRequestKey,
+                        message: messageFrom(
+                            caught,
+                            "The focused relationship graph could not be loaded.",
+                        ),
+                    });
                 }
             });
         return () => {
@@ -148,18 +216,18 @@ export function RelationshipsView({ snapshotId }: RelationshipsViewProps) {
 
     useEffect(
         () => () => {
+            nodeGeneration.current += 1;
             graphGeneration.current += 1;
             sourceGeneration.current += 1;
         },
         [],
     );
 
-    const displayedNeighborhood =
-        neighborhood?.focus_id === effectiveFocusId && neighborhood.mode === mode
-            ? neighborhood
-            : null;
+    const displayedNeighborhood = graphResult?.key === graphRequestKey ? graphResult.value : null;
+    const displayedGraphError =
+        graphErrorResult?.key === graphRequestKey ? graphErrorResult.message : null;
     const graphLoading = Boolean(
-        effectiveFocusId && completedGraphKey !== graphRequestKey && !error,
+        effectiveFocusId && !displayedNeighborhood && !displayedGraphError,
     );
     const nodeIndex = useMemo(
         () => new Map((displayedNeighborhood?.nodes ?? []).map((node) => [node.node_id, node])),
@@ -179,38 +247,63 @@ export function RelationshipsView({ snapshotId }: RelationshipsViewProps) {
     const focusedNode =
         nodeIndex.get(effectiveFocusId) ??
         modeNodes.find((node) => node.node_id === effectiveFocusId);
-
-    const invalidateEvidence = () => {
-        sourceGeneration.current += 1;
-        setSelectedRelationship(null);
-        setSource(null);
-        setSourceError(null);
-        setSourceLoading(false);
-    };
+    const displayedSelectedRelationship =
+        selectedRelationshipKey === graphRequestKey &&
+        displayedNeighborhood?.relationships.some(
+            (item) => item.relationship_id === selectedRelationship?.relationship_id,
+        )
+            ? selectedRelationship
+            : null;
 
     const chooseFocus = (nodeId: string) => {
         invalidateEvidence();
-        setError(null);
+        setGraphErrorResult(null);
         setFocusId(nodeId);
     };
 
     const chooseMode = (nextMode: GraphMode) => {
         invalidateEvidence();
-        setError(null);
+        setNodeErrorResult(null);
+        setGraphErrorResult(null);
         setSearch("");
+        setRequestedNodeIds([]);
+        setFocusId("");
         setMode(nextMode);
+    };
+
+    const chooseSearch = (value: string) => {
+        invalidateEvidence();
+        setNodeErrorResult(null);
+        setGraphErrorResult(null);
+        setRequestedNodeIds([]);
+        setFocusId("");
+        setSearch(value);
     };
 
     const updateGraphFilter = (update: () => void) => {
         invalidateEvidence();
-        setError(null);
+        setGraphErrorResult(null);
         update();
+    };
+
+    const chooseCycle = (cycleId: string) => {
+        const cycle = cycles.find((item) => item.cycle_id === cycleId);
+        if (!cycle) return;
+        const memberId = cycle.member_node_ids[0] ?? "";
+        invalidateEvidence();
+        setNodeErrorResult(null);
+        setGraphErrorResult(null);
+        setSearch("");
+        setMode(cycle.relationship_type === "imports" ? "modules" : "inheritance");
+        setFocusId(memberId);
+        setRequestedNodeIds(memberId ? [memberId] : []);
     };
 
     const chooseRelationship = (relationship: Relationship) => {
         const generation = sourceGeneration.current + 1;
         sourceGeneration.current = generation;
         setSelectedRelationship(relationship);
+        setSelectedRelationshipKey(graphRequestKey);
         setSource(null);
         setSourceError(null);
         setSourceLoading(true);
@@ -233,11 +326,22 @@ export function RelationshipsView({ snapshotId }: RelationshipsViewProps) {
             });
     };
 
-    if (!summary && !error) {
+    if (!summary && !summaryError) {
         return (
             <section className="view relationships-view">
                 <h2>Relationships</h2>
                 <p role="status">Loading bounded relationship evidence…</p>
+            </section>
+        );
+    }
+
+    if (summaryError) {
+        return (
+            <section className="view relationships-view">
+                <h2>Relationships</h2>
+                <p className="error-message" role="alert">
+                    {summaryError}
+                </p>
             </section>
         );
     }
@@ -300,11 +404,12 @@ export function RelationshipsView({ snapshotId }: RelationshipsViewProps) {
                         type="search"
                         value={search}
                         placeholder="Search nodes"
-                        onChange={(event) => setSearch(event.target.value)}
+                        onChange={(event) => chooseSearch(event.target.value)}
                     />
                 </label>
                 <Filter label="Focus node" value={effectiveFocusId} onChange={chooseFocus}>
-                    {visibleNodes.map((node) => (
+                    {modeNodes.length === 0 ? <option value="">No matching nodes</option> : null}
+                    {modeNodes.map((node) => (
                         <option value={node.node_id} key={node.node_id}>
                             {node.qualified_name}
                             {duplicateNodeNames.has(node.qualified_name) && node.relative_path
@@ -344,18 +449,7 @@ export function RelationshipsView({ snapshotId }: RelationshipsViewProps) {
                     <option value="ambiguous">Ambiguous</option>
                     <option value="unresolved-dynamic">Unresolved dynamic</option>
                 </Filter>
-                <Filter
-                    label="Cycle group"
-                    value=""
-                    onChange={(cycleId) => {
-                        const cycle = cycles.find((item) => item.cycle_id === cycleId);
-                        if (!cycle) return;
-                        chooseMode(
-                            cycle.relationship_type === "imports" ? "modules" : "inheritance",
-                        );
-                        setFocusId(cycle.member_node_ids[0] ?? "");
-                    }}
-                >
+                <Filter label="Cycle group" value="" onChange={chooseCycle}>
                     <option value="">Choose a cycle</option>
                     {cycles.map((cycle, index) => (
                         <option value={cycle.cycle_id} key={cycle.cycle_id}>
@@ -365,9 +459,25 @@ export function RelationshipsView({ snapshotId }: RelationshipsViewProps) {
                     ))}
                 </Filter>
             </div>
-            {error ? (
+            {nodeLoading ? <p role="status">Searching relationship nodes…</p> : null}
+            {displayedNodeError ? (
                 <p className="error-message" role="alert">
-                    {error}
+                    {displayedNodeError}
+                </p>
+            ) : null}
+            {!nodeLoading && !displayedNodeError && displayedNodePage?.total === 0 ? (
+                <p className="relationships-empty">No relationship nodes match this search.</p>
+            ) : null}
+            {displayedNodePage?.truncated ? (
+                <p className="truncation-message" role="status">
+                    Node search matched {displayedNodePage.total.toLocaleString()} nodes. Showing
+                    the first {displayedNodePage.items.length.toLocaleString()} deterministic
+                    results; narrow the search to focus another node.
+                </p>
+            ) : null}
+            {displayedGraphError ? (
+                <p className="error-message" role="alert">
+                    {displayedGraphError}
                 </p>
             ) : null}
             {graphLoading ? <p role="status">Loading focused graph…</p> : null}
@@ -376,7 +486,7 @@ export function RelationshipsView({ snapshotId }: RelationshipsViewProps) {
                     Selected node: <span className="mono">{focusedNode.qualified_name}</span>
                 </p>
             ) : null}
-            {displayedNeighborhood?.truncated || summary?.truncated ? (
+            {displayedNeighborhood?.truncated ? (
                 <p className="truncation-message" role="status">
                     Results were truncated at the configured local graph limits. Narrow the mode,
                     focus, filters, or depth.
@@ -467,22 +577,22 @@ export function RelationshipsView({ snapshotId }: RelationshipsViewProps) {
                     title="Incoming relationships"
                     items={incoming}
                     nodeIndex={nodeIndex}
-                    selectedId={selectedRelationship?.relationship_id ?? null}
+                    selectedId={displayedSelectedRelationship?.relationship_id ?? null}
                     onSelect={chooseRelationship}
                 />
                 <RelationshipList
                     title="Outgoing relationships"
                     items={outgoing}
                     nodeIndex={nodeIndex}
-                    selectedId={selectedRelationship?.relationship_id ?? null}
+                    selectedId={displayedSelectedRelationship?.relationship_id ?? null}
                     onSelect={chooseRelationship}
                 />
             </div>
             <RelationshipEvidence
-                relationship={selectedRelationship}
-                source={source}
-                loading={sourceLoading}
-                error={sourceError}
+                relationship={displayedSelectedRelationship}
+                source={displayedSelectedRelationship ? source : null}
+                loading={displayedSelectedRelationship ? sourceLoading : false}
+                error={displayedSelectedRelationship ? sourceError : null}
             />
         </section>
     );
@@ -612,16 +722,6 @@ function RelationshipEvidence({
             )}
         </section>
     );
-}
-
-function nodesForMode(nodes: GraphNode[], mode: GraphMode): GraphNode[] {
-    if (mode === "modules") return nodes.filter((node) => node.node_type === "module");
-    if (mode === "packages") return nodes.filter((node) => node.node_type === "package");
-    if (mode === "inheritance") {
-        return nodes.filter((node) => node.node_type === "symbol" && node.symbol_kind === "class");
-    }
-    if (mode === "types") return nodes.filter((node) => node.node_type === "symbol");
-    return nodes;
 }
 
 function layoutNodes(neighborhood: RelationshipNeighborhood | null): PositionedNode[] {

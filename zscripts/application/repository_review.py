@@ -404,6 +404,43 @@ class RepositoryReviewService:
             "page_size": result.page_size,
         }
 
+    def relationship_nodes(
+        self,
+        snapshot_id: str,
+        *,
+        mode: str,
+        search: str = "",
+        node_ids: tuple[str, ...] = (),
+        page: int = 1,
+        page_size: int = 100,
+    ) -> dict[str, object]:
+        snapshot = self.store.get_snapshot(snapshot_id)
+        if not _version_at_least(snapshot.schema_version, 2):
+            return {
+                "supported": False,
+                "items": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+                "truncated": False,
+            }
+        result = self.store.query_graph_nodes(
+            snapshot_id,
+            mode=mode,
+            search=search,
+            node_ids=node_ids,
+            page=page,
+            page_size=page_size,
+        )
+        return {
+            "supported": True,
+            "items": [public_graph_node(item) for item in result.items],
+            "total": result.total,
+            "page": result.page,
+            "page_size": result.page_size,
+            "truncated": result.page * result.page_size < result.total,
+        }
+
     def relationship_neighborhood(
         self,
         snapshot_id: str,

@@ -143,6 +143,9 @@ zscripts experimental analyze PATH \
 - resource values must be positive; invalid values fail before analysis.
 - `zscripts workspace --host` accepts only `127.0.0.1`; use `--port` to select a
   different local port.
+- Relationship neighborhood requests accept depth `1`–`3`, at most 100 nodes
+  and 200 edges, and report truncation explicitly. Cycle queries return at most
+  100 groups. These server-side bounds are not configurable in this slice.
 
 See [Experimental Repository Review Workspace](repository-review.md) for default
 exclusions, storage, and privacy details.

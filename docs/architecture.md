@@ -31,24 +31,34 @@ The experimental workspace follows the same dependency direction:
 ```mermaid
 flowchart LR
     A["Read-only repository discovery"] --> B["Python AST analyzer"]
-    B --> C["Versioned evidence dataclasses"]
-    C --> D["Atomic SQLite snapshot store"]
-    D --> E["RepositoryReviewService"]
-    E --> F["Experimental CLI"]
-    E --> G["Loopback FastAPI interface"]
-    G --> H["React Overview and Symbols workspace"]
+    B --> C["Deterministic relationship resolver"]
+    C --> D["Versioned evidence dataclasses"]
+    D --> E["Atomic SQLite snapshot store"]
+    E --> F["RepositoryReviewService"]
+    F --> G["Experimental CLI"]
+    F --> H["Loopback FastAPI interface"]
+    H --> I["React Overview, Symbols, and Relationships workspace"]
 ```
 
 - `zscripts.domain.repository_review` owns immutable evidence and version
   contracts.
-- `zscripts.infrastructure.repository_discovery` and `python_analyzer` treat the
-  selected repository as untrusted input and never import it.
+- `zscripts.infrastructure.repository_discovery`, `python_analyzer`, and
+  `relationship_analysis` treat the selected repository as untrusted input,
+  never import it, and resolve only deterministic static evidence.
 - `zscripts.infrastructure.snapshot_store` persists only completed evidence
-  atomically outside the repository.
+  atomically outside the repository. Database schema v2 migrates v1 data
+  without reinterpreting old snapshot identities.
 - `zscripts.application.repository_review` is the single orchestration/query
   surface used by CLI and API.
 - `zscripts.interfaces.workspace_api` is a same-origin, localhost-only transport.
 - `workspace-ui` renders evidence; it does not analyze source or construct SQL.
+
+The relationship resolver derives language-neutral graph nodes and immutable
+relationship records from one snapshot. Sorted Kosaraju traversal identifies
+strongly connected components; deterministic adjacency indexes provide
+fan-in/fan-out, inheritance depth, and bounded breadth-first neighborhoods.
+Package dependencies are derived from resolved module imports rather than
+persisted as a second source of truth.
 
 Generated frontend assets are copied into package data during the quality/build
 flow. The existing zipapp remains a lightweight CLI artifact; the workspace is

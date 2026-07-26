@@ -4,15 +4,17 @@ Status: **PUBLIC BETA — ACTIVE DEVELOPMENT**
 
 The repository review workspace is an experimental, local-first way to scan an
 ordinary Python repository, store deterministic metadata snapshots, and explore
-an Overview and searchable Symbols table. It does not require an LLM, a cloud
-account, Docker, or an external database.
+an Overview, searchable Symbols table, and focused relationship graphs. It does
+not require an LLM, a cloud account, Docker, or an external database.
 
 The MVP flow is:
 
 ```text
-Local repository → bounded static scan → atomic SQLite snapshot
-                                           ↓
-                           localhost API → React workspace
+Local repository → bounded static scan → deterministic relationships
+                                                   ↓
+                                      atomic SQLite snapshot
+                                                   ↓
+                                  localhost API → React workspace
 ```
 
 The existing log-normalization CLI remains supported. New repository-review
@@ -74,6 +76,18 @@ The Symbols view supports:
   containment, and exact source ranges;
 - an on-demand, bounded source drawer.
 
+The Relationships view supports:
+
+- module-import, derived package-dependency, containment, inheritance, and
+  bounded type-reference modes;
+- focused node search, depth `1`–`3`, allowlisted evidence filters, and cycle
+  selection;
+- deterministic SVG neighborhoods with a keyboard-selectable textual
+  equivalent;
+- incoming and outgoing evidence lists, exact repository-relative source
+  locations, and an on-demand source panel;
+- explicit loading, unsupported, error, empty, and truncation states.
+
 Recent repositories and prior completed snapshots can be reopened. Failed and
 cancelled attempts are tracked as attempts but never promoted as completed
 snapshots.
@@ -91,6 +105,27 @@ It can establish:
 - class base expressions as written;
 - signatures, annotations, decorators, async state, visibility, and docstring
   presence.
+- unique internal import and class-base targets, conservative internal type
+  references, containment, strongly connected components, fan-in/fan-out, and
+  cycle-safe inheritance depth.
+
+Relationship records use these types:
+
+- `contains`: package-to-module, module-to-top-level-symbol, and lexical
+  symbol-to-nested-symbol containment;
+- `imports`: module imports resolved from absolute or relative syntax;
+- `inherits`: one class-base candidate per written base expression;
+- `references-type`: bounded names found in parameter/return annotations and
+  statically declared class or attribute annotations.
+
+Resolution status is never inferred from convenience:
+
+- `resolved-static`: exactly one supported internal target;
+- `probable-static`: one strongly evidenced internal target with incomplete
+  export context;
+- `ambiguous`: multiple supported targets remain;
+- `unresolved-dynamic`: external, built-in, dynamic, or unsupported evidence
+  has no internal edge.
 
 It cannot prove:
 
@@ -102,22 +137,37 @@ It cannot prove:
   migrations, plugins, or execution.
 
 Malformed files produce bounded diagnostics and do not stop other files from
-being analyzed. Imports and bases are syntax evidence, not resolved runtime
-relationships. Relationship graphs, findings, comparisons, and handoffs remain
-later roadmap phases.
+being analyzed. Strings and forward references are parsed only as bounded
+textual names; annotations are never evaluated. Ordinary calls and assignments
+do not imply composition, and this slice does not build a function-level call
+graph. Resolved static evidence remains a source-level claim, not proof of
+runtime behavior. Findings, scoring, comparisons, and handoffs remain later
+roadmap phases.
 
 ## Determinism and persistence
 
-Version `1` of the analyzer, evidence schema, and rule set produces content-based
-repository, file, module, symbol, diagnostic, and snapshot identifiers.
+Version `2` of the analyzer, evidence schema, and rule set produces content-based
+repository, file, module, symbol, diagnostic, graph-node, relationship, cycle,
+and snapshot identifiers.
 Canonical JSON uses sorted keys/records and LF termination. For unchanged source,
 configuration, and analyzer versions, core evidence is byte-identical; wall-clock
 timestamps and duration are deliberately outside the canonical payload.
+
+Relationship identifiers hash the sorted semantic record, including type,
+source, optional target or unresolved target text, resolution status, location,
+analyzer version, and bounded textual evidence. Cycle identifiers hash sorted
+node and edge membership. Snapshot identity includes both sets.
 
 SQLite writes use foreign keys, explicit transactions, and atomic promotion.
 Only a fully written evidence set can become a completed snapshot. Repeating an
 unchanged scan reuses the same snapshot identity instead of creating duplicate
 evidence rows.
+
+Database schema v2 adds normalized graph, relationship, and cycle tables plus
+import source locations. Migration is versioned, transactional, idempotent, and
+does not reset existing local data. Snapshots created by analyzer/schema v1
+remain openable and retain their original identity; relationship routes report
+`supported: false` with empty data instead of reinterpreting them.
 
 The application database lives outside analyzed repositories:
 
@@ -169,6 +219,14 @@ uses same-origin routes, no CORS grant, a restrictive Content Security Policy,
 and a loopback-only binding. Repository-derived text is rendered through React
 escaping.
 
+Relationship exploration is deliberately focused: neighborhood responses allow
+depth `1`–`3`, at most 100 nodes and 200 edges, and explicit truncation.
+Summary node lists are capped at 500 and cycle responses at 100 groups.
+Traversal sorts nodes and edges before deterministic SCC and breadth-first
+algorithms. A cycle group is a strongly connected component of resolved
+internal imports or inheritance edges (including a resolved self-edge), not a
+severity or finding.
+
 Static analysis is not a malware or secret scanner. Review local evidence before
 sharing it. Report suspected vulnerabilities through the private process in
 [SECURITY.md](../SECURITY.md).
@@ -187,10 +245,18 @@ The same process serves the SPA and these experimental routes:
 - `GET /api/snapshots/{snapshot_id}/overview`
 - `GET /api/snapshots/{snapshot_id}/symbols`
 - `GET /api/snapshots/{snapshot_id}/source`
+- `GET /api/snapshots/{snapshot_id}/relationships/summary`
+- `GET /api/snapshots/{snapshot_id}/relationships`
+- `GET /api/snapshots/{snapshot_id}/relationships/neighborhood`
+- `GET /api/snapshots/{snapshot_id}/cycles`
 
 Request models reject unknown fields. Validation responses are generic and do
 not reflect user-supplied local paths. Symbol sort fields and SQL identifiers
 are allowlisted; user values remain bound parameters.
+
+Automatic Swagger and ReDoc interfaces are disabled so the strict CSP never
+depends on hosted assets. Machine-readable OpenAPI remains available at
+`/api/openapi.json`.
 
 ## Development and validation
 
@@ -211,6 +277,11 @@ python scripts/quality_gate.py workspace-api
 python scripts/quality_gate.py packaged-workspace
 python scripts/quality_gate.py quality
 ```
+
+Focused relationship tests live in `tests/repository_review` and cover stable
+identities, resolution, SCCs, graph metrics, bounds, migrations, rollback, old
+snapshots, API validation, frontend interaction, stale requests, and generated
+medium/large performance fixtures.
 
 See [Dependency Audit](DEPENDENCIES.md) for dependency/license rationale and
 [Repository Review Workspace Roadmap](product/REPOSITORY_INTELLIGENCE_ROADMAP.md)

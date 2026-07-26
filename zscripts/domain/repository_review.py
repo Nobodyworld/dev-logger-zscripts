@@ -8,9 +8,9 @@ from dataclasses import asdict, dataclass
 from enum import StrEnum
 from typing import Any, cast
 
-ANALYZER_VERSION = "1"
-SCHEMA_VERSION = "1"
-RULE_SET_VERSION = "1"
+ANALYZER_VERSION = "2"
+SCHEMA_VERSION = "2"
+RULE_SET_VERSION = "2"
 
 
 class AnalysisState(StrEnum):
@@ -100,6 +100,8 @@ class ImportRecord:
     imported_name: str | None
     alias: str | None
     level: int
+    line: int = 1
+    column: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,6 +159,61 @@ class DiagnosticRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class TypeReferenceCandidate:
+    """Bounded syntax-only name awaiting deterministic relationship resolution."""
+
+    candidate_id: str
+    source_symbol_id: str
+    module_name: str
+    textual_name: str
+    relative_path: str
+    line: int
+    column: int
+    evidence: str
+    candidate_kind: str
+
+
+@dataclass(frozen=True, slots=True)
+class GraphNodeRecord:
+    """A language-neutral node used by bounded graph queries."""
+
+    node_id: str
+    node_type: str
+    display_name: str
+    qualified_name: str
+    relative_path: str | None
+    symbol_kind: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class RelationshipRecord:
+    """One immutable, source-backed static relationship observation."""
+
+    relationship_id: str
+    relationship_type: str
+    source_id: str
+    target_id: str | None
+    unresolved_target: str | None
+    resolution_status: str
+    confidence: str
+    relative_path: str
+    line: int
+    column: int
+    analyzer_version: str
+    evidence: str
+
+
+@dataclass(frozen=True, slots=True)
+class CycleGroupRecord:
+    """A content-derived strongly connected component with cyclic membership."""
+
+    cycle_id: str
+    relationship_type: str
+    member_node_ids: tuple[str, ...]
+    edge_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class AnalysisEvidence:
     """Complete metadata-only evidence promoted atomically to SQLite."""
 
@@ -166,6 +223,9 @@ class AnalysisEvidence:
     modules: tuple[ModuleRecord, ...]
     symbols: tuple[SymbolRecord, ...]
     diagnostics: tuple[DiagnosticRecord, ...]
+    graph_nodes: tuple[GraphNodeRecord, ...] = ()
+    relationships: tuple[RelationshipRecord, ...] = ()
+    cycles: tuple[CycleGroupRecord, ...] = ()
 
     def canonical_payload(self) -> dict[str, Any]:
         """Return the deterministic, path-redacted evidence representation."""
@@ -205,6 +265,16 @@ class AnalysisEvidence:
             "diagnostics": [
                 _public_dataclass(record) for record in sorted(self.diagnostics, key=_diagnostic_sort_key)
             ],
+            "graph_nodes": [
+                _public_dataclass(record)
+                for record in sorted(self.graph_nodes, key=lambda item: item.node_id)
+            ],
+            "relationships": [
+                _public_dataclass(record) for record in sorted(self.relationships, key=_relationship_sort_key)
+            ],
+            "cycles": [
+                _public_dataclass(record) for record in sorted(self.cycles, key=lambda item: item.cycle_id)
+            ],
         }
 
     def canonical_bytes(self) -> bytes:
@@ -238,7 +308,15 @@ def stable_digest(namespace: str, payload: object) -> str:
 
 
 def _public_dataclass(
-    record: FileRecord | ModuleRecord | SymbolRecord | DiagnosticRecord,
+    record: (
+        FileRecord
+        | ModuleRecord
+        | SymbolRecord
+        | DiagnosticRecord
+        | GraphNodeRecord
+        | RelationshipRecord
+        | CycleGroupRecord
+    ),
 ) -> dict[str, Any]:
     payload = asdict(record)
     return cast(dict[str, Any], _normalize(payload))
@@ -270,20 +348,33 @@ def _diagnostic_sort_key(record: DiagnosticRecord) -> tuple[str, int, str]:
     return (record.relative_path or "", record.line or 0, record.diagnostic_id)
 
 
+def _relationship_sort_key(record: RelationshipRecord) -> tuple[str, str, str, str]:
+    return (
+        record.relationship_type,
+        record.source_id,
+        record.target_id or record.unresolved_target or "",
+        record.relationship_id,
+    )
+
+
 __all__ = [
     "ANALYZER_VERSION",
     "RULE_SET_VERSION",
     "SCHEMA_VERSION",
     "AnalysisEvidence",
     "AnalysisState",
+    "CycleGroupRecord",
     "DiagnosticRecord",
     "FileRecord",
+    "GraphNodeRecord",
     "ImportRecord",
     "ModuleRecord",
+    "RelationshipRecord",
     "RepositoryRecord",
     "ScanLimits",
     "SnapshotRecord",
     "SymbolRecord",
+    "TypeReferenceCandidate",
     "canonical_json_bytes",
     "stable_digest",
 ]

@@ -60,3 +60,24 @@ service = build_toolkit_service(config, adapter_registry=registry)
   patterns are needed for organisation-specific secrets.
 - Always validate adapter identifiers against `AdapterRegistry.available()` to
   provide meaningful feedback in user interfaces.
+
+## Experimental Repository Review API
+
+The loopback-only workspace also exposes versioned snapshot evidence:
+
+- `GET /api/snapshots/{snapshot_id}/relationships/summary`
+- `GET /api/snapshots/{snapshot_id}/relationships`
+- `GET /api/snapshots/{snapshot_id}/relationships/neighborhood`
+- `GET /api/snapshots/{snapshot_id}/cycles`
+
+Graph modes are `modules`, `packages`, `inheritance`, `containment`, and
+`types`. Relationship filters are allowlisted to `contains`, `imports`,
+`inherits`, and `references-type`; resolution filters are `resolved-static`,
+`probable-static`, `ambiguous`, and `unresolved-dynamic`.
+
+Neighborhood depth is limited to 3, with maximum response bounds of 100 nodes
+and 200 edges. Cycle responses are limited to 100 groups. Responses include an
+explicit `truncated` flag and source evidence as repository-relative path,
+line, and column only. Analyzer/schema v1 snapshots return `supported: false`
+with empty relationship data. Automatic Swagger and ReDoc pages remain
+disabled; machine-readable OpenAPI is available at `/api/openapi.json`.

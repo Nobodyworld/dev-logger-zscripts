@@ -34,6 +34,17 @@ export function SymbolsIcon(props: IconProps) {
     );
 }
 
+export function RelationshipsIcon(props: IconProps) {
+    return (
+        <svg {...common} {...props}>
+            <circle cx="6" cy="6" r="2.5" />
+            <circle cx="18" cy="8" r="2.5" />
+            <circle cx="10" cy="18" r="2.5" />
+            <path d="m8.3 6.5 7.2 1M7.2 8.2l1.7 7.3m7.3-5.3-4.7 5.7" />
+        </svg>
+    );
+}
+
 export function MenuIcon(props: IconProps) {
     return (
         <svg {...common} {...props}>

@@ -16,6 +16,7 @@ from zscripts.domain.repository_review import (
     ImportRecord,
     ModuleRecord,
     SymbolRecord,
+    TypeReferenceCandidate,
     stable_digest,
 )
 from zscripts.infrastructure.repository_discovery import AnalysisCancelled, DiscoveredFile
@@ -32,6 +33,7 @@ class PythonAnalysisResult:
     modules: tuple[ModuleRecord, ...]
     symbols: tuple[SymbolRecord, ...]
     diagnostics: tuple[DiagnosticRecord, ...]
+    type_references: tuple[TypeReferenceCandidate, ...]
 
 
 class PythonAnalyzer:
@@ -49,6 +51,7 @@ class PythonAnalyzer:
         modules: list[ModuleRecord] = []
         symbols: list[SymbolRecord] = []
         diagnostics: list[DiagnosticRecord] = []
+        type_references: list[TypeReferenceCandidate] = []
         included = tuple(item for item in files if item.record.included)
         processed_count = 0
 
@@ -67,6 +70,7 @@ class PythonAnalyzer:
                 modules.append(parsed.module)
             symbols.extend(parsed.symbols)
             diagnostics.extend(parsed.diagnostics)
+            type_references.extend(parsed.type_references)
             processed_count += 1
 
         if progress is not None:
@@ -86,6 +90,17 @@ class PythonAnalyzer:
                 )
             ),
             diagnostics=tuple(sorted(diagnostics, key=lambda item: item.diagnostic_id)),
+            type_references=tuple(
+                sorted(
+                    type_references,
+                    key=lambda item: (
+                        item.relative_path,
+                        item.line,
+                        item.column,
+                        item.candidate_id,
+                    ),
+                )
+            ),
         )
 
     def _analyze_file(self, discovered: DiscoveredFile) -> _ParsedFile:
@@ -97,6 +112,7 @@ class PythonAnalyzer:
                 module=None,
                 symbols=(),
                 diagnostics=(self._diagnostic(record, "PY_CONTENT_MISSING", "decode_error"),),
+                type_references=(),
             )
         try:
             text = _decode_python(content)
@@ -106,6 +122,7 @@ class PythonAnalyzer:
                 module=None,
                 symbols=(),
                 diagnostics=(self._diagnostic(record, "PY_DECODE_ERROR", "decode_error"),),
+                type_references=(),
             )
         try:
             tree = ast.parse(text, filename=record.relative_path, mode="exec", type_comments=True)
@@ -123,6 +140,7 @@ class PythonAnalyzer:
                         column=max((exc.offset or 1) - 1, 0),
                     ),
                 ),
+                type_references=(),
             )
 
         module_name = _module_name(record.relative_path)
@@ -142,6 +160,8 @@ class PythonAnalyzer:
                             "name": item.imported_name,
                             "alias": item.alias,
                             "level": item.level,
+                            "line": item.line,
+                            "column": item.column,
                         }
                         for item in imports
                     ],
@@ -165,6 +185,7 @@ class PythonAnalyzer:
             module=module,
             symbols=tuple(visitor.symbols),
             diagnostics=(),
+            type_references=tuple(visitor.type_references),
         )
 
     @staticmethod
@@ -206,6 +227,7 @@ class _ParsedFile:
     module: ModuleRecord | None
     symbols: tuple[SymbolRecord, ...]
     diagnostics: tuple[DiagnosticRecord, ...]
+    type_references: tuple[TypeReferenceCandidate, ...]
 
 
 class _SymbolVisitor(ast.NodeVisitor):
@@ -214,6 +236,7 @@ class _SymbolVisitor(ast.NodeVisitor):
         self.file_id = file_id
         self.relative_path = relative_path
         self.symbols: list[SymbolRecord] = []
+        self.type_references: list[TypeReferenceCandidate] = []
         self._stack: list[SymbolRecord] = []
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:  # noqa: N802 - ast visitor contract
@@ -261,9 +284,42 @@ class _SymbolVisitor(ast.NodeVisitor):
         symbol: SymbolRecord,
     ) -> None:
         self.symbols.append(symbol)
+        self._record_type_references(node, symbol)
         self._stack.append(symbol)
         self.generic_visit(node)
         self._stack.pop()
+
+    def _record_type_references(
+        self,
+        node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef,
+        symbol: SymbolRecord,
+    ) -> None:
+        for reference_node, textual_name, candidate_kind, evidence in _scope_type_references(node):
+            location_node = node if candidate_kind == "inheritance" else reference_node
+            line = int(getattr(location_node, "lineno", node.lineno))
+            column = int(getattr(location_node, "col_offset", node.col_offset))
+            payload = {
+                "source_symbol_id": symbol.symbol_id,
+                "name": textual_name,
+                "path": self.relative_path,
+                "line": line,
+                "column": column,
+                "kind": candidate_kind,
+                "evidence": evidence,
+            }
+            self.type_references.append(
+                TypeReferenceCandidate(
+                    candidate_id=stable_digest("repository-review-type-candidate", payload),
+                    source_symbol_id=symbol.symbol_id,
+                    module_name=self.module_name,
+                    textual_name=textual_name,
+                    relative_path=self.relative_path,
+                    line=line,
+                    column=column,
+                    evidence=evidence,
+                    candidate_kind=candidate_kind,
+                )
+            )
 
     def _build_symbol(
         self,
@@ -348,6 +404,8 @@ def _extract_imports(tree: ast.Module) -> list[ImportRecord]:
                         imported_name=None,
                         alias=alias.asname,
                         level=0,
+                        line=node.lineno,
+                        column=node.col_offset,
                     )
                 )
         elif isinstance(node, ast.ImportFrom):
@@ -358,6 +416,8 @@ def _extract_imports(tree: ast.Module) -> list[ImportRecord]:
                         imported_name=alias.name,
                         alias=alias.asname,
                         level=node.level,
+                        line=node.lineno,
+                        column=node.col_offset,
                     )
                 )
     return imports
@@ -450,6 +510,174 @@ def _safe_unparse(node: ast.AST) -> str:
         return ast.dump(node, annotate_fields=True, include_attributes=False)
 
 
+def _scope_type_references(
+    node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[tuple[ast.AST, str, str, str]]:
+    references: list[tuple[ast.AST, str, str, str]] = []
+    if isinstance(node, ast.ClassDef):
+        for base in node.bases:
+            name = _base_reference_name(base)
+            if name:
+                references.append((base, name, "inheritance", _bounded_unparse(base)))
+        for statement in node.body:
+            if isinstance(statement, ast.AnnAssign):
+                references.extend(_annotation_references(statement.annotation, "type"))
+        return _deduplicate_references(references)
+
+    arguments = node.args
+    for argument in (
+        *arguments.posonlyargs,
+        *arguments.args,
+        *arguments.kwonlyargs,
+    ):
+        if argument.annotation is not None:
+            references.extend(_annotation_references(argument.annotation, "type"))
+    if arguments.vararg is not None and arguments.vararg.annotation is not None:
+        references.extend(_annotation_references(arguments.vararg.annotation, "type"))
+    if arguments.kwarg is not None and arguments.kwarg.annotation is not None:
+        references.extend(_annotation_references(arguments.kwarg.annotation, "type"))
+    if node.returns is not None:
+        references.extend(_annotation_references(node.returns, "type"))
+    collector = _AttributeAnnotationCollector()
+    for statement in node.body:
+        collector.visit(statement)
+    for annotation in collector.annotations:
+        references.extend(_annotation_references(annotation, "type"))
+    return _deduplicate_references(references)
+
+
+class _AttributeAnnotationCollector(ast.NodeVisitor):
+    def __init__(self) -> None:
+        self.annotations: list[ast.expr] = []
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:  # noqa: N802 - ast visitor contract
+        if isinstance(node.target, ast.Attribute):
+            self.annotations.append(node.annotation)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:  # noqa: N802 - nested scope
+        return
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802 - nested scope
+        return
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:  # noqa: N802
+        return
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:  # noqa: N802 - nested scope
+        return
+
+
+def _annotation_references(
+    annotation: ast.expr,
+    candidate_kind: str,
+) -> list[tuple[ast.AST, str, str, str]]:
+    evidence = _bounded_unparse(annotation)
+    return [
+        (reference_node, name, candidate_kind, evidence)
+        for reference_node, name in _bounded_type_names(annotation)
+    ]
+
+
+def _bounded_type_names(node: ast.AST) -> list[tuple[ast.AST, str]]:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        value = node.value.strip()
+        if not value or len(value) > 256:
+            return []
+        try:
+            parsed = ast.parse(value, mode="eval")
+        except SyntaxError:
+            return [(node, value)] if _is_dotted_name(value) else []
+        return [(node, name) for _, name in _bounded_type_names(parsed.body)]
+    dotted = _dotted_name(node)
+    if dotted is not None:
+        return [(node, dotted)]
+    if isinstance(node, ast.Subscript):
+        outer = _dotted_name(node.value)
+        results: list[tuple[ast.AST, str]] = []
+        if outer and outer not in _GENERIC_CONTAINER_NAMES:
+            results.append((node.value, outer))
+        results.extend(_bounded_type_names(node.slice))
+        return results
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+        return [*_bounded_type_names(node.left), *_bounded_type_names(node.right)]
+    if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+        return [item for element in node.elts for item in _bounded_type_names(element)]
+    return []
+
+
+def _base_reference_name(node: ast.expr) -> str | None:
+    if isinstance(node, ast.Subscript):
+        return _dotted_name(node.value)
+    return _dotted_name(node)
+
+
+def _dotted_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        prefix = _dotted_name(node.value)
+        return f"{prefix}.{node.attr}" if prefix else None
+    return None
+
+
+def _is_dotted_name(value: str) -> bool:
+    return all(part.isidentifier() for part in value.split("."))
+
+
+def _bounded_unparse(node: ast.AST) -> str:
+    return _safe_unparse(node)[:256]
+
+
+def _deduplicate_references(
+    references: list[tuple[ast.AST, str, str, str]],
+) -> list[tuple[ast.AST, str, str, str]]:
+    result: list[tuple[ast.AST, str, str, str]] = []
+    seen: set[tuple[int, int, str, str]] = set()
+    for reference in references:
+        node, name, kind, _ = reference
+        key = (
+            int(getattr(node, "lineno", 0)),
+            int(getattr(node, "col_offset", 0)),
+            name,
+            kind,
+        )
+        if key not in seen:
+            seen.add(key)
+            result.append(reference)
+    return result
+
+
+_GENERIC_CONTAINER_NAMES = {
+    "Annotated",
+    "Callable",
+    "ClassVar",
+    "Final",
+    "Iterable",
+    "Literal",
+    "Mapping",
+    "Optional",
+    "Sequence",
+    "Type",
+    "Union",
+    "dict",
+    "frozenset",
+    "list",
+    "set",
+    "tuple",
+    "typing.Annotated",
+    "typing.Callable",
+    "typing.ClassVar",
+    "typing.Final",
+    "typing.Iterable",
+    "typing.Literal",
+    "typing.Mapping",
+    "typing.Optional",
+    "typing.Sequence",
+    "typing.Type",
+    "typing.Union",
+}
+
+
 def _visibility(name: str) -> str:
     if name.startswith("__") and name.endswith("__"):
         return "dunder"
@@ -458,12 +686,14 @@ def _visibility(name: str) -> str:
     return "public"
 
 
-def _import_sort_key(record: ImportRecord) -> tuple[str, str, str, int]:
+def _import_sort_key(record: ImportRecord) -> tuple[str, str, str, int, int, int]:
     return (
         record.module or "",
         record.imported_name or "",
         record.alias or "",
         record.level,
+        record.line,
+        record.column,
     )
 
 

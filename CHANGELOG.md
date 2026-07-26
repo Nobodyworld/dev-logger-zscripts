@@ -4,6 +4,13 @@
 
 ### Added
 
+- Deterministic import, containment, inheritance, and bounded type-reference
+  evidence for Repository Review, including explicit ambiguous/unresolved
+  records, SCC/cycle analysis, fan-in/fan-out, bounded graph APIs, and the
+  accessible Relationships workspace.
+- SQLite repository-review schema v2 migration with atomic graph persistence,
+  stable relationship/cycle identities, and explicit empty relationship
+  responses for v1 snapshots.
 - Experimental Repository Review MVP: bounded read-only generic-Python
   discovery and AST extraction, versioned deterministic evidence, atomic local
   SQLite snapshots, experimental CLI and loopback API, and responsive React

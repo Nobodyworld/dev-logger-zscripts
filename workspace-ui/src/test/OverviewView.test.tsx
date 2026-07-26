@@ -12,6 +12,10 @@ describe("OverviewView", () => {
         expect(screen.getByText("Files analyzed")).toBeTruthy();
         expect(screen.getByText("Files excluded")).toBeTruthy();
         expect(screen.getByText("Parse gaps")).toBeTruthy();
+        expect(screen.getByText("Resolved imports")).toBeTruthy();
+        expect(screen.getByText("Inheritance edges")).toBeTruthy();
+        expect(screen.getByText("Cycle groups")).toBeTruthy();
+        expect(screen.getByText("Largest cycle")).toBeTruthy();
         expect(screen.getByText("Analyzer version")).toBeTruthy();
         expect(screen.getByText("Schema version")).toBeTruthy();
     });

@@ -24,7 +24,11 @@ def test_python_analyzer_extracts_packages_imports_and_nested_symbols(
     assert set(modules) == {"pkg", "pkg.module"}
     assert modules["pkg"].public_exports == ("Example", "top_level")
     assert any(
-        item.module == "pathlib" and item.imported_name == "Path" and item.alias == "FilePath"
+        item.module == "pathlib"
+        and item.imported_name == "Path"
+        and item.alias == "FilePath"
+        and item.line == 7
+        and item.column == 0
         for item in modules["pkg.module"].imports
     )
     assert any(
@@ -51,6 +55,10 @@ def test_python_analyzer_extracts_packages_imports_and_nested_symbols(
     assert nested_class.parent_symbol_id == example.symbol_id
     assert nested_function.parent_symbol_id == method.symbol_id
     assert all(item.start_line <= item.end_line for item in result.symbols)
+    candidates = {(item.source_symbol_id, item.textual_name) for item in result.type_references}
+    assert (method.symbol_id, "cabc.Sequence") in candidates
+    assert (nested_function.symbol_id, "FilePath") in candidates
+    assert (example.symbol_id, "BaseExample") in candidates
 
 
 def test_malformed_python_isolated_to_diagnostic(tmp_path: Path) -> None:

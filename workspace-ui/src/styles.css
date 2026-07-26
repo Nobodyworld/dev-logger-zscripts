@@ -401,7 +401,7 @@ select {
 
 .summary-band {
     display: grid;
-    grid-template-columns: repeat(10, minmax(96px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
     margin: 0;
     border: 1px solid var(--border);
     border-left: 3px solid var(--teal);
@@ -781,21 +781,234 @@ select {
     line-height: 1.6;
 }
 
+.relationships-view {
+    display: grid;
+    gap: 20px;
+}
+
+.relationships-heading-row {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    justify-content: space-between;
+}
+
+.relationships-heading-row h2 {
+    margin-bottom: 6px;
+}
+
+.relationships-heading-row p,
+.relationships-empty,
+.relationship-lists p,
+.relationship-evidence > p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.relationship-totals {
+    min-width: 260px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.relationship-totals > div {
+    padding: 12px;
+    border-right: 1px solid var(--border);
+    text-align: center;
+}
+
+.relationship-totals > div:last-child {
+    border-right: 0;
+}
+
+.relationship-totals dt {
+    color: var(--muted);
+    font-size: 10px;
+}
+
+.relationship-totals dd {
+    margin: 5px 0 0;
+    font-size: 17px;
+    font-weight: 680;
+}
+
+.relationship-toolbar {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(170px, 1fr));
+    gap: 12px;
+    align-items: end;
+}
+
+.relationship-search {
+    align-self: end;
+}
+
+.selection-status,
+.truncation-message {
+    margin: 0;
+    padding: 10px 12px;
+    border-left: 3px solid var(--teal);
+    color: #31435b;
+    background: var(--surface-subtle);
+    font-size: 12px;
+}
+
+.truncation-message {
+    border-left-color: #9c701d;
+    background: #fff9ec;
+}
+
+.relationship-workspace {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 0.35fr);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.graph-panel {
+    min-width: 0;
+    overflow: auto;
+    background: #fbfcfd;
+}
+
+.relationship-graph {
+    width: 100%;
+    min-width: 680px;
+    min-height: 360px;
+    display: block;
+}
+
+.graph-edge {
+    stroke: #8b98aa;
+    stroke-width: 1.5;
+}
+
+.graph-edge--inherits {
+    stroke: #7b5cb6;
+    stroke-dasharray: 6 3;
+}
+
+.graph-edge--contains {
+    stroke: #388f6c;
+    stroke-dasharray: 2 3;
+}
+
+.graph-edge--references-type {
+    stroke: #a36e2b;
+    stroke-dasharray: 8 3 2 3;
+}
+
+.graph-node circle {
+    fill: #ffffff;
+    stroke: var(--teal-dark);
+    stroke-width: 2;
+}
+
+.graph-node text {
+    fill: var(--ink);
+    font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    font-size: 11px;
+}
+
+.graph-node--selected circle {
+    fill: var(--teal);
+    stroke: var(--ink);
+    stroke-width: 3;
+}
+
+.graph-node--selected text {
+    font-weight: 700;
+}
+
+.graph-node-list {
+    max-height: 420px;
+    overflow: auto;
+    border-left: 1px solid var(--border);
+    padding: 16px;
+}
+
+.graph-node-list h3,
+.relationship-lists h3,
+.relationship-evidence h3 {
+    margin: 0 0 12px;
+    font-size: 15px;
+}
+
+.graph-node-list ul,
+.relationship-lists ul {
+    display: grid;
+    gap: 7px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.graph-node-list button,
+.relationship-lists button {
+    width: 100%;
+    display: grid;
+    gap: 4px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--ink);
+    background: #ffffff;
+    text-align: left;
+}
+
+.graph-node-list button[aria-pressed="true"],
+.relationship-lists button[aria-pressed="true"] {
+    border-color: var(--teal);
+    box-shadow: inset 3px 0 var(--teal);
+    background: var(--teal-soft);
+}
+
+.graph-node-list button span:last-child,
+.relationship-lists button span:first-child {
+    color: var(--muted);
+    font-size: 10px;
+}
+
+.relationship-lists {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.relationship-lists > section,
+.relationship-evidence {
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.relationship-lists .mono {
+    overflow-wrap: anywhere;
+    font-size: 11px;
+}
+
+.relationship-evidence .source-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.relationship-evidence .source-code {
+    max-height: 300px;
+}
+
 @media (max-width: 1180px) {
     .repository-controls {
         grid-template-columns: 1fr;
     }
 
     .summary-band {
-        grid-template-columns: repeat(5, 1fr);
-    }
-
-    .summary-band > div:nth-child(5) {
-        border-right: 0;
-    }
-
-    .summary-band > div:nth-child(-n + 5) {
-        border-bottom: 1px solid var(--border);
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
     }
 
     .symbol-toolbar {
@@ -804,6 +1017,10 @@ select {
 
     .symbols-view--drawer {
         grid-template-columns: minmax(0, 1fr) 380px;
+    }
+
+    .relationship-workspace {
+        grid-template-columns: minmax(0, 1fr) 300px;
     }
 }
 
@@ -915,8 +1132,7 @@ select {
         border-left-width: 1px;
     }
 
-    .summary-band > div,
-    .summary-band > div:nth-child(-n + 5) {
+    .summary-band > div {
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -958,6 +1174,34 @@ select {
         overflow: auto;
         border-left: 0;
         padding-inline: 20px;
+    }
+
+    .relationships-heading-row,
+    .relationship-lists {
+        display: grid;
+    }
+
+    .relationship-totals {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .relationship-toolbar {
+        grid-template-columns: 1fr;
+    }
+
+    .relationship-workspace {
+        display: block;
+    }
+
+    .graph-node-list {
+        max-height: 320px;
+        border-top: 1px solid var(--border);
+        border-left: 0;
+    }
+
+    .relationship-evidence .source-meta {
+        grid-template-columns: 1fr;
     }
 
     .pagination {

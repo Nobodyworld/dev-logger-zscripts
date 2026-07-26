@@ -15,6 +15,10 @@ export function OverviewView({ overview }: OverviewViewProps) {
         ["Functions", counts.functions.toLocaleString()],
         ["Methods", counts.methods.toLocaleString()],
         ["Parse gaps", counts.parse_gaps.toLocaleString()],
+        ["Resolved imports", counts.resolved_import_edges.toLocaleString()],
+        ["Inheritance edges", counts.inheritance_edges.toLocaleString()],
+        ["Cycle groups", counts.cycle_groups.toLocaleString()],
+        ["Largest cycle", counts.largest_cycle_size.toLocaleString()],
         ["Elapsed", formatDuration(snapshot.duration_ms)],
         ["Truncated", snapshot.truncated ? "Yes" : "No"],
     ];

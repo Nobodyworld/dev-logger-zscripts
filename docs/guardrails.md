@@ -23,3 +23,17 @@ python cli.py redact --input examples/python/sample.log
 To customize guardrails for automation, subclass `SandboxRunner` or
 preconfigure a `SandboxSettings` instance and pass it directly when using the
 Python API.
+
+## Repository Review static-analysis boundary
+
+Repository Review reads Python source through `ast` and never imports analyzed
+modules, evaluates annotations, follows dynamic imports, or runs project
+commands. Import, inheritance, and type-reference relationships are static
+evidence, not runtime claims. Unique internal targets can be resolved;
+ambiguous candidates and unsupported or external targets remain explicit
+non-edge records.
+
+Graph queries use allowlisted modes, relationship types, resolution statuses,
+and sort behavior. Depth, nodes, edges, and cycle results are bounded before
+serialization. The localhost workspace retains strict same-origin CSP, embeds
+no remote runtime assets, and performs no ordinary outbound request.

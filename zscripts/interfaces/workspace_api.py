@@ -108,6 +108,11 @@ class OverviewCounts(_StrictModel):
     functions: int
     methods: int
     parse_gaps: int
+    relationship_analysis_supported: bool
+    resolved_import_edges: int
+    inheritance_edges: int
+    cycle_groups: int
+    largest_cycle_size: int
 
 
 class OverviewResponse(_StrictModel):
@@ -167,10 +172,83 @@ class SourceEvidenceResponse(_StrictModel):
     content_hash: str
 
 
+class GraphNodeResponse(_StrictModel):
+    node_id: str
+    node_type: Literal["package", "module", "symbol"]
+    display_name: str
+    qualified_name: str
+    relative_path: str | None
+    symbol_kind: str | None
+
+
+class RelationshipResponse(_StrictModel):
+    relationship_id: str
+    relationship_type: Literal["contains", "imports", "inherits", "references-type"]
+    source_id: str
+    target_id: str | None
+    unresolved_target: str | None
+    resolution_status: Literal["resolved-static", "probable-static", "ambiguous", "unresolved-dynamic"]
+    confidence: Literal["high", "medium", "low"]
+    relative_path: str
+    line: int
+    column: int
+    analyzer_version: str
+    evidence: str
+
+
+class RelationshipSummaryResponse(_StrictModel):
+    supported: bool
+    analyzer_version: str
+    schema_version: str
+    node_count: int
+    relationship_count: int
+    cycle_count: int
+    largest_cycle_size: int
+    truncated: bool
+    nodes: list[GraphNodeResponse]
+    relationship_types: dict[str, int]
+    resolution_statuses: dict[str, int]
+    fan_in: dict[str, int]
+    fan_out: dict[str, int]
+    inheritance_depth: dict[str, int | None]
+
+
+class RelationshipPageResponse(_StrictModel):
+    supported: bool
+    items: list[RelationshipResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class RelationshipNeighborhoodResponse(_StrictModel):
+    supported: bool
+    focus_id: str
+    mode: Literal["modules", "packages", "inheritance", "containment", "types"]
+    depth: int
+    nodes: list[GraphNodeResponse]
+    relationships: list[RelationshipResponse]
+    distances: dict[str, int]
+    truncated: bool
+
+
+class CycleResponse(_StrictModel):
+    cycle_id: str
+    relationship_type: Literal["imports", "inherits"]
+    member_node_ids: list[str]
+    edge_ids: list[str]
+
+
+class CycleListResponse(_StrictModel):
+    supported: bool
+    items: list[CycleResponse]
+    truncated: bool
+
+
 class HealthResponse(_StrictModel):
     status: Literal["ok"]
     service: Literal["repository-review"]
-    schema_version: Literal["1"]
+    schema_version: Literal["2"]
 
 
 def create_workspace_app(
@@ -224,7 +302,7 @@ def create_workspace_app(
 
     @app.get("/api/health", response_model=HealthResponse)
     def health() -> dict[str, str]:
-        return {"status": "ok", "service": "repository-review", "schema_version": "1"}
+        return {"status": "ok", "service": "repository-review", "schema_version": "2"}
 
     @app.get("/api/repositories", response_model=RepositoryListResponse)
     def repositories() -> dict[str, object]:
@@ -356,6 +434,94 @@ def create_workspace_app(
             "truncated": evidence.truncated,
             "content_hash": evidence.content_hash,
         }
+
+    @app.get(
+        "/api/snapshots/{snapshot_id}/relationships/summary",
+        response_model=RelationshipSummaryResponse,
+    )
+    def relationship_summary(
+        snapshot_id: str,
+        max_nodes: Annotated[int, Query(ge=1, le=500)] = 200,
+    ) -> dict[str, object]:
+        try:
+            return review_service.relationship_summary(snapshot_id, max_nodes=max_nodes)
+        except SnapshotNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Snapshot was not found.") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Relationship query is invalid.") from exc
+
+    @app.get(
+        "/api/snapshots/{snapshot_id}/relationships",
+        response_model=RelationshipPageResponse,
+    )
+    def relationships(
+        snapshot_id: str,
+        relationship_type: Literal["contains", "imports", "inherits", "references-type"] | None = None,
+        resolution_status: Literal["resolved-static", "probable-static", "ambiguous", "unresolved-dynamic"]
+        | None = None,
+        page: Annotated[int, Query(ge=1)] = 1,
+        page_size: Annotated[int, Query(ge=1, le=200)] = 100,
+    ) -> dict[str, object]:
+        try:
+            return review_service.relationships(
+                snapshot_id,
+                relationship_type=relationship_type,
+                resolution_status=resolution_status,
+                page=page,
+                page_size=page_size,
+            )
+        except SnapshotNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Snapshot was not found.") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Relationship query is invalid.") from exc
+
+    @app.get(
+        "/api/snapshots/{snapshot_id}/relationships/neighborhood",
+        response_model=RelationshipNeighborhoodResponse,
+    )
+    def relationship_neighborhood(
+        snapshot_id: str,
+        focus_id: Annotated[str, Query(min_length=16, max_length=128)],
+        mode: Literal["modules", "packages", "inheritance", "containment", "types"] = "modules",
+        depth: Annotated[int, Query(ge=1, le=3)] = 1,
+        resolution_status: Literal["resolved-static", "probable-static", "ambiguous", "unresolved-dynamic"]
+        | None = None,
+        relationship_type: Literal["contains", "imports", "inherits", "references-type"] | None = None,
+        max_nodes: Annotated[int, Query(ge=1, le=100)] = 40,
+        max_edges: Annotated[int, Query(ge=1, le=200)] = 80,
+    ) -> dict[str, object]:
+        try:
+            return review_service.relationship_neighborhood(
+                snapshot_id,
+                focus_id=focus_id,
+                mode=mode,
+                depth=depth,
+                max_nodes=max_nodes,
+                max_edges=max_edges,
+                resolution_status=resolution_status,
+                relationship_type=relationship_type,
+            )
+        except SnapshotNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Snapshot was not found.") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Relationship query is invalid.") from exc
+
+    @app.get("/api/snapshots/{snapshot_id}/cycles", response_model=CycleListResponse)
+    def cycles(
+        snapshot_id: str,
+        relationship_type: Literal["imports", "inherits"] | None = None,
+        max_results: Annotated[int, Query(ge=1, le=100)] = 100,
+    ) -> dict[str, object]:
+        try:
+            return review_service.cycles(
+                snapshot_id,
+                relationship_type=relationship_type,
+                max_results=max_results,
+            )
+        except SnapshotNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Snapshot was not found.") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Relationship query is invalid.") from exc
 
     static_root = Path(__file__).resolve().parents[1] / "workspace_static"
     assets = static_root / "assets"

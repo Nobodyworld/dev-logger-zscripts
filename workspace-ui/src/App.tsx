@@ -12,6 +12,7 @@ import {
 import { RepositoryControls } from "./components/RepositoryControls";
 import { RepositoryHeader } from "./components/RepositoryHeader";
 import { OverviewView } from "./components/OverviewView";
+import { RelationshipsView } from "./components/RelationshipsView";
 import { Sidebar } from "./components/Sidebar";
 import { SymbolsView } from "./components/SymbolsView";
 import type { AnalysisJob, Overview, Repository, Snapshot, ViewName } from "./types";
@@ -154,14 +155,19 @@ export function App() {
                                 loadSnapshot(snapshotId, overview.repository.repository_id)
                             }
                         />
-                        {activeView === "overview" ? (
-                            <OverviewView overview={overview} />
-                        ) : (
+                        {activeView === "overview" ? <OverviewView overview={overview} /> : null}
+                        {activeView === "symbols" ? (
                             <SymbolsView
                                 key={overview.snapshot.snapshot_id}
                                 snapshotId={overview.snapshot.snapshot_id}
                             />
-                        )}
+                        ) : null}
+                        {activeView === "relationships" ? (
+                            <RelationshipsView
+                                key={overview.snapshot.snapshot_id}
+                                snapshotId={overview.snapshot.snapshot_id}
+                            />
+                        ) : null}
                     </>
                 ) : (
                     <EmptyState hasJob={job?.state === "started"} />

@@ -1,4 +1,11 @@
-import { CloseIcon, MenuIcon, OverviewIcon, RelationshipsIcon, SymbolsIcon } from "../icons";
+import {
+    CloseIcon,
+    FindingsIcon,
+    MenuIcon,
+    OverviewIcon,
+    RelationshipsIcon,
+    SymbolsIcon,
+} from "../icons";
 import type { ViewName } from "../types";
 
 interface SidebarProps {
@@ -66,6 +73,15 @@ export function Sidebar({ activeView, open, onOpen, onClose, onSelect }: Sidebar
                     >
                         <RelationshipsIcon />
                         Relationships
+                    </button>
+                    <button
+                        className={`nav-item ${activeView === "findings" ? "nav-item--active" : ""}`}
+                        type="button"
+                        aria-current={activeView === "findings" ? "page" : undefined}
+                        onClick={() => choose("findings")}
+                    >
+                        <FindingsIcon />
+                        Findings
                     </button>
                 </nav>
                 <p className="sidebar__beta">PUBLIC BETA — ACTIVE DEVELOPMENT</p>

@@ -45,6 +45,16 @@ export function RelationshipsIcon(props: IconProps) {
     );
 }
 
+export function FindingsIcon(props: IconProps) {
+    return (
+        <svg {...common} {...props}>
+            <path d="M5 4h14v16H5z" />
+            <path d="M8 8h8M8 12h5M8 16h7" />
+            <path d="m15 12 1.5 1.5L19 10.8" />
+        </svg>
+    );
+}
+
 export function MenuIcon(props: IconProps) {
     return (
         <svg {...common} {...props}>

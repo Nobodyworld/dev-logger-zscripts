@@ -49,6 +49,10 @@ export interface Overview {
         inheritance_edges: number;
         cycle_groups: number;
         largest_cycle_size: number;
+        active_findings: number;
+        needs_action_findings: number;
+        resolved_since_last_scan: number;
+        high_confidence_high_severity_findings: number;
     };
 }
 
@@ -184,4 +188,73 @@ export interface CycleList {
     truncated: boolean;
 }
 
-export type ViewName = "overview" | "symbols" | "relationships";
+export type ReviewStatus = "new" | "reviewed" | "needs-action" | "accepted" | "dismissed";
+
+export interface Finding {
+    finding_id: string;
+    rule_id: string;
+    rule_version: string;
+    family: string;
+    title: string;
+    explanation: string;
+    suggested_action: string;
+    severity: "high" | "medium" | "low";
+    confidence: "high" | "medium" | "low";
+    subject_type: string;
+    subject_keys: string[];
+    affected_node_ids: string[];
+    relative_path: string | null;
+    line: number | null;
+    metric_evidence: Array<[string, number]>;
+    threshold_evidence: Array<[string, number]>;
+    repository_id: string;
+    first_seen_snapshot_id: string;
+    last_seen_snapshot_id: string;
+    evidence_state: "active" | "resolved";
+    resolved_snapshot_id: string | null;
+    review_status: ReviewStatus;
+    effective_status: ReviewStatus | "resolved";
+    note: string;
+    reason_code: string | null;
+    review_version: number;
+    decided_at: string;
+    updated_at: string;
+}
+
+export interface FindingSummary {
+    supported: boolean;
+    active: number;
+    resolved: number;
+    needs_action: number;
+    accepted: number;
+    dismissed: number;
+    severity: Record<string, number>;
+    low_confidence: number;
+}
+
+export interface FindingPage {
+    supported: boolean;
+    items: Finding[];
+    total: number;
+    page: number;
+    page_size: number;
+}
+
+export interface FindingHistory {
+    items: Array<{
+        event_id: number;
+        finding_id: string;
+        event_type: string;
+        snapshot_id: string | null;
+        review_status: string | null;
+        reason_code: string | null;
+        note: string;
+        review_version: number | null;
+        event_at: string;
+    }>;
+    total: number;
+    page: number;
+    page_size: number;
+}
+
+export type ViewName = "overview" | "symbols" | "relationships" | "findings";

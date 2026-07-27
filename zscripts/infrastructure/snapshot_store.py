@@ -17,14 +17,18 @@ from zscripts.domain.repository_review import (
     CycleGroupRecord,
     DiagnosticRecord,
     FileRecord,
+    FindingEvidenceRecord,
+    FindingLifecycleRecord,
     GraphNodeRecord,
     RelationshipRecord,
     RepositoryRecord,
+    ReviewDecisionRecord,
+    ReviewEventRecord,
     SnapshotRecord,
     SymbolRecord,
 )
 
-DATABASE_SCHEMA_VERSION = 2
+DATABASE_SCHEMA_VERSION = 3
 SYMBOL_SORT_COLUMNS: dict[str, str] = {
     "qualified_name": "qualified_name",
     "kind": "kind",
@@ -34,6 +38,79 @@ SYMBOL_SORT_COLUMNS: dict[str, str] = {
     "line": "start_line",
     "visibility": "visibility",
 }
+FINDING_SORT_COLUMNS: dict[str, str] = {
+    "severity": "CASE o.severity WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END",
+    "family": "o.family",
+    "status": "effective_status",
+    "first_seen": "f.first_seen_snapshot_id",
+    "last_seen": "f.last_seen_snapshot_id",
+    "qualified_subject": "o.subject_keys_json",
+    "finding_id": "o.finding_id",
+}
+FINDING_FAMILIES = frozenset(
+    {
+        "dependency-cycle",
+        "inheritance-cycle",
+        "duplicate-name-candidate",
+        "oversized",
+        "complexity",
+        "nesting",
+        "parameters",
+        "coupling",
+        "inheritance",
+        "documentation",
+        "test-evidence-candidate",
+        "orphan-candidate",
+    }
+)
+REVIEW_STATUSES = frozenset({"new", "reviewed", "needs-action", "accepted", "dismissed"})
+REASON_CODES = frozenset(
+    {
+        "intentional-design",
+        "false-positive",
+        "accepted-risk",
+        "planned-refactor",
+        "needs-investigation",
+        "other",
+    }
+)
+_FINDING_SELECT = """
+SELECT
+    o.finding_id AS o_finding_id,
+    o.rule_id AS o_rule_id,
+    o.rule_version AS o_rule_version,
+    o.family AS o_family,
+    o.title AS o_title,
+    o.explanation AS o_explanation,
+    o.suggested_action AS o_suggested_action,
+    o.severity AS o_severity,
+    o.confidence AS o_confidence,
+    o.subject_type AS o_subject_type,
+    o.subject_keys_json AS o_subject_keys_json,
+    o.affected_node_ids_json AS o_affected_node_ids_json,
+    o.relative_path AS o_relative_path,
+    o.line AS o_line,
+    o.metric_evidence_json AS o_metric_evidence_json,
+    o.threshold_evidence_json AS o_threshold_evidence_json,
+    f.repository_id AS f_repository_id,
+    f.first_seen_snapshot_id AS f_first_seen_snapshot_id,
+    f.last_seen_snapshot_id AS f_last_seen_snapshot_id,
+    f.evidence_state AS f_evidence_state,
+    f.resolved_snapshot_id AS f_resolved_snapshot_id,
+    r.review_status AS r_review_status,
+    r.note AS r_note,
+    r.reason_code AS r_reason_code,
+    r.version AS r_version,
+    r.decided_at AS r_decided_at,
+    r.updated_at AS r_updated_at,
+    CASE
+        WHEN f.evidence_state = 'resolved' THEN 'resolved'
+        ELSE r.review_status
+    END AS effective_status
+FROM finding_occurrences o
+JOIN findings f USING (finding_id)
+JOIN finding_reviews r USING (finding_id)
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +144,25 @@ class GraphNodePage:
 
 
 @dataclass(frozen=True, slots=True)
+class StoredFindingRecord:
+    """Combined immutable evidence, lifecycle, and current review decision."""
+
+    evidence: FindingEvidenceRecord
+    lifecycle: FindingLifecycleRecord
+    review: ReviewDecisionRecord
+
+
+@dataclass(frozen=True, slots=True)
+class FindingPage:
+    """A bounded page of findings returned by allowlisted filters."""
+
+    items: tuple[StoredFindingRecord, ...]
+    total: int
+    page: int
+    page_size: int
+
+
+@dataclass(frozen=True, slots=True)
 class AnalysisStatusRecord:
     """Persisted state for an in-process analysis job."""
 
@@ -84,6 +180,14 @@ class AnalysisStatusRecord:
 
 class SnapshotNotFoundError(LookupError):
     """Raised when a completed snapshot cannot be found."""
+
+
+class ReviewConflictError(RuntimeError):
+    """Raised when an optimistic review update uses a stale version."""
+
+    def __init__(self, current: StoredFindingRecord) -> None:
+        super().__init__("Finding review version conflict.")
+        self.current = current
 
 
 class SnapshotStore:
@@ -180,6 +284,7 @@ class SnapshotStore:
             ).fetchone()
             if existing is None:
                 self._insert_snapshot(connection, evidence)
+            self._reconcile_findings(connection, evidence)
             updated = connection.execute(
                 """
                 UPDATE analyses
@@ -639,6 +744,303 @@ class SnapshotStore:
                 )
         return tuple(groups)
 
+    def finding_overview_counts(self, snapshot_id: str) -> dict[str, int]:
+        snapshot = self.get_snapshot(snapshot_id)
+        if not _version_at_least(snapshot.schema_version, 3):
+            return {
+                "active_findings": 0,
+                "needs_action_findings": 0,
+                "resolved_since_last_scan": 0,
+                "high_confidence_high_severity_findings": 0,
+            }
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT
+                    SUM(f.evidence_state = 'active') AS active_findings,
+                    SUM(f.evidence_state = 'active' AND r.review_status = 'needs-action')
+                        AS needs_action_findings,
+                    SUM(f.resolved_snapshot_id = ?) AS resolved_since_last_scan,
+                    SUM(
+                        f.evidence_state = 'active'
+                        AND o.severity = 'high'
+                        AND o.confidence = 'high'
+                    ) AS high_confidence_high_severity_findings
+                FROM findings f
+                JOIN finding_reviews r USING (finding_id)
+                JOIN finding_occurrences o
+                  ON o.finding_id = f.finding_id
+                 AND o.snapshot_id = f.last_seen_snapshot_id
+                WHERE f.repository_id = ?
+                """,
+                (snapshot_id, snapshot.repository_id),
+            ).fetchone()
+        return {
+            key: int(row[key] or 0)
+            for key in (
+                "active_findings",
+                "needs_action_findings",
+                "resolved_since_last_scan",
+                "high_confidence_high_severity_findings",
+            )
+        }
+
+    def finding_summary(self, snapshot_id: str) -> dict[str, object]:
+        snapshot = self.get_snapshot(snapshot_id)
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT f.evidence_state, r.review_status, o.severity, o.confidence
+                FROM findings f
+                JOIN finding_reviews r USING (finding_id)
+                JOIN finding_occurrences o
+                  ON o.finding_id = f.finding_id
+                 AND o.snapshot_id = f.last_seen_snapshot_id
+                WHERE f.repository_id = ?
+                """,
+                (snapshot.repository_id,),
+            ).fetchall()
+        severity = {"high": 0, "medium": 0, "low": 0}
+        active = resolved = needs_action = accepted = dismissed = low_confidence = 0
+        for row in rows:
+            state = str(row["evidence_state"])
+            if state == "active":
+                active += 1
+            else:
+                resolved += 1
+            status = str(row["review_status"])
+            if status == "needs-action":
+                needs_action += 1
+            elif status == "accepted":
+                accepted += 1
+            elif status == "dismissed":
+                dismissed += 1
+            severity[str(row["severity"])] += 1
+            if str(row["confidence"]) == "low":
+                low_confidence += 1
+        return {
+            "active": active,
+            "resolved": resolved,
+            "needs_action": needs_action,
+            "accepted": accepted,
+            "dismissed": dismissed,
+            "severity": severity,
+            "low_confidence": low_confidence,
+        }
+
+    def list_findings(
+        self,
+        snapshot_id: str,
+        *,
+        family: str | None = None,
+        severity: str | None = None,
+        confidence: str | None = None,
+        effective_status: str | None = None,
+        evidence_state: str | None = None,
+        search: str = "",
+        sort: str = "severity",
+        direction: str = "desc",
+        page: int = 1,
+        page_size: int = 50,
+    ) -> FindingPage:
+        if family is not None and family not in FINDING_FAMILIES:
+            raise ValueError("Unsupported finding family.")
+        if severity is not None and severity not in {"high", "medium", "low"}:
+            raise ValueError("Unsupported finding severity.")
+        if confidence is not None and confidence not in {"high", "medium", "low"}:
+            raise ValueError("Unsupported finding confidence.")
+        if effective_status is not None and effective_status not in {*REVIEW_STATUSES, "resolved"}:
+            raise ValueError("Unsupported effective finding status.")
+        if evidence_state is not None and evidence_state not in {"active", "resolved"}:
+            raise ValueError("Unsupported finding evidence state.")
+        if sort not in FINDING_SORT_COLUMNS or direction not in {"asc", "desc"}:
+            raise ValueError("Unsupported finding sort.")
+        if page < 1 or page_size < 1 or page_size > 100:
+            raise ValueError("Finding pagination is outside the supported range.")
+        if len(search) > 200:
+            raise ValueError("Finding search is too long.")
+        snapshot = self.get_snapshot(snapshot_id)
+        conditions = [
+            "f.repository_id = ?",
+            """
+            (
+                EXISTS (
+                    SELECT 1 FROM finding_occurrences current_o
+                    WHERE current_o.finding_id = f.finding_id
+                      AND current_o.snapshot_id = ?
+                )
+                OR f.resolved_snapshot_id = ?
+            )
+            """,
+            """
+            o.snapshot_id = CASE
+                WHEN EXISTS (
+                    SELECT 1 FROM finding_occurrences current_o
+                    WHERE current_o.finding_id = f.finding_id
+                      AND current_o.snapshot_id = ?
+                )
+                THEN ?
+                ELSE f.last_seen_snapshot_id
+            END
+            """,
+        ]
+        parameters: list[object] = [
+            snapshot.repository_id,
+            snapshot_id,
+            snapshot_id,
+            snapshot_id,
+            snapshot_id,
+        ]
+        if family is not None:
+            conditions.append("o.family = ?")
+            parameters.append(family)
+        if severity is not None:
+            conditions.append("o.severity = ?")
+            parameters.append(severity)
+        if confidence is not None:
+            conditions.append("o.confidence = ?")
+            parameters.append(confidence)
+        if effective_status is not None:
+            conditions.append(
+                "(CASE WHEN f.evidence_state = 'resolved' THEN 'resolved' ELSE r.review_status END) = ?"
+            )
+            parameters.append(effective_status)
+        if evidence_state is not None:
+            conditions.append("f.evidence_state = ?")
+            parameters.append(evidence_state)
+        if search:
+            conditions.append(
+                "(instr(lower(o.title), lower(?)) > 0 OR instr(lower(o.subject_keys_json), lower(?)) > 0)"
+            )
+            parameters.extend((search, search))
+        where = " AND ".join(f"({item})" for item in conditions)
+        with self._connect() as connection:
+            total = int(
+                connection.execute(
+                    f"SELECT COUNT(*) FROM ({_FINDING_SELECT} WHERE {where})",  # nosec B608
+                    parameters,
+                ).fetchone()[0]
+            )
+            rows = connection.execute(
+                f"""
+                {_FINDING_SELECT}
+                WHERE {where}
+                ORDER BY {FINDING_SORT_COLUMNS[sort]} {direction.upper()},
+                         o.finding_id ASC
+                LIMIT ? OFFSET ?
+                """,  # nosec B608
+                (*parameters, page_size, (page - 1) * page_size),
+            ).fetchall()
+        return FindingPage(
+            items=tuple(_stored_finding_from_row(row) for row in rows),
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+
+    def get_finding(
+        self,
+        finding_id: str,
+        *,
+        snapshot_id: str | None = None,
+    ) -> StoredFindingRecord | None:
+        with self._connect() as connection:
+            return _get_finding_in_connection(connection, finding_id, snapshot_id)
+
+    def finding_history(
+        self,
+        finding_id: str,
+        *,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> tuple[tuple[ReviewEventRecord, ...], int]:
+        if page < 1 or page_size < 1 or page_size > 100:
+            raise ValueError("Finding history pagination is outside the supported range.")
+        with self._connect() as connection:
+            total = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM finding_review_events WHERE finding_id = ?",
+                    (finding_id,),
+                ).fetchone()[0]
+            )
+            rows = connection.execute(
+                """
+                SELECT * FROM finding_review_events
+                WHERE finding_id = ?
+                ORDER BY event_id DESC
+                LIMIT ? OFFSET ?
+                """,
+                (finding_id, page_size, (page - 1) * page_size),
+            ).fetchall()
+        return tuple(_review_event_from_row(row) for row in rows), total
+
+    def update_finding_review(
+        self,
+        finding_id: str,
+        *,
+        expected_version: int,
+        review_status: str,
+        note: str,
+        reason_code: str | None,
+        updated_at: str,
+    ) -> StoredFindingRecord:
+        if review_status not in REVIEW_STATUSES:
+            raise ValueError("Unsupported review status.")
+        if reason_code is not None and reason_code not in REASON_CODES:
+            raise ValueError("Unsupported review reason.")
+        if len(note) > 2_000:
+            raise ValueError("Finding review note exceeds 2,000 characters.")
+        if expected_version < 0:
+            raise ValueError("Expected review version is invalid.")
+        with self._transaction() as connection:
+            current = _get_finding_in_connection(connection, finding_id, None)
+            if current is None:
+                raise LookupError("Finding was not found.")
+            if current.review.version != expected_version:
+                raise ReviewConflictError(current)
+            updated = connection.execute(
+                """
+                UPDATE finding_reviews
+                SET review_status = ?, note = ?, reason_code = ?,
+                    version = version + 1, decided_at = ?, updated_at = ?
+                WHERE finding_id = ? AND version = ?
+                """,
+                (
+                    review_status,
+                    note,
+                    reason_code,
+                    updated_at,
+                    updated_at,
+                    finding_id,
+                    expected_version,
+                ),
+            )
+            if updated.rowcount != 1:
+                current = _get_finding_in_connection(connection, finding_id, None)
+                if current is None:
+                    raise LookupError("Finding was not found.")
+                raise ReviewConflictError(current)
+            connection.execute(
+                """
+                INSERT INTO finding_review_events (
+                    finding_id, event_type, snapshot_id, review_status,
+                    reason_code, note, review_version, event_at
+                ) VALUES (?, 'review-decision-changed', NULL, ?, ?, ?, ?, ?)
+                """,
+                (
+                    finding_id,
+                    review_status,
+                    reason_code,
+                    note,
+                    expected_version + 1,
+                    updated_at,
+                ),
+            )
+            result = _get_finding_in_connection(connection, finding_id, None)
+            if result is None:
+                raise RuntimeError("Updated finding disappeared.")
+            return result
+
     def get_file(self, snapshot_id: str, relative_path: str) -> FileRecord | None:
         with self._connect() as connection:
             row = connection.execute(
@@ -689,6 +1091,9 @@ class SnapshotStore:
         if current < 2:
             _execute_schema(connection, _SCHEMA_V2)
             connection.execute("UPDATE schema_version SET version = 2")
+        if current < 3:
+            _execute_schema(connection, _SCHEMA_V3)
+            connection.execute("UPDATE schema_version SET version = 3")
 
     @staticmethod
     def _upsert_repository(
@@ -890,6 +1295,61 @@ class SnapshotStore:
         )
         connection.executemany(
             """
+            INSERT INTO metrics (
+                snapshot_id, metric_id, subject_id, subject_type, metric_name,
+                numeric_value, unit, analyzer_version, relative_path, line
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    snapshot.snapshot_id,
+                    item.metric_id,
+                    item.subject_id,
+                    item.subject_type,
+                    item.metric_name,
+                    item.numeric_value,
+                    item.unit,
+                    item.analyzer_version,
+                    item.relative_path,
+                    item.line,
+                )
+                for item in evidence.metrics
+            ],
+        )
+        connection.executemany(
+            """
+            INSERT INTO finding_occurrences (
+                snapshot_id, finding_id, rule_id, rule_version, family, title,
+                explanation, suggested_action, severity, confidence, subject_type,
+                subject_keys_json, affected_node_ids_json, relative_path, line,
+                metric_evidence_json, threshold_evidence_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    snapshot.snapshot_id,
+                    item.finding_id,
+                    item.rule_id,
+                    item.rule_version,
+                    item.family,
+                    item.title,
+                    item.explanation,
+                    item.suggested_action,
+                    item.severity,
+                    item.confidence,
+                    item.subject_type,
+                    json.dumps(item.subject_keys, separators=(",", ":")),
+                    json.dumps(item.affected_node_ids, separators=(",", ":")),
+                    item.relative_path,
+                    item.line,
+                    json.dumps(item.metric_evidence, separators=(",", ":")),
+                    json.dumps(item.threshold_evidence, separators=(",", ":")),
+                )
+                for item in evidence.findings
+            ],
+        )
+        connection.executemany(
+            """
             INSERT INTO graph_nodes (
                 snapshot_id, node_id, node_type, display_name, qualified_name,
                 relative_path, symbol_kind
@@ -965,6 +1425,106 @@ class SnapshotStore:
                 for relationship_id in cycle.edge_ids
             ],
         )
+
+    @staticmethod
+    def _reconcile_findings(
+        connection: sqlite3.Connection,
+        evidence: AnalysisEvidence,
+    ) -> None:
+        snapshot = evidence.snapshot
+        observed = {item.finding_id for item in evidence.findings}
+        for item in evidence.findings:
+            existing = connection.execute(
+                """
+                SELECT evidence_state, last_seen_snapshot_id
+                FROM findings WHERE finding_id = ?
+                """,
+                (item.finding_id,),
+            ).fetchone()
+            if existing is None:
+                connection.execute(
+                    """
+                    INSERT INTO findings (
+                        finding_id, repository_id, first_seen_snapshot_id,
+                        last_seen_snapshot_id, evidence_state, resolved_snapshot_id
+                    ) VALUES (?, ?, ?, ?, 'active', NULL)
+                    """,
+                    (
+                        item.finding_id,
+                        snapshot.repository_id,
+                        snapshot.snapshot_id,
+                        snapshot.snapshot_id,
+                    ),
+                )
+                event_type = "finding-first-seen"
+                connection.execute(
+                    """
+                    INSERT INTO finding_reviews (
+                        finding_id, review_status, note, reason_code, version,
+                        decided_at, updated_at
+                    ) VALUES (?, 'new', '', NULL, 0, ?, ?)
+                    """,
+                    (item.finding_id, snapshot.completed_at, snapshot.completed_at),
+                )
+            else:
+                if (
+                    str(existing["evidence_state"]) == "active"
+                    and str(existing["last_seen_snapshot_id"]) == snapshot.snapshot_id
+                ):
+                    continue
+                event_type = (
+                    "finding-reactivated"
+                    if str(existing["evidence_state"]) == "resolved"
+                    else "finding-evidence-updated"
+                )
+                connection.execute(
+                    """
+                    UPDATE findings
+                    SET last_seen_snapshot_id = ?, evidence_state = 'active',
+                        resolved_snapshot_id = NULL
+                    WHERE finding_id = ? AND repository_id = ?
+                    """,
+                    (snapshot.snapshot_id, item.finding_id, snapshot.repository_id),
+                )
+            connection.execute(
+                """
+                INSERT INTO finding_review_events (
+                    finding_id, event_type, snapshot_id, review_status,
+                    reason_code, note, review_version, event_at
+                ) VALUES (?, ?, ?, NULL, NULL, '', NULL, ?)
+                """,
+                (item.finding_id, event_type, snapshot.snapshot_id, snapshot.completed_at),
+            )
+
+        active_rows = connection.execute(
+            """
+            SELECT finding_id FROM findings
+            WHERE repository_id = ? AND evidence_state = 'active'
+            ORDER BY finding_id
+            """,
+            (snapshot.repository_id,),
+        ).fetchall()
+        for row in active_rows:
+            finding_id = str(row["finding_id"])
+            if finding_id in observed:
+                continue
+            connection.execute(
+                """
+                UPDATE findings
+                SET evidence_state = 'resolved', resolved_snapshot_id = ?
+                WHERE finding_id = ?
+                """,
+                (snapshot.snapshot_id, finding_id),
+            )
+            connection.execute(
+                """
+                INSERT INTO finding_review_events (
+                    finding_id, event_type, snapshot_id, review_status,
+                    reason_code, note, review_version, event_at
+                ) VALUES (?, 'finding-resolved', ?, NULL, NULL, '', NULL, ?)
+                """,
+                (finding_id, snapshot.snapshot_id, snapshot.completed_at),
+            )
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -1141,6 +1701,98 @@ def _relationship_from_row(row: sqlite3.Row) -> RelationshipRecord:
         column=int(row["column_number"]),
         analyzer_version=str(row["analyzer_version"]),
         evidence=str(row["evidence"]),
+    )
+
+
+def _stored_finding_from_row(row: sqlite3.Row) -> StoredFindingRecord:
+    evidence = FindingEvidenceRecord(
+        finding_id=str(row["o_finding_id"]),
+        rule_id=str(row["o_rule_id"]),
+        rule_version=str(row["o_rule_version"]),
+        family=str(row["o_family"]),
+        title=str(row["o_title"]),
+        explanation=str(row["o_explanation"]),
+        suggested_action=str(row["o_suggested_action"]),
+        severity=str(row["o_severity"]),
+        confidence=str(row["o_confidence"]),
+        subject_type=str(row["o_subject_type"]),
+        subject_keys=tuple(str(item) for item in json.loads(str(row["o_subject_keys_json"]))),
+        affected_node_ids=tuple(str(item) for item in json.loads(str(row["o_affected_node_ids_json"]))),
+        relative_path=(str(row["o_relative_path"]) if row["o_relative_path"] is not None else None),
+        line=int(row["o_line"]) if row["o_line"] is not None else None,
+        metric_evidence=tuple(
+            (str(name), float(value)) for name, value in json.loads(str(row["o_metric_evidence_json"]))
+        ),
+        threshold_evidence=tuple(
+            (str(name), float(value)) for name, value in json.loads(str(row["o_threshold_evidence_json"]))
+        ),
+    )
+    lifecycle = FindingLifecycleRecord(
+        finding_id=evidence.finding_id,
+        repository_id=str(row["f_repository_id"]),
+        first_seen_snapshot_id=str(row["f_first_seen_snapshot_id"]),
+        last_seen_snapshot_id=str(row["f_last_seen_snapshot_id"]),
+        evidence_state=str(row["f_evidence_state"]),
+        resolved_snapshot_id=(
+            str(row["f_resolved_snapshot_id"]) if row["f_resolved_snapshot_id"] is not None else None
+        ),
+    )
+    review = ReviewDecisionRecord(
+        finding_id=evidence.finding_id,
+        review_status=str(row["r_review_status"]),
+        note=str(row["r_note"]),
+        reason_code=str(row["r_reason_code"]) if row["r_reason_code"] is not None else None,
+        version=int(row["r_version"]),
+        decided_at=str(row["r_decided_at"]),
+        updated_at=str(row["r_updated_at"]),
+    )
+    return StoredFindingRecord(evidence=evidence, lifecycle=lifecycle, review=review)
+
+
+def _get_finding_in_connection(
+    connection: sqlite3.Connection,
+    finding_id: str,
+    snapshot_id: str | None,
+) -> StoredFindingRecord | None:
+    if snapshot_id is None:
+        row = connection.execute(
+            f"""
+            {_FINDING_SELECT}
+            WHERE o.finding_id = ? AND o.snapshot_id = f.last_seen_snapshot_id
+            """,
+            (finding_id,),
+        ).fetchone()
+    else:
+        row = connection.execute(
+            f"""
+            {_FINDING_SELECT}
+            WHERE o.finding_id = ?
+              AND (
+                  o.snapshot_id = ?
+                  OR (
+                      f.resolved_snapshot_id = ?
+                      AND o.snapshot_id = f.last_seen_snapshot_id
+                  )
+              )
+            ORDER BY CASE WHEN o.snapshot_id = ? THEN 0 ELSE 1 END
+            LIMIT 1
+            """,
+            (finding_id, snapshot_id, snapshot_id, snapshot_id),
+        ).fetchone()
+    return _stored_finding_from_row(row) if row is not None else None
+
+
+def _review_event_from_row(row: sqlite3.Row) -> ReviewEventRecord:
+    return ReviewEventRecord(
+        event_id=int(row["event_id"]),
+        finding_id=str(row["finding_id"]),
+        event_type=str(row["event_type"]),
+        snapshot_id=str(row["snapshot_id"]) if row["snapshot_id"] is not None else None,
+        review_status=(str(row["review_status"]) if row["review_status"] is not None else None),
+        reason_code=str(row["reason_code"]) if row["reason_code"] is not None else None,
+        note=str(row["note"]),
+        review_version=(int(row["review_version"]) if row["review_version"] is not None else None),
+        event_at=str(row["event_at"]),
     )
 
 
@@ -1388,14 +2040,107 @@ CREATE INDEX IF NOT EXISTS idx_relationships_snapshot_target
     ON relationships(snapshot_id, target_id);
 """
 
+_SCHEMA_V3 = """
+CREATE TABLE IF NOT EXISTS metrics (
+    snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id) ON DELETE CASCADE,
+    metric_id TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    subject_type TEXT NOT NULL CHECK (subject_type IN ('module', 'symbol')),
+    metric_name TEXT NOT NULL,
+    numeric_value REAL NOT NULL,
+    unit TEXT NOT NULL,
+    analyzer_version TEXT NOT NULL,
+    relative_path TEXT,
+    line INTEGER,
+    PRIMARY KEY (snapshot_id, metric_id)
+);
+
+CREATE TABLE IF NOT EXISTS finding_occurrences (
+    snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id) ON DELETE CASCADE,
+    finding_id TEXT NOT NULL,
+    rule_id TEXT NOT NULL,
+    rule_version TEXT NOT NULL,
+    family TEXT NOT NULL,
+    title TEXT NOT NULL,
+    explanation TEXT NOT NULL,
+    suggested_action TEXT NOT NULL,
+    severity TEXT NOT NULL CHECK (severity IN ('high', 'medium', 'low')),
+    confidence TEXT NOT NULL CHECK (confidence IN ('high', 'medium', 'low')),
+    subject_type TEXT NOT NULL,
+    subject_keys_json TEXT NOT NULL,
+    affected_node_ids_json TEXT NOT NULL,
+    relative_path TEXT,
+    line INTEGER,
+    metric_evidence_json TEXT NOT NULL,
+    threshold_evidence_json TEXT NOT NULL,
+    PRIMARY KEY (snapshot_id, finding_id)
+);
+
+CREATE TABLE IF NOT EXISTS findings (
+    finding_id TEXT PRIMARY KEY,
+    repository_id TEXT NOT NULL REFERENCES repositories(repository_id),
+    first_seen_snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+    last_seen_snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+    evidence_state TEXT NOT NULL CHECK (evidence_state IN ('active', 'resolved')),
+    resolved_snapshot_id TEXT REFERENCES snapshots(snapshot_id)
+);
+
+CREATE TABLE IF NOT EXISTS finding_reviews (
+    finding_id TEXT PRIMARY KEY REFERENCES findings(finding_id) ON DELETE CASCADE,
+    review_status TEXT NOT NULL
+        CHECK (review_status IN ('new', 'reviewed', 'needs-action', 'accepted', 'dismissed')),
+    note TEXT NOT NULL CHECK (length(note) <= 2000),
+    reason_code TEXT
+        CHECK (
+            reason_code IS NULL OR reason_code IN (
+                'intentional-design', 'false-positive', 'accepted-risk',
+                'planned-refactor', 'needs-investigation', 'other'
+            )
+        ),
+    version INTEGER NOT NULL CHECK (version >= 0),
+    decided_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS finding_review_events (
+    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    finding_id TEXT NOT NULL REFERENCES findings(finding_id) ON DELETE CASCADE,
+    event_type TEXT NOT NULL
+        CHECK (
+            event_type IN (
+                'finding-first-seen', 'finding-evidence-updated',
+                'review-decision-changed', 'finding-resolved', 'finding-reactivated'
+            )
+        ),
+    snapshot_id TEXT REFERENCES snapshots(snapshot_id),
+    review_status TEXT,
+    reason_code TEXT,
+    note TEXT NOT NULL CHECK (length(note) <= 2000),
+    review_version INTEGER,
+    event_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_metrics_snapshot_subject
+    ON metrics(snapshot_id, subject_id, metric_name);
+CREATE INDEX IF NOT EXISTS idx_occurrences_snapshot_filters
+    ON finding_occurrences(snapshot_id, family, severity, confidence);
+CREATE INDEX IF NOT EXISTS idx_findings_repository_state
+    ON findings(repository_id, evidence_state, last_seen_snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_review_events_finding
+    ON finding_review_events(finding_id, event_id DESC);
+"""
+
 
 __all__ = [
     "AnalysisStatusRecord",
     "DATABASE_SCHEMA_VERSION",
+    "FindingPage",
     "GraphNodePage",
+    "ReviewConflictError",
     "RelationshipPage",
     "SnapshotNotFoundError",
     "SnapshotStore",
+    "StoredFindingRecord",
     "SymbolPage",
     "resolve_app_data_directory",
 ]

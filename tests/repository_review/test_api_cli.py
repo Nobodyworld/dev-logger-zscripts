@@ -284,6 +284,8 @@ def test_relationship_api_handles_old_snapshot_explicitly(tmp_path: Path) -> Non
             params={"mode": "modules"},
         )
         cycles = client.get(f"/api/snapshots/{evidence.snapshot.snapshot_id}/cycles")
+        finding_summary = client.get(f"/api/snapshots/{evidence.snapshot.snapshot_id}/findings/summary")
+        findings = client.get(f"/api/snapshots/{evidence.snapshot.snapshot_id}/findings")
 
     assert summary.status_code == 200
     assert summary.json()["supported"] is False
@@ -297,6 +299,109 @@ def test_relationship_api_handles_old_snapshot_explicitly(tmp_path: Path) -> Non
         "truncated": False,
     }
     assert cycles.json()["items"] == []
+    assert finding_summary.json()["supported"] is False
+    assert findings.json()["supported"] is False
+    assert findings.json()["items"] == []
+
+
+def test_findings_api_filters_reviews_conflicts_and_redacts_paths(tmp_path: Path) -> None:
+    repository = tmp_path / "findings"
+    shutil.copytree(FIXTURES / "findings", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    snapshot_id = evidence.snapshot.snapshot_id
+    app = create_workspace_app(service=service)
+
+    with TestClient(app) as client:
+        summary = client.get(f"/api/snapshots/{snapshot_id}/findings/summary")
+        assert summary.status_code == 200
+        assert summary.json()["supported"] is True
+        assert summary.json()["active"] == len(evidence.findings)
+
+        page = client.get(
+            f"/api/snapshots/{snapshot_id}/findings",
+            params={
+                "family": "parameters",
+                "severity": "low",
+                "confidence": "high",
+                "search": "COMPLEX_TARGET",
+                "page": 1,
+                "page_size": 5,
+            },
+        )
+        assert page.status_code == 200
+        assert page.json()["total"] == 1
+        finding = page.json()["items"][0]
+        assert finding["subject_keys"] == ["pkg.metrics.complex_target"]
+        assert str(repository.resolve()) not in page.text
+
+        detail = client.get(
+            f"/api/findings/{finding['finding_id']}",
+            params={"snapshot_id": snapshot_id},
+        )
+        assert detail.status_code == 200
+        history = client.get(f"/api/findings/{finding['finding_id']}/history")
+        assert history.status_code == 200
+        assert history.json()["items"][0]["event_type"] == "finding-first-seen"
+
+        malicious_note = '<img src=x onerror="alert(1)">'
+        update = client.patch(
+            f"/api/findings/{finding['finding_id']}/review",
+            json={
+                "expected_version": 0,
+                "review_status": "needs-action",
+                "note": malicious_note,
+                "reason_code": "needs-investigation",
+            },
+        )
+        assert update.status_code == 200
+        assert update.json()["note"] == malicious_note
+        assert update.json()["review_version"] == 1
+
+        conflict = client.patch(
+            f"/api/findings/{finding['finding_id']}/review",
+            json={
+                "expected_version": 0,
+                "review_status": "dismissed",
+                "note": "stale",
+                "reason_code": "false-positive",
+            },
+        )
+        assert conflict.status_code == 409
+        assert conflict.json()["detail"] == "Finding review version conflict."
+        assert conflict.json()["current"]["review_version"] == 1
+        assert conflict.json()["current"]["note"] == malicious_note
+
+        invalid = client.get(
+            f"/api/snapshots/{snapshot_id}/findings",
+            params={"severity": "critical"},
+        )
+        assert invalid.status_code == 422
+        assert invalid.json() == {"detail": "Request validation failed."}
+        invalid_note = client.patch(
+            f"/api/findings/{finding['finding_id']}/review",
+            json={
+                "expected_version": 1,
+                "review_status": "reviewed",
+                "note": "x" * 2_001,
+                "reason_code": "other",
+            },
+        )
+        assert invalid_note.status_code == 422
+        rules = client.get("/api/finding-rules")
+        assert rules.status_code == 200
+        assert any(item["rule_id"] == "dependency-cycle" for item in rules.json()["rules"])
+
+    assert str(repository.resolve()) not in json.dumps(
+        {
+            "summary": summary.json(),
+            "page": page.json(),
+            "detail": detail.json(),
+            "history": history.json(),
+            "update": update.json(),
+            "conflict": conflict.json(),
+        }
+    )
 
 
 def test_cli_and_api_share_canonical_snapshot_contract(
@@ -326,6 +431,32 @@ def test_cli_and_api_share_canonical_snapshot_contract(
     assert snapshot.snapshot_id == cli_payload["snapshot"]["snapshot_id"]
     assert service.overview(snapshot.snapshot_id)["snapshot"]["snapshot_id"] == snapshot.snapshot_id
     assert str(tmp_path) not in captured.out
+
+    findings_exit = cli_module.main(
+        [
+            "experimental",
+            "findings",
+            snapshot.snapshot_id,
+            "--app-data-dir",
+            str(data_directory),
+            "--json",
+        ]
+    )
+    findings_payload = json.loads(capsys.readouterr().out)
+    rules_exit = cli_module.main(
+        [
+            "experimental",
+            "finding-rules",
+            "--app-data-dir",
+            str(data_directory),
+            "--json",
+        ]
+    )
+    rules_payload = json.loads(capsys.readouterr().out)
+    assert findings_exit == 0
+    assert findings_payload["supported"] is True
+    assert rules_exit == 0
+    assert rules_payload["rules"]
 
 
 def test_workspace_binding_is_localhost_only() -> None:

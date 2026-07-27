@@ -17,12 +17,13 @@ from zscripts.application.repository_review import (
     RepositoryReviewJobManager,
     RepositoryReviewService,
     SourceEvidenceError,
+    public_finding,
     public_repository,
     public_snapshot,
     public_symbol,
 )
 from zscripts.domain.repository_review import AnalysisState
-from zscripts.infrastructure.snapshot_store import SnapshotNotFoundError
+from zscripts.infrastructure.snapshot_store import ReviewConflictError, SnapshotNotFoundError
 
 LOCALHOST = "127.0.0.1"
 
@@ -113,6 +114,10 @@ class OverviewCounts(_StrictModel):
     inheritance_edges: int
     cycle_groups: int
     largest_cycle_size: int
+    active_findings: int
+    needs_action_findings: int
+    resolved_since_last_scan: int
+    high_confidence_high_severity_findings: int
 
 
 class OverviewResponse(_StrictModel):
@@ -254,10 +259,109 @@ class CycleListResponse(_StrictModel):
     truncated: bool
 
 
+class FindingResponse(_StrictModel):
+    finding_id: str
+    rule_id: str
+    rule_version: str
+    family: str
+    title: str
+    explanation: str
+    suggested_action: str
+    severity: Literal["high", "medium", "low"]
+    confidence: Literal["high", "medium", "low"]
+    subject_type: str
+    subject_keys: list[str]
+    affected_node_ids: list[str]
+    relative_path: str | None
+    line: int | None
+    metric_evidence: list[tuple[str, float]]
+    threshold_evidence: list[tuple[str, float]]
+    repository_id: str
+    first_seen_snapshot_id: str
+    last_seen_snapshot_id: str
+    evidence_state: Literal["active", "resolved"]
+    resolved_snapshot_id: str | None
+    review_status: Literal["new", "reviewed", "needs-action", "accepted", "dismissed"]
+    effective_status: Literal["new", "reviewed", "needs-action", "accepted", "dismissed", "resolved"]
+    note: str
+    reason_code: str | None
+    review_version: int
+    decided_at: str
+    updated_at: str
+
+
+class FindingSummaryResponse(_StrictModel):
+    supported: bool
+    active: int
+    resolved: int
+    needs_action: int
+    accepted: int
+    dismissed: int
+    severity: dict[str, int]
+    low_confidence: int
+
+
+class FindingPageResponse(_StrictModel):
+    supported: bool
+    items: list[FindingResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class FindingReviewRequest(_StrictModel):
+    expected_version: int = Field(ge=0)
+    review_status: Literal["new", "reviewed", "needs-action", "accepted", "dismissed"]
+    note: str = Field(max_length=2_000)
+    reason_code: (
+        Literal[
+            "intentional-design",
+            "false-positive",
+            "accepted-risk",
+            "planned-refactor",
+            "needs-investigation",
+            "other",
+        ]
+        | None
+    ) = None
+
+
+class FindingEventResponse(_StrictModel):
+    event_id: int
+    finding_id: str
+    event_type: str
+    snapshot_id: str | None
+    review_status: str | None
+    reason_code: str | None
+    note: str
+    review_version: int | None
+    event_at: str
+
+
+class FindingHistoryResponse(_StrictModel):
+    items: list[FindingEventResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class FindingRuleResponse(_StrictModel):
+    rule_id: str
+    rule_version: str
+    family: str
+    title: str
+    experimental: bool
+    thresholds: dict[str, int]
+
+
+class FindingRulesResponse(_StrictModel):
+    rules: list[FindingRuleResponse]
+
+
 class HealthResponse(_StrictModel):
     status: Literal["ok"]
     service: Literal["repository-review"]
-    schema_version: Literal["2"]
+    schema_version: Literal["3"]
 
 
 def create_workspace_app(
@@ -311,7 +415,7 @@ def create_workspace_app(
 
     @app.get("/api/health", response_model=HealthResponse)
     def health() -> dict[str, str]:
-        return {"status": "ok", "service": "repository-review", "schema_version": "2"}
+        return {"status": "ok", "service": "repository-review", "schema_version": "3"}
 
     @app.get("/api/repositories", response_model=RepositoryListResponse)
     def repositories() -> dict[str, object]:
@@ -557,6 +661,119 @@ def create_workspace_app(
             raise HTTPException(status_code=404, detail="Snapshot was not found.") from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="Relationship query is invalid.") from exc
+
+    @app.get(
+        "/api/snapshots/{snapshot_id}/findings/summary",
+        response_model=FindingSummaryResponse,
+    )
+    def finding_summary(snapshot_id: str) -> dict[str, object]:
+        try:
+            return review_service.finding_summary(snapshot_id)
+        except SnapshotNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Snapshot was not found.") from exc
+
+    @app.get(
+        "/api/snapshots/{snapshot_id}/findings",
+        response_model=FindingPageResponse,
+    )
+    def findings(
+        snapshot_id: str,
+        family: Annotated[str | None, Query(max_length=64)] = None,
+        severity: Literal["high", "medium", "low"] | None = None,
+        confidence: Literal["high", "medium", "low"] | None = None,
+        effective_status: Literal["new", "reviewed", "needs-action", "accepted", "dismissed", "resolved"]
+        | None = None,
+        evidence_state: Literal["active", "resolved"] | None = None,
+        search: Annotated[str, Query(max_length=200)] = "",
+        sort: Literal[
+            "severity",
+            "family",
+            "status",
+            "first_seen",
+            "last_seen",
+            "qualified_subject",
+            "finding_id",
+        ] = "severity",
+        direction: Literal["asc", "desc"] = "desc",
+        page: Annotated[int, Query(ge=1)] = 1,
+        page_size: Annotated[int, Query(ge=1, le=100)] = 50,
+    ) -> dict[str, object]:
+        try:
+            return review_service.findings(
+                snapshot_id,
+                family=family,
+                severity=severity,
+                confidence=confidence,
+                effective_status=effective_status,
+                evidence_state=evidence_state,
+                search=search,
+                sort=sort,
+                direction=direction,
+                page=page,
+                page_size=page_size,
+            )
+        except SnapshotNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Snapshot was not found.") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Finding query is invalid.") from exc
+
+    @app.get("/api/findings/{finding_id}", response_model=FindingResponse)
+    def finding_detail(
+        finding_id: str,
+        snapshot_id: Annotated[str | None, Query(min_length=16, max_length=128)] = None,
+    ) -> dict[str, object]:
+        try:
+            return review_service.finding_detail(finding_id, snapshot_id)
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="Finding was not found.") from exc
+
+    @app.get(
+        "/api/findings/{finding_id}/history",
+        response_model=FindingHistoryResponse,
+    )
+    def finding_history(
+        finding_id: str,
+        page: Annotated[int, Query(ge=1)] = 1,
+        page_size: Annotated[int, Query(ge=1, le=100)] = 50,
+    ) -> dict[str, object]:
+        try:
+            return review_service.finding_history(
+                finding_id,
+                page=page,
+                page_size=page_size,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Finding history query is invalid.") from exc
+
+    @app.patch("/api/findings/{finding_id}/review", response_model=FindingResponse)
+    def update_finding_review(
+        finding_id: str,
+        request: FindingReviewRequest,
+    ) -> Any:
+        try:
+            return review_service.update_finding_review(
+                finding_id,
+                expected_version=request.expected_version,
+                review_status=request.review_status,
+                note=request.note,
+                reason_code=request.reason_code,
+            )
+        except ReviewConflictError as exc:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "detail": "Finding review version conflict.",
+                    "current": public_finding(exc.current),
+                },
+            )
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="Finding was not found.") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Finding review is invalid.") from exc
+
+    @app.get("/api/finding-rules", response_model=FindingRulesResponse)
+    def finding_rule_catalog() -> dict[str, object]:
+        return {"rules": list(review_service.finding_rules())}
 
     static_root = Path(__file__).resolve().parents[1] / "workspace_static"
     assets = static_root / "assets"

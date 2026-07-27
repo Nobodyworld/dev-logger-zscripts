@@ -1,6 +1,6 @@
 # Zscripts 0.2 Repository Review Workspace Roadmap
 
-Status: approved direction; Phases 1 and 2 implemented for review under
+Status: approved direction; Phases 1–3 implemented for review under
 `PUBLIC BETA — ACTIVE DEVELOPMENT`.
 
 Umbrella issue: #76
@@ -660,6 +660,9 @@ resolution quality improves.
 ### Phase 3 — Findings and review workflow
 
 Issue: #79
+
+Status: implemented for review in the `feature/repository-findings` vertical
+slice; publication remains gated on exact-head hosted quality.
 
 Deliver:
 

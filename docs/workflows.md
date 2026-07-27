@@ -76,7 +76,11 @@ permission errors before any partial files are left behind.
 6. Search/filter/sort Symbols and request a bounded source excerpt when needed.
 7. Explore a focused import, package, containment, inheritance, or type graph;
    inspect cycles, incoming/outgoing edges, and source evidence.
-8. Reopen the completed snapshot from the recent-repository/snapshot controls.
+8. Filter deterministic Findings, inspect the metric/threshold and source
+   evidence, then explicitly save a reviewed, accepted, or dismissed decision.
+9. Reopen the completed snapshot from the recent-repository/snapshot controls;
+   completed rescans preserve review decisions and record resolved/reactivated
+   lifecycle events.
 
 No repository command, framework setup, migration, hook, plugin, or analyzed
 Python module is executed. Use the experimental CLI when a deterministic JSON

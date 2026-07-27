@@ -4,6 +4,11 @@
 
 ### Added
 
+- Deterministic repository metrics and conservative finding candidates with
+  stable repository-scoped identities, schema-v3 lifecycle reconciliation,
+  optimistic review decisions/history, bounded API/CLI queries, and the
+  accessible Findings workspace. Rule-set version advances to 4; analyzer
+  version remains 3.
 - Correct bounded relationship discovery and resolution with server-side node
   search, complete neighborhood request identities, proven qualified-name
   bindings, and conservative `Literal`/`Annotated` handling. Analyzer and

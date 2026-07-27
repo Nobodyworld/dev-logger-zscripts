@@ -80,6 +80,10 @@ def test_snapshot_round_trip_filters_and_source_evidence(tmp_path: Path) -> None
         "inheritance_edges": 0,
         "cycle_groups": 0,
         "largest_cycle_size": 0,
+        "active_findings": 3,
+        "needs_action_findings": 0,
+        "resolved_since_last_scan": 0,
+        "high_confidence_high_severity_findings": 0,
     }
     assert first.relationships
     assert service.store.list_graph_nodes(first.snapshot.snapshot_id)
@@ -166,6 +170,11 @@ def test_snapshot_promotion_rolls_back_all_evidence_on_failure(
             "cycle_groups",
             "cycle_members",
             "cycle_edges",
+            "metrics",
+            "finding_occurrences",
+            "findings",
+            "finding_reviews",
+            "finding_review_events",
         ):
             assert connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
 
@@ -222,8 +231,10 @@ def test_mvp_schema_migrates_without_reinterpreting_old_snapshot(tmp_path: Path)
     assert service.relationship_summary("old-snapshot")["supported"] is False
     assert service.relationships("old-snapshot")["items"] == []
     assert service.cycles("old-snapshot")["items"] == []
+    assert service.finding_summary("old-snapshot")["supported"] is False
+    assert service.findings("old-snapshot")["items"] == []
     with sqlite3.connect(database) as connection:
-        assert connection.execute("SELECT version FROM schema_version").fetchone()[0] == 2
+        assert connection.execute("SELECT version FROM schema_version").fetchone()[0] == 3
         assert (
             connection.execute(
                 "SELECT COUNT(*) FROM relationships WHERE snapshot_id = 'old-snapshot'"
@@ -232,3 +243,50 @@ def test_mvp_schema_migrates_without_reinterpreting_old_snapshot(tmp_path: Path)
         )
     with store._connect() as connection:
         assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+
+
+def test_relationship_schema_v2_migrates_to_v3_without_finding_reinterpretation(
+    tmp_path: Path,
+) -> None:
+    data = tmp_path / "data"
+    data.mkdir()
+    database = data / "repository-review.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TABLE schema_version (version INTEGER NOT NULL)")
+        connection.execute("INSERT INTO schema_version (version) VALUES (2)")
+        connection.executescript(snapshot_store_module._SCHEMA_V1)
+        connection.executescript(snapshot_store_module._SCHEMA_V2)
+        connection.execute(
+            """
+            INSERT INTO repositories (
+                repository_id, display_name, canonical_path, git_root, branch,
+                git_sha, dirty, staged, untracked, configuration_digest,
+                source_roots_json, test_roots_json
+            ) VALUES ('v2-repository', 'v2', ?, NULL, NULL, NULL, 0, 0, 0, 'config', '[]', '[]')
+            """,
+            (str(tmp_path / "v2"),),
+        )
+        connection.execute(
+            """
+            INSERT INTO snapshots (
+                snapshot_id, repository_id, analyzer_version, schema_version,
+                rule_set_version, state, source_fingerprint, file_count,
+                included_file_count, module_count, symbol_count, started_at,
+                completed_at, duration_ms, truncated, parse_gap_count
+            ) VALUES (
+                'v2-snapshot', 'v2-repository', '3', '2', '3', 'completed',
+                'source', 0, 0, 0, 0, '2026-01-01T00:00:00.000Z',
+                '2026-01-01T00:00:00.000Z', 0, 0, 0
+            )
+            """
+        )
+
+    store = SnapshotStore(data)
+    service = RepositoryReviewService(store=store)
+
+    assert store.get_snapshot("v2-snapshot").schema_version == "2"
+    assert service.relationship_summary("v2-snapshot")["supported"] is True
+    assert service.finding_summary("v2-snapshot")["supported"] is False
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("SELECT version FROM schema_version").fetchone()[0] == 3
+        assert connection.execute("SELECT COUNT(*) FROM findings").fetchone()[0] == 0

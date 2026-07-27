@@ -143,8 +143,9 @@ Global flags such as `--config`, `--set`, `--adapter`, `--enable-telemetry`,
 
 The workspace is a local-first product slice for scanning an ordinary Python
 repository without importing or executing it. It stores metadata-only snapshots
-outside the analyzed repository and serves responsive Overview, Symbols, and
-focused Relationships views from one localhost-only process.
+outside the analyzed repository and serves responsive Overview, Symbols,
+focused Relationships, and reviewable Findings views from one localhost-only
+process.
 
 ```sh
 # Editable development checkout
@@ -169,6 +170,10 @@ This is **PUBLIC BETA — ACTIVE DEVELOPMENT**. Static syntax evidence cannot pr
 runtime behavior, architectural intent, code safety, or framework semantics.
 Relationship exploration is deliberately bounded and reports ambiguous or
 unresolved evidence instead of guessing.
+Findings are deterministic static-analysis signals, not diagnoses: the
+workspace shows their metric, threshold, confidence, source evidence,
+lifecycle, and explicit local review decision without changing the analyzed
+repository.
 Review the complete [repository review guide](docs/repository-review.md) for
 installation, API, storage/deletion, privacy, exclusions, limitations, and
 validation details.

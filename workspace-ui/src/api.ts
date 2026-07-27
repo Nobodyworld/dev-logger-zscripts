@@ -2,6 +2,10 @@ import type {
     AnalysisJob,
     Overview,
     CycleList,
+    Finding,
+    FindingHistory,
+    FindingPage,
+    FindingSummary,
     GraphMode,
     GraphNodePage,
     RelationshipNeighborhood,
@@ -13,9 +17,14 @@ import type {
 } from "./types";
 
 export class ApiError extends Error {
-    constructor(message: string) {
+    status: number;
+    currentFinding: Finding | null;
+
+    constructor(message: string, status = 0, currentFinding: Finding | null = null) {
         super(message);
         this.name = "ApiError";
+        this.status = status;
+        this.currentFinding = currentFinding;
     }
 }
 
@@ -28,8 +37,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         },
     });
     if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
-        throw new ApiError(payload?.detail ?? "The local workspace request failed.");
+        const payload = (await response.json().catch(() => null)) as {
+            detail?: string;
+            current?: Finding;
+        } | null;
+        throw new ApiError(
+            payload?.detail ?? "The local workspace request failed.",
+            response.status,
+            payload?.current ?? null,
+        );
     }
     return (await response.json()) as T;
 }
@@ -179,4 +195,85 @@ export function getCycles(snapshotId: string): Promise<CycleList> {
     return request<CycleList>(
         `/api/snapshots/${encodeURIComponent(snapshotId)}/cycles?max_results=100`,
     );
+}
+
+export function getFindingSummary(snapshotId: string): Promise<FindingSummary> {
+    return request<FindingSummary>(
+        `/api/snapshots/${encodeURIComponent(snapshotId)}/findings/summary`,
+    );
+}
+
+export interface FindingQuery {
+    search: string;
+    family: string;
+    severity: string;
+    confidence: string;
+    effectiveStatus: string;
+    evidenceState: string;
+    sort: string;
+    direction: "asc" | "desc";
+    page: number;
+    pageSize: number;
+}
+
+export function getFindings(snapshotId: string, query: FindingQuery): Promise<FindingPage> {
+    const parameters = new URLSearchParams({
+        search: query.search,
+        sort: query.sort,
+        direction: query.direction,
+        page: String(query.page),
+        page_size: String(query.pageSize),
+    });
+    if (query.family) parameters.set("family", query.family);
+    if (query.severity) parameters.set("severity", query.severity);
+    if (query.confidence) parameters.set("confidence", query.confidence);
+    if (query.effectiveStatus) parameters.set("effective_status", query.effectiveStatus);
+    if (query.evidenceState) parameters.set("evidence_state", query.evidenceState);
+    return request<FindingPage>(
+        `/api/snapshots/${encodeURIComponent(snapshotId)}/findings?${parameters.toString()}`,
+    );
+}
+
+export function getFinding(
+    findingId: string,
+    snapshotId: string,
+    signal?: AbortSignal,
+): Promise<Finding> {
+    const parameters = new URLSearchParams({ snapshot_id: snapshotId });
+    return request<Finding>(
+        `/api/findings/${encodeURIComponent(findingId)}?${parameters.toString()}`,
+        { signal },
+    );
+}
+
+export function getFindingHistory(
+    findingId: string,
+    signal?: AbortSignal,
+): Promise<FindingHistory> {
+    return request<FindingHistory>(
+        `/api/findings/${encodeURIComponent(findingId)}/history?page=1&page_size=50`,
+        { signal },
+    );
+}
+
+export function updateFindingReview(
+    findingId: string,
+    input: {
+        expectedVersion: number;
+        reviewStatus: string;
+        note: string;
+        reasonCode: string;
+    },
+    signal?: AbortSignal,
+): Promise<Finding> {
+    return request<Finding>(`/api/findings/${encodeURIComponent(findingId)}/review`, {
+        method: "PATCH",
+        signal,
+        body: JSON.stringify({
+            expected_version: input.expectedVersion,
+            review_status: input.reviewStatus,
+            note: input.note,
+            reason_code: input.reasonCode || null,
+        }),
+    });
 }

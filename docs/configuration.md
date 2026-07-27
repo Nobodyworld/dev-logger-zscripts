@@ -146,6 +146,10 @@ zscripts experimental analyze PATH \
 - Relationship neighborhood requests accept depth `1`–`3`, at most 100 nodes
   and 200 edges, and report truncation explicitly. Cycle queries return at most
   100 groups. These server-side bounds are not configurable in this slice.
+- Finding list pages contain at most 100 records and searches are bounded to
+  200 characters. Review notes contain at most 2,000 characters. Finding
+  thresholds are versioned product defaults rather than repository
+  configuration in this slice.
 
 See [Experimental Repository Review Workspace](repository-review.md) for default
 exclusions, storage, and privacy details.

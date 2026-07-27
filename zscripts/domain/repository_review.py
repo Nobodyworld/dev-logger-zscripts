@@ -9,8 +9,8 @@ from enum import StrEnum
 from typing import Any, cast
 
 ANALYZER_VERSION = "3"
-SCHEMA_VERSION = "2"
-RULE_SET_VERSION = "3"
+SCHEMA_VERSION = "3"
+RULE_SET_VERSION = "4"
 
 
 class AnalysisState(StrEnum):
@@ -214,6 +214,83 @@ class CycleGroupRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class MetricRecord:
+    """One deterministic raw measurement, independent from finding thresholds."""
+
+    metric_id: str
+    subject_id: str
+    subject_type: str
+    metric_name: str
+    numeric_value: float
+    unit: str
+    analyzer_version: str
+    relative_path: str | None
+    line: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class FindingEvidenceRecord:
+    """Immutable snapshot evidence emitted by one versioned finding rule."""
+
+    finding_id: str
+    rule_id: str
+    rule_version: str
+    family: str
+    title: str
+    explanation: str
+    suggested_action: str
+    severity: str
+    confidence: str
+    subject_type: str
+    subject_keys: tuple[str, ...]
+    affected_node_ids: tuple[str, ...]
+    relative_path: str | None
+    line: int | None
+    metric_evidence: tuple[tuple[str, float], ...]
+    threshold_evidence: tuple[tuple[str, float], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class FindingLifecycleRecord:
+    """Repository-local lifecycle state for stable finding identity."""
+
+    finding_id: str
+    repository_id: str
+    first_seen_snapshot_id: str
+    last_seen_snapshot_id: str
+    evidence_state: str
+    resolved_snapshot_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewDecisionRecord:
+    """Current optimistic-concurrency protected user review decision."""
+
+    finding_id: str
+    review_status: str
+    note: str
+    reason_code: str | None
+    version: int
+    decided_at: str
+    updated_at: str
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewEventRecord:
+    """Append-only local audit event for finding lifecycle and review changes."""
+
+    event_id: int
+    finding_id: str
+    event_type: str
+    snapshot_id: str | None
+    review_status: str | None
+    reason_code: str | None
+    note: str
+    review_version: int | None
+    event_at: str
+
+
+@dataclass(frozen=True, slots=True)
 class AnalysisEvidence:
     """Complete metadata-only evidence promoted atomically to SQLite."""
 
@@ -226,6 +303,8 @@ class AnalysisEvidence:
     graph_nodes: tuple[GraphNodeRecord, ...] = ()
     relationships: tuple[RelationshipRecord, ...] = ()
     cycles: tuple[CycleGroupRecord, ...] = ()
+    metrics: tuple[MetricRecord, ...] = ()
+    findings: tuple[FindingEvidenceRecord, ...] = ()
 
     def canonical_payload(self) -> dict[str, Any]:
         """Return the deterministic, path-redacted evidence representation."""
@@ -275,6 +354,14 @@ class AnalysisEvidence:
             "cycles": [
                 _public_dataclass(record) for record in sorted(self.cycles, key=lambda item: item.cycle_id)
             ],
+            "metrics": [
+                _public_dataclass(record)
+                for record in sorted(self.metrics, key=lambda item: (item.subject_id, item.metric_name))
+            ],
+            "findings": [
+                _public_dataclass(record)
+                for record in sorted(self.findings, key=lambda item: item.finding_id)
+            ],
         }
 
     def canonical_bytes(self) -> bytes:
@@ -316,6 +403,8 @@ def _public_dataclass(
         | GraphNodeRecord
         | RelationshipRecord
         | CycleGroupRecord
+        | MetricRecord
+        | FindingEvidenceRecord
     ),
 ) -> dict[str, Any]:
     payload = asdict(record)
@@ -366,11 +455,16 @@ __all__ = [
     "CycleGroupRecord",
     "DiagnosticRecord",
     "FileRecord",
+    "FindingEvidenceRecord",
+    "FindingLifecycleRecord",
     "GraphNodeRecord",
     "ImportRecord",
+    "MetricRecord",
     "ModuleRecord",
     "RelationshipRecord",
     "RepositoryRecord",
+    "ReviewDecisionRecord",
+    "ReviewEventRecord",
     "ScanLimits",
     "SnapshotRecord",
     "SymbolRecord",

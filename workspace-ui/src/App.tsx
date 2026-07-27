@@ -12,6 +12,7 @@ import {
 import { RepositoryControls } from "./components/RepositoryControls";
 import { RepositoryHeader } from "./components/RepositoryHeader";
 import { OverviewView } from "./components/OverviewView";
+import { FindingsView } from "./components/FindingsView";
 import { RelationshipsView } from "./components/RelationshipsView";
 import { Sidebar } from "./components/Sidebar";
 import { SymbolsView } from "./components/SymbolsView";
@@ -24,6 +25,7 @@ export function App() {
     const [overview, setOverview] = useState<Overview | null>(null);
     const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
     const [activeView, setActiveView] = useState<ViewName>("overview");
+    const [findingPreset, setFindingPreset] = useState<string>("");
     const [navigationOpen, setNavigationOpen] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const pollGeneration = useRef(0);
@@ -126,7 +128,10 @@ export function App() {
                 open={navigationOpen}
                 onOpen={() => setNavigationOpen(true)}
                 onClose={() => setNavigationOpen(false)}
-                onSelect={setActiveView}
+                onSelect={(view) => {
+                    if (view === "findings") setFindingPreset("");
+                    setActiveView(view);
+                }}
             />
             <main className="workspace">
                 <header className="topbar">
@@ -155,7 +160,15 @@ export function App() {
                                 loadSnapshot(snapshotId, overview.repository.repository_id)
                             }
                         />
-                        {activeView === "overview" ? <OverviewView overview={overview} /> : null}
+                        {activeView === "overview" ? (
+                            <OverviewView
+                                overview={overview}
+                                onOpenFindings={(preset) => {
+                                    setFindingPreset(preset);
+                                    setActiveView("findings");
+                                }}
+                            />
+                        ) : null}
                         {activeView === "symbols" ? (
                             <SymbolsView
                                 key={overview.snapshot.snapshot_id}
@@ -166,6 +179,13 @@ export function App() {
                             <RelationshipsView
                                 key={overview.snapshot.snapshot_id}
                                 snapshotId={overview.snapshot.snapshot_id}
+                            />
+                        ) : null}
+                        {activeView === "findings" ? (
+                            <FindingsView
+                                key={overview.snapshot.snapshot_id}
+                                snapshotId={overview.snapshot.snapshot_id}
+                                preset={findingPreset}
                             />
                         ) : null}
                     </>

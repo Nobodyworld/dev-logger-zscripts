@@ -347,6 +347,23 @@ def _build_main_parser(
     snapshots_parser.add_argument("--json", action="store_true")
     snapshots_parser.set_defaults(handler=_handle_experimental_snapshots)
 
+    findings_parser = experimental_subparsers.add_parser(
+        "findings",
+        help="List bounded deterministic findings for a completed snapshot.",
+    )
+    findings_parser.add_argument("snapshot_id")
+    findings_parser.add_argument("--app-data-dir", type=Path)
+    findings_parser.add_argument("--json", action="store_true")
+    findings_parser.set_defaults(handler=_handle_experimental_findings)
+
+    rules_parser = experimental_subparsers.add_parser(
+        "finding-rules",
+        help="List the immutable experimental finding rule catalog.",
+    )
+    rules_parser.add_argument("--app-data-dir", type=Path)
+    rules_parser.add_argument("--json", action="store_true")
+    rules_parser.set_defaults(handler=_handle_experimental_finding_rules)
+
     workspace_parser = subparsers.add_parser(
         "workspace",
         help="Start the experimental localhost-only repository review workspace.",
@@ -634,6 +651,35 @@ def _handle_experimental_snapshots(args: argparse.Namespace, runtime: RuntimeSta
     return 0
 
 
+def _handle_experimental_findings(args: argparse.Namespace, runtime: RuntimeState) -> int:
+    service = RepositoryReviewService(data_directory=args.app_data_dir)
+    payload = service.findings(args.snapshot_id, page=1, page_size=100)
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    elif not payload["supported"]:
+        print("Findings are not available for this older snapshot.")
+    else:
+        items = payload["items"]
+        if isinstance(items, list):
+            for finding in items:
+                if isinstance(finding, dict):
+                    print(
+                        f"{finding['severity']}  {finding['effective_status']}  "
+                        f"{finding['family']}  {finding['title']}"
+                    )
+    return 0
+
+
+def _handle_experimental_finding_rules(args: argparse.Namespace, runtime: RuntimeState) -> int:
+    rules = RepositoryReviewService(data_directory=args.app_data_dir).finding_rules()
+    if args.json:
+        print(json.dumps({"rules": rules}, indent=2, sort_keys=True))
+    else:
+        for rule in rules:
+            print(f"{rule['rule_id']}  v{rule['rule_version']}  {rule['title']}")
+    return 0
+
+
 def _handle_workspace(args: argparse.Namespace, runtime: RuntimeState) -> int:
     try:
         from zscripts.interfaces.workspace_api import run_workspace
@@ -738,7 +784,11 @@ def _handle_adapters(args: argparse.Namespace, runtime: RuntimeState) -> int:
     lines: list[str] = []
     for entry in inventory:
         examples = entry["examples"]
-        examples_text = ", ".join(examples) if examples else "none"
+        examples_text = (
+            ", ".join(str(item) for item in examples)
+            if isinstance(examples, Sequence) and not isinstance(examples, str)
+            else "none"
+        )
         lines.append(
             f"{entry['identifier']} ({entry['ecosystem']}): {entry['description']}\n"
             f"  examples: {examples_text}"

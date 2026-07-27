@@ -88,3 +88,20 @@ explicit `truncated` flag and source evidence as repository-relative path,
 line, and column only. Analyzer/schema v1 snapshots return `supported: false`
 with empty relationship data. Automatic Swagger and ReDoc pages remain
 disabled; machine-readable OpenAPI is available at `/api/openapi.json`.
+
+Deterministic findings and local review state use:
+
+- `GET /api/snapshots/{snapshot_id}/findings/summary`
+- `GET /api/snapshots/{snapshot_id}/findings`
+- `GET /api/findings/{finding_id}`
+- `GET /api/findings/{finding_id}/history`
+- `PATCH /api/findings/{finding_id}/review`
+- `GET /api/finding-rules`
+
+Finding lists use bounded search, allowlisted family/severity/confidence/
+evidence/review filters, allowlisted sort tokens, and pages of at most 100.
+Responses include total matches and explicit support/truncation metadata.
+Review updates require the current integer `version`; stale writes return `409`
+with a generic conflict message and the current safe record. Notes are limited
+to 2,000 characters and reason codes are allowlisted. Older schema snapshots
+return `supported: false` rather than synthesizing findings.

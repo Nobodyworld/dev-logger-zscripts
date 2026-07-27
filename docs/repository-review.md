@@ -4,8 +4,9 @@ Status: **PUBLIC BETA — ACTIVE DEVELOPMENT**
 
 The repository review workspace is an experimental, local-first way to scan an
 ordinary Python repository, store deterministic metadata snapshots, and explore
-an Overview, searchable Symbols table, and focused relationship graphs. It does
-not require an LLM, a cloud account, Docker, or an external database.
+an Overview, searchable Symbols table, focused relationship graphs, and a
+reviewable deterministic Findings queue. It does not require an LLM, a cloud
+account, Docker, or an external database.
 
 The MVP flow is:
 
@@ -88,6 +89,30 @@ The Relationships view supports:
   locations, and an on-demand source panel;
 - explicit loading, unsupported, error, empty, and truncation states.
 
+The Findings view supports bounded server-side search, family/severity/
+confidence/lifecycle/review filters, allowlisted sorting, pagination, source
+evidence, and explicit review decisions. Review states are `new`, `reviewed`,
+`accepted`, and `dismissed`; an optional allowlisted reason and a local note of
+at most 2,000 characters are saved only after **Save review** is selected.
+Optimistic review versions prevent one workspace from silently overwriting a
+newer decision.
+
+Finding families cover dependency and inheritance cycles, exact duplicate-name
+candidates, size, complexity, nesting, parameter count, coupling, inheritance
+depth, public-documentation absence, complexity without nearby recognized test
+evidence, and orphan-looking candidates. Candidate wording is intentional:
+static evidence cannot establish a defect, dead code, runtime coverage, or
+architectural intent.
+
+Default thresholds are 80 function/method lines, 400 class lines, 1,000 module
+lines, cyclomatic complexity 15, nesting depth 5, 8 parameters, fan-in/fan-out
+12, and inheritance depth 5. Complexity starts at one and counts static branch
+points (`if`, loops, conditional expressions, exception handlers, non-default
+match cases, additional boolean operands, and comprehension conditions), while
+excluding nested function/class bodies from the enclosing symbol. Nearby test
+evidence requires both a recognized test path and a resolved or probable static
+import of the source module.
+
 Recent repositories and prior completed snapshots can be reopened. Failed and
 cancelled attempts are tracked as attempts but never promoted as completed
 snapshots.
@@ -141,14 +166,15 @@ being analyzed. Strings and forward references are parsed only as bounded
 textual names; annotations are never evaluated. Ordinary calls and assignments
 do not imply composition, and this slice does not build a function-level call
 graph. Resolved static evidence remains a source-level claim, not proof of
-runtime behavior. Findings, scoring, comparisons, and handoffs remain later
+runtime behavior. Architecture scoring, comparisons, and handoffs remain later
 roadmap phases.
 
 ## Determinism and persistence
 
-Analyzer and rule-set version `3` produce content-based repository, file,
-module, symbol, diagnostic, graph-node, relationship, cycle, and snapshot
-identifiers using evidence schema version `2`. Version 3 requires a proven
+Analyzer version `3`, evidence schema version `3`, and rule-set version `4`
+produce content-based repository, file, module, symbol, diagnostic, graph-node,
+relationship, cycle, metric, finding, and snapshot identifiers. Analyzer
+version 3 requires a proven
 same-module, import, alias, or supported static-export binding before resolving
 a qualified symbol name. It also excludes `Literal` values and all but the
 first type argument of `Annotated` from type-reference evidence. These
@@ -168,11 +194,21 @@ Only a fully written evidence set can become a completed snapshot. Repeating an
 unchanged scan reuses the same snapshot identity instead of creating duplicate
 evidence rows.
 
-Database schema v2 adds normalized graph, relationship, and cycle tables plus
-import source locations. Migration is versioned, transactional, idempotent, and
-does not reset existing local data. Snapshots created by analyzer/schema v1
-remain openable and retain their original identity; relationship routes report
-`supported: false` with empty data instead of reinterpreting them.
+Database schema v3 adds immutable metric/finding occurrences and
+repository-scoped finding lifecycle, review, and append-only event records.
+Migration from v1 or v2 is versioned, transactional, idempotent, and does not
+reset existing local data. Older snapshots retain their identity; unsupported
+finding routes return explicit empty data instead of reinterpreting old
+evidence.
+
+Finding IDs hash the repository ID, rule ID/version, subject type, and sorted
+stable subject keys. They deliberately exclude snapshot IDs, metric values,
+paths, timestamps, lifecycle state, and review text. Completed scans reconcile
+first-seen, evidence-updated, resolved, and reactivated events transactionally;
+failed or cancelled scans cannot resolve findings. `dismissed` is a human
+review decision and is distinct from automatic `resolved` evidence state.
+Canonical snapshot evidence includes metrics and finding occurrences but never
+review state, notes, or timestamps.
 
 The Relationships workspace discovers focus nodes through a bounded server-side
 query rather than only the summary sample. Search is case-insensitive over
@@ -219,6 +255,10 @@ evidence. It does **not** persist complete source files or source excerpts.
 String and byte literal values in stored signature/default and decorator
 displays are normalized to placeholders. Explicit `__all__` names and Python
 identifiers remain metadata.
+Finding notes are local user data and may contain sensitive text; they are not
+canonical evidence or export data. Delete the SQLite database while the
+workspace is stopped to remove snapshots, lifecycle history, decisions, and
+notes.
 
 The source drawer rereads only the selected repository-relative file, verifies
 its current SHA-256 hash against the snapshot, rejects traversal and symlinks,

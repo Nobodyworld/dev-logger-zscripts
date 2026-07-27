@@ -46,7 +46,7 @@ flowchart LR
   `relationship_analysis`, and `finding_analysis` treat the selected repository as untrusted input,
   never import it, and resolve only deterministic static evidence.
 - `zscripts.infrastructure.snapshot_store` persists only completed evidence
-  atomically outside the repository. Database schema v3 migrates v1/v2 data
+  atomically outside the repository. Database schema v4 migrates v1–v3 data
   without reinterpreting old snapshot identities.
 - `zscripts.application.repository_review` is the single orchestration/query
   surface used by CLI and API.
@@ -65,6 +65,10 @@ Metrics and immutable occurrences participate in schema-v3 canonical snapshot
 identity; repository-scoped lifecycle, review decisions, and append-only events
 do not. Snapshot promotion and lifecycle reconciliation share a transaction, so
 a failed or cancelled analysis cannot change active/resolved state.
+Repository-local generations ensure only the latest-started analysis can
+reconcile lifecycle state. Truncated scans and scans with parse gaps reconcile
+observed findings without resolving absent ones; stale completions persist only
+their immutable snapshots.
 
 Generated frontend assets are copied into package data during the quality/build
 flow. The existing zipapp remains a lightweight CLI artifact; the workspace is

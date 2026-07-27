@@ -230,6 +230,9 @@ export interface FindingSummary {
     dismissed: number;
     severity: Record<string, number>;
     low_confidence: number;
+    reconciliation_complete: boolean;
+    lifecycle_reconciled: boolean;
+    reconciliation_skip_reason: string | null;
 }
 
 export interface FindingPage {

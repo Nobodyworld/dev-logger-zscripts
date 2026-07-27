@@ -97,6 +97,12 @@ at most 2,000 characters are saved only after **Save review** is selected.
 Optimistic review versions prevent one workspace from silently overwriting a
 newer decision.
 
+The Findings workspace shows the repository's current lifecycle. Selecting an
+older supported snapshot establishes repository and evidence compatibility but
+does not rewind review decisions or active/resolved state. Summary, queue, and
+detail queries therefore use one current occurrence per stable finding from its
+`last_seen_snapshot_id`.
+
 Finding families cover dependency and inheritance cycles, exact duplicate-name
 candidates, size, complexity, nesting, parameter count, coupling, inheritance
 depth, public-documentation absence, complexity without nearby recognized test
@@ -196,17 +202,26 @@ evidence rows.
 
 Database schema v3 adds immutable metric/finding occurrences and
 repository-scoped finding lifecycle, review, and append-only event records.
-Migration from v1 or v2 is versioned, transactional, idempotent, and does not
-reset existing local data. Older snapshots retain their identity; unsupported
-finding routes return explicit empty data instead of reinterpreting old
-evidence.
+Database schema v4 adds repository-local analysis generations and reconciliation
+status to mutable storage. Migration from v1–v3 is versioned, transactional,
+idempotent, and does not reset existing local data. Older snapshots retain
+their identity; unsupported finding routes return explicit empty data instead
+of reinterpreting old evidence. Analyzer version `3`, evidence schema version
+`3`, and rule-set version `4` are unchanged because generation and
+reconciliation authority are excluded from canonical evidence.
 
 Finding IDs hash the repository ID, rule ID/version, subject type, and sorted
 stable subject keys. They deliberately exclude snapshot IDs, metric values,
 paths, timestamps, lifecycle state, and review text. Completed scans reconcile
 first-seen, evidence-updated, resolved, and reactivated events transactionally;
-failed or cancelled scans cannot resolve findings. `dismissed` is a human
-review decision and is distinct from automatic `resolved` evidence state.
+failed or cancelled scans cannot resolve findings. A completed scan resolves
+missing findings only when it is the latest-started analysis for its repository,
+is not truncated, and has no parse gaps. Authoritative incomplete scans retain
+new, updated, and reactivated observations but report `truncated-scan` or
+`parse-gaps` and create no absence-based resolution events. Late completions
+still persist immutable snapshots but report
+`superseded-by-newer-analysis` and cannot mutate lifecycle state. `dismissed`
+is a human review decision and is distinct from automatic `resolved` evidence state.
 Canonical snapshot evidence includes metrics and finding occurrences but never
 review state, notes, or timestamps.
 

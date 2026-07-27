@@ -315,6 +315,9 @@ class RepositoryReviewService:
                 "dismissed": 0,
                 "severity": {"high": 0, "medium": 0, "low": 0},
                 "low_confidence": 0,
+                "reconciliation_complete": False,
+                "lifecycle_reconciled": False,
+                "reconciliation_skip_reason": "unsupported-snapshot-schema",
             }
         return {"supported": True, **self.store.finding_summary(snapshot_id)}
 

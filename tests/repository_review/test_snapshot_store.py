@@ -234,7 +234,9 @@ def test_mvp_schema_migrates_without_reinterpreting_old_snapshot(tmp_path: Path)
     assert service.finding_summary("old-snapshot")["supported"] is False
     assert service.findings("old-snapshot")["items"] == []
     with sqlite3.connect(database) as connection:
-        assert connection.execute("SELECT version FROM schema_version").fetchone()[0] == 3
+        assert (
+            connection.execute("SELECT version FROM schema_version").fetchone()[0] == DATABASE_SCHEMA_VERSION
+        )
         assert (
             connection.execute(
                 "SELECT COUNT(*) FROM relationships WHERE snapshot_id = 'old-snapshot'"
@@ -245,7 +247,7 @@ def test_mvp_schema_migrates_without_reinterpreting_old_snapshot(tmp_path: Path)
         assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
 
 
-def test_relationship_schema_v2_migrates_to_v3_without_finding_reinterpretation(
+def test_relationship_schema_v2_migrates_without_finding_reinterpretation(
     tmp_path: Path,
 ) -> None:
     data = tmp_path / "data"
@@ -288,5 +290,72 @@ def test_relationship_schema_v2_migrates_to_v3_without_finding_reinterpretation(
     assert service.relationship_summary("v2-snapshot")["supported"] is True
     assert service.finding_summary("v2-snapshot")["supported"] is False
     with sqlite3.connect(database) as connection:
-        assert connection.execute("SELECT version FROM schema_version").fetchone()[0] == 3
+        assert (
+            connection.execute("SELECT version FROM schema_version").fetchone()[0] == DATABASE_SCHEMA_VERSION
+        )
         assert connection.execute("SELECT COUNT(*) FROM findings").fetchone()[0] == 0
+
+
+def test_finding_schema_v3_migrates_analysis_generations_idempotently(
+    tmp_path: Path,
+) -> None:
+    data = tmp_path / "data"
+    data.mkdir()
+    database = data / "repository-review.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TABLE schema_version (version INTEGER NOT NULL)")
+        connection.execute("INSERT INTO schema_version (version) VALUES (3)")
+        connection.executescript(snapshot_store_module._SCHEMA_V1)
+        connection.executescript(snapshot_store_module._SCHEMA_V2)
+        connection.executescript(snapshot_store_module._SCHEMA_V3)
+        connection.execute(
+            """
+            INSERT INTO repositories (
+                repository_id, display_name, canonical_path, git_root, branch,
+                git_sha, dirty, staged, untracked, configuration_digest,
+                source_roots_json, test_roots_json
+            ) VALUES ('repository', 'repository', ?, NULL, NULL, NULL, 0, 0, 0, 'config', '[]', '[]')
+            """,
+            (str(tmp_path / "repository"),),
+        )
+        connection.executemany(
+            """
+            INSERT INTO analyses (
+                analysis_id, repository_id, state, progress_completed,
+                progress_total, progress_phase, message, started_at,
+                completed_at, snapshot_id
+            ) VALUES (?, 'repository', 'started', 0, 0, 'discovery', NULL, ?, NULL, NULL)
+            """,
+            (
+                ("analysis-00000001", "2026-07-27T10:00:00.000Z"),
+                ("analysis-00000002", "2026-07-27T10:00:01.000Z"),
+            ),
+        )
+
+    first = SnapshotStore(data)
+    second = SnapshotStore(data)
+
+    assert first.database_path == second.database_path
+    with sqlite3.connect(database) as connection:
+        connection.row_factory = sqlite3.Row
+        rows = connection.execute(
+            """
+            SELECT repository_generation, lifecycle_reconciled,
+                   reconciliation_skip_reason
+            FROM analyses
+            ORDER BY analysis_id
+            """
+        ).fetchall()
+        repository = connection.execute(
+            """
+            SELECT latest_analysis_generation
+            FROM repositories
+            WHERE repository_id = 'repository'
+            """
+        ).fetchone()
+        version = connection.execute("SELECT version FROM schema_version").fetchone()[0]
+    assert [row["repository_generation"] for row in rows] == [1, 2]
+    assert [row["lifecycle_reconciled"] for row in rows] == [0, 0]
+    assert all(row["reconciliation_skip_reason"] is None for row in rows)
+    assert repository["latest_analysis_generation"] == 2
+    assert version == DATABASE_SCHEMA_VERSION

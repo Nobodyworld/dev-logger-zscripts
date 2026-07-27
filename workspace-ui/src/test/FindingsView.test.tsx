@@ -94,18 +94,16 @@ describe("FindingsView", () => {
             reason_code: "intentional-design",
             review_version: 2,
         };
-        vi.stubGlobal(
-            "fetch",
-            findingsFetch(() =>
-                response(
-                    {
-                        detail: "Finding review version conflict.",
-                        current,
-                    },
-                    409,
-                ),
+        const fetchMock = findingsFetch(() =>
+            response(
+                {
+                    detail: "Finding review version conflict.",
+                    current,
+                },
+                409,
             ),
         );
+        vi.stubGlobal("fetch", fetchMock);
         const user = userEvent.setup();
         render(<FindingsView snapshotId={snapshot.snapshot_id} />);
 
@@ -122,6 +120,187 @@ describe("FindingsView", () => {
             "value",
             "another local decision",
         );
+        await waitFor(() => {
+            expect(
+                fetchMock.mock.calls.filter(([input]) =>
+                    String(input).includes("/findings/summary"),
+                ).length,
+            ).toBeGreaterThanOrEqual(2);
+            expect(
+                fetchMock.mock.calls.filter(([input]) => String(input).includes("/findings?"))
+                    .length,
+            ).toBeGreaterThanOrEqual(2);
+        });
+    });
+
+    it("explains when automatic resolution was skipped", async () => {
+        vi.stubGlobal(
+            "fetch",
+            findingsFetch(undefined, undefined, {
+                ...findingSummary,
+                reconciliation_complete: false,
+                lifecycle_reconciled: true,
+                reconciliation_skip_reason: "parse-gaps",
+            }),
+        );
+        render(<FindingsView snapshotId={snapshot.snapshot_id} />);
+
+        expect(await screen.findByText(/parse gaps made absence unreliable/i)).toBeTruthy();
+    });
+
+    it("refreshes a status-filtered queue after a successful review", async () => {
+        const fetchMock = reviewQueueFetch([finding]);
+        vi.stubGlobal("fetch", fetchMock);
+        const user = userEvent.setup();
+        render(<FindingsView snapshotId={snapshot.snapshot_id} />);
+
+        await user.selectOptions(await screen.findByLabelText("Status"), "new");
+        await screen.findByRole("heading", { name: finding.title });
+        await user.selectOptions(screen.getByLabelText("Review status"), "reviewed");
+        await user.click(screen.getByRole("button", { name: "Save review" }));
+
+        expect(
+            await screen.findByText("No findings match the current bounded query."),
+        ).toBeTruthy();
+        expect(screen.queryByRole("heading", { name: finding.title })).toBeNull();
+        expect(
+            fetchMock.mock.calls.filter(([input]) => String(input).includes("/findings?")).length,
+        ).toBeGreaterThanOrEqual(2);
+    });
+
+    it("refreshes needs-action filters and status ordering after saves", async () => {
+        const needsAction = {
+            ...finding,
+            review_status: "needs-action" as const,
+            effective_status: "needs-action" as const,
+        };
+        const fetchMock = reviewQueueFetch([needsAction, secondFinding]);
+        vi.stubGlobal("fetch", fetchMock);
+        const user = userEvent.setup();
+        const { container, rerender } = render(
+            <FindingsView snapshotId={snapshot.snapshot_id} preset="needs-action" />,
+        );
+
+        await screen.findByRole("heading", { name: finding.title });
+        await user.selectOptions(screen.getByLabelText("Review status"), "accepted");
+        await user.click(screen.getByRole("button", { name: "Save review" }));
+        expect(
+            await screen.findByText("No findings match the current bounded query."),
+        ).toBeTruthy();
+
+        rerender(<FindingsView snapshotId="snapshot-sort-0123456789" />);
+        await user.selectOptions(await screen.findByLabelText("Status"), "");
+        await user.selectOptions(screen.getByLabelText("Sort"), "status");
+        await waitFor(() => {
+            const labels = Array.from(
+                container.querySelectorAll<HTMLButtonElement>(".finding-queue button"),
+            ).map((button) => button.textContent ?? "");
+            expect(labels[0]).toContain(secondFinding.title);
+            expect(labels[1]).toContain(finding.title);
+        });
+    });
+
+    it("moves back from an emptied last page and selects a visible row", async () => {
+        const findings = Array.from({ length: 26 }, (_, index) => ({
+            ...finding,
+            finding_id: `finding-page-${String(index).padStart(2, "0")}-0123456789abcdef`,
+            title: `Finding ${String(index + 1).padStart(2, "0")}`,
+            subject_keys: [`pkg.finding_${index + 1}`],
+        }));
+        vi.stubGlobal("fetch", reviewQueueFetch(findings));
+        const user = userEvent.setup();
+        render(<FindingsView snapshotId={snapshot.snapshot_id} />);
+
+        await user.selectOptions(await screen.findByLabelText("Status"), "new");
+        await user.click(await screen.findByRole("button", { name: "Next" }));
+        expect(await screen.findByRole("heading", { name: "Finding 26" })).toBeTruthy();
+        await user.selectOptions(screen.getByLabelText("Review status"), "reviewed");
+        await user.click(screen.getByRole("button", { name: "Save review" }));
+
+        expect(await screen.findByText(/Page 1 · 25 findings/)).toBeTruthy();
+        expect(await screen.findByRole("heading", { name: "Finding 01" })).toBeTruthy();
+    });
+
+    it("ignores a slow pre-save list response after the post-save refresh", async () => {
+        const staleList = deferred<Response>();
+        let listCall = 0;
+        let current: Finding = finding;
+        const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+            const url = String(input);
+            if (url.includes("/findings/summary")) {
+                return Promise.resolve(response(findingSummary));
+            }
+            if (url.includes("/findings?")) {
+                listCall += 1;
+                if (listCall === 2) return staleList.promise;
+                const parameters = new URL(url, "http://localhost").searchParams;
+                const items =
+                    parameters.get("effective_status") === "new" &&
+                    current.effective_status !== "new"
+                        ? []
+                        : [current];
+                return Promise.resolve(
+                    response({
+                        supported: true,
+                        items,
+                        total: items.length,
+                        page: 1,
+                        page_size: 25,
+                    }),
+                );
+            }
+            if (url.includes("/review") && init?.method === "PATCH") {
+                current = {
+                    ...current,
+                    review_status: "reviewed",
+                    effective_status: "reviewed",
+                    review_version: 1,
+                };
+                return Promise.resolve(response(current));
+            }
+            if (url.includes("/history")) return Promise.resolve(response(findingHistory));
+            if (url.includes("/api/findings/")) return Promise.resolve(response(current));
+            if (url.includes("/source?")) {
+                return Promise.resolve(
+                    response({
+                        relative_path: finding.relative_path,
+                        start_line: 1,
+                        end_line: 4,
+                        lines: [],
+                        truncated: false,
+                        content_hash: "source-hash",
+                    }),
+                );
+            }
+            return Promise.resolve(response({ detail: "Unexpected request" }, 500));
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        const user = userEvent.setup();
+        render(<FindingsView snapshotId={snapshot.snapshot_id} />);
+
+        await screen.findByRole("heading", { name: finding.title });
+        await user.selectOptions(screen.getByLabelText("Status"), "new");
+        await waitFor(() => {
+            expect(listCall).toBe(2);
+        });
+        await user.selectOptions(screen.getByLabelText("Review status"), "reviewed");
+        await user.click(screen.getByRole("button", { name: "Save review" }));
+        expect(
+            await screen.findByText("No findings match the current bounded query."),
+        ).toBeTruthy();
+
+        staleList.resolve(
+            response({
+                supported: true,
+                items: [finding],
+                total: 1,
+                page: 1,
+                page_size: 25,
+            }),
+        );
+        await waitFor(() => {
+            expect(screen.queryByRole("heading", { name: finding.title })).toBeNull();
+        });
     });
 
     it("ignores stale detail success after selecting another finding", async () => {
@@ -282,10 +461,11 @@ describe("FindingsView", () => {
 function findingsFetch(
     reviewResponse?: () => Response | Promise<Response>,
     firstDetail?: Deferred<Response>,
+    summary = findingSummary,
 ) {
     return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
-        if (url.includes("/findings/summary")) return Promise.resolve(response(findingSummary));
+        if (url.includes("/findings/summary")) return Promise.resolve(response(summary));
         if (url.includes("/findings?")) {
             return Promise.resolve(
                 response({
@@ -342,6 +522,91 @@ function findingsFetch(
                     truncated: false,
                     content_hash: "source-hash",
                 }),
+            );
+        }
+        return Promise.resolve(response({ detail: "Unexpected request" }, 500));
+    });
+}
+
+function reviewQueueFetch(initialItems: Finding[]) {
+    let items = initialItems.map((item) => ({ ...item }));
+    return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes("/findings/summary")) {
+            const counts = {
+                ...findingSummary,
+                active: items.length,
+                needs_action: items.filter((item) => item.review_status === "needs-action").length,
+                accepted: items.filter((item) => item.review_status === "accepted").length,
+                dismissed: items.filter((item) => item.review_status === "dismissed").length,
+            };
+            return Promise.resolve(response(counts));
+        }
+        if (url.includes("/findings?")) {
+            const parameters = new URL(url, "http://localhost").searchParams;
+            const effectiveStatus = parameters.get("effective_status");
+            const pageNumber = Number(parameters.get("page") ?? "1");
+            const pageSize = Number(parameters.get("page_size") ?? "25");
+            const matches = effectiveStatus
+                ? items.filter((item) => item.effective_status === effectiveStatus)
+                : [...items];
+            if (parameters.get("sort") === "status") {
+                matches.sort(
+                    (left, right) =>
+                        left.effective_status.localeCompare(right.effective_status) ||
+                        left.finding_id.localeCompare(right.finding_id),
+                );
+                if (parameters.get("direction") === "desc") matches.reverse();
+            }
+            const start = (pageNumber - 1) * pageSize;
+            return Promise.resolve(
+                response({
+                    supported: true,
+                    items: matches.slice(start, start + pageSize),
+                    total: matches.length,
+                    page: pageNumber,
+                    page_size: pageSize,
+                }),
+            );
+        }
+        if (url.includes("/review") && init?.method === "PATCH") {
+            const findingId = decodeURIComponent(url.split("/api/findings/")[1].split("/")[0]);
+            const payload = JSON.parse(String(init.body)) as {
+                review_status: Finding["review_status"];
+                note: string;
+                reason_code: string | null;
+            };
+            const current = items.find((item) => item.finding_id === findingId);
+            if (!current) return Promise.resolve(response({ detail: "Not found" }, 404));
+            const updated: Finding = {
+                ...current,
+                review_status: payload.review_status,
+                effective_status: payload.review_status,
+                note: payload.note,
+                reason_code: payload.reason_code,
+                review_version: current.review_version + 1,
+            };
+            items = items.map((item) => (item.finding_id === findingId ? updated : item));
+            return Promise.resolve(response(updated));
+        }
+        if (url.includes("/history")) return Promise.resolve(response(findingHistory));
+        if (url.includes("/source?")) {
+            return Promise.resolve(
+                response({
+                    relative_path: finding.relative_path,
+                    start_line: 1,
+                    end_line: 4,
+                    lines: [],
+                    truncated: false,
+                    content_hash: "source-hash",
+                }),
+            );
+        }
+        if (url.includes("/api/findings/")) {
+            const findingId = decodeURIComponent(url.split("/api/findings/")[1].split("?")[0]);
+            const current = items.find((item) => item.finding_id === findingId);
+            return Promise.resolve(
+                current ? response(current) : response({ detail: "Finding was not found." }, 404),
             );
         }
         return Promise.resolve(response({ detail: "Unexpected request" }, 500));

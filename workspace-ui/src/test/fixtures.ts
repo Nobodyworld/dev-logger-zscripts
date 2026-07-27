@@ -257,6 +257,9 @@ export const findingSummary: FindingSummary = {
     dismissed: 0,
     severity: { high: 0, medium: 0, low: 2 },
     low_confidence: 1,
+    reconciliation_complete: true,
+    lifecycle_reconciled: true,
+    reconciliation_skip_reason: null,
 };
 
 export const findingHistory: FindingHistory = {

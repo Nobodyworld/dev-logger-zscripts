@@ -30,6 +30,15 @@
 - Public repository-review architecture, configuration, privacy, dependency,
   workflow, data-deletion, and static-analysis limitation documentation.
 
+### Fixed
+
+- Finding lifecycle reconciliation now skips absence-based resolution for
+  truncated scans and parse gaps, orders overlapping analyses by
+  repository-local generation, applies current-repository lifecycle semantics
+  consistently across summary/list/detail queries, and refreshes bounded
+  frontend queues after review saves or conflicts. SQLite schema advances to 4;
+  analyzer/evidence/rule-set versions remain 3/3/4.
+
 - Evidence-backed consumer and ownership review for the seven temporary legacy
   helper compatibility points, plus the public-beta deprecation notice. The
   notice starts the required cycle without authorizing Phase 2B; all owner

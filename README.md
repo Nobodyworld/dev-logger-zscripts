@@ -173,7 +173,9 @@ unresolved evidence instead of guessing.
 Findings are deterministic static-analysis signals, not diagnoses: the
 workspace shows their metric, threshold, confidence, source evidence,
 lifecycle, and explicit local review decision without changing the analyzed
-repository.
+repository. The Findings view uses the repository's current lifecycle even
+when an older supported snapshot is selected, and it visibly skips automatic
+resolution when truncation or parse gaps make absence unreliable.
 Review the complete [repository review guide](docs/repository-review.md) for
 installation, API, storage/deletion, privacy, exclusions, limitations, and
 validation details.

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
     ApiError,
@@ -33,6 +33,9 @@ const emptySummary: FindingSummary = {
     dismissed: 0,
     severity: { high: 0, medium: 0, low: 0 },
     low_confidence: 0,
+    reconciliation_complete: true,
+    lifecycle_reconciled: true,
+    reconciliation_skip_reason: null,
 };
 const findingFamilies = [
     "dependency-cycle",
@@ -79,9 +82,42 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
     const [note, setNote] = useState("");
     const [saving, setSaving] = useState(false);
     const [saveMessage, setSaveMessage] = useState("");
+    const [reviewNotice, setReviewNotice] = useState("");
+    const [reloadVersion, setReloadVersion] = useState(0);
     const listGeneration = useRef(0);
     const detailGeneration = useRef(0);
     const saveGeneration = useRef(0);
+    const selectedIdRef = useRef(selectedId);
+    const pageRef = useRef(page);
+
+    const direction: "asc" | "desc" =
+        sort === "qualified_subject" || sort === "family" ? "asc" : "desc";
+    const pageSize = 25;
+    const listQuery = useMemo(
+        () => ({
+            search,
+            family,
+            severity,
+            confidence,
+            effectiveStatus,
+            evidenceState,
+            sort,
+            direction,
+            page: pageNumber,
+            pageSize,
+        }),
+        [
+            search,
+            family,
+            severity,
+            confidence,
+            effectiveStatus,
+            evidenceState,
+            sort,
+            direction,
+            pageNumber,
+        ],
+    );
 
     const dirty =
         selected !== null &&
@@ -90,82 +126,89 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
             note !== selected.note);
 
     useEffect(() => {
-        let active = true;
-        getFindingSummary(snapshotId)
-            .then((value) => {
-                if (active) setSummary(value);
-            })
-            .catch(() => {
-                if (active) setError("Finding summary could not be loaded.");
-            });
-        return () => {
-            active = false;
-        };
-    }, [snapshotId]);
+        selectedIdRef.current = selectedId;
+    }, [selectedId]);
 
     useEffect(() => {
+        pageRef.current = page;
+    }, [page]);
+
+    const invalidateSelection = useCallback(() => {
+        detailGeneration.current += 1;
+        saveGeneration.current += 1;
+        setSelected(null);
+        setHistory(null);
+        setSource(null);
+        setDetailError(null);
+        setSaveMessage("");
+    }, []);
+
+    const reloadWorkspace = useCallback(async () => {
         const generation = ++listGeneration.current;
+        const previousPage = pageRef.current;
+        const previousSelectedId = selectedIdRef.current;
+        setLoading(true);
+        setError(null);
+        try {
+            const [listResult, summaryResult] = await Promise.allSettled([
+                getFindings(snapshotId, listQuery),
+                getFindingSummary(snapshotId),
+            ]);
+            if (generation !== listGeneration.current) return;
+            if (summaryResult.status === "fulfilled") {
+                setSummary(summaryResult.value);
+            }
+            if (listResult.status === "rejected") {
+                throw listResult.reason;
+            }
+            const value = listResult.value;
+            setPage(value);
+            if (value.items.length === 0 && value.total > 0 && listQuery.page > 1) {
+                setPageNumber(Math.max(Math.ceil(value.total / listQuery.pageSize), 1));
+                return;
+            }
+            const previousIndex =
+                previousPage?.items.findIndex((item) => item.finding_id === previousSelectedId) ??
+                -1;
+            const nextId =
+                previousSelectedId &&
+                value.items.some((item) => item.finding_id === previousSelectedId)
+                    ? previousSelectedId
+                    : (value.items[
+                          previousIndex >= 0 ? Math.min(previousIndex, value.items.length - 1) : 0
+                      ]?.finding_id ?? null);
+            if (nextId !== previousSelectedId) {
+                invalidateSelection();
+                setSelectedId(nextId);
+            }
+        } catch {
+            if (generation !== listGeneration.current) return;
+            setPage(null);
+            setError("Findings could not be loaded.");
+            invalidateSelection();
+            setSelectedId(null);
+        } finally {
+            if (generation === listGeneration.current) setLoading(false);
+        }
+    }, [invalidateSelection, listQuery, snapshotId]);
+
+    const requestWorkspaceReload = useCallback(() => {
+        listGeneration.current += 1;
+        setReloadVersion((value) => value + 1);
+    }, []);
+
+    useEffect(() => {
         const timer = window.setTimeout(() => {
-            setLoading(true);
-            setError(null);
-            getFindings(snapshotId, {
-                search,
-                family,
-                severity,
-                confidence,
-                effectiveStatus,
-                evidenceState,
-                sort,
-                direction: sort === "qualified_subject" || sort === "family" ? "asc" : "desc",
-                page: pageNumber,
-                pageSize: 25,
-            })
-                .then((value) => {
-                    if (generation !== listGeneration.current) return;
-                    setPage(value);
-                    const nextId =
-                        selectedId && value.items.some((item) => item.finding_id === selectedId)
-                            ? selectedId
-                            : (value.items[0]?.finding_id ?? null);
-                    if (nextId !== selectedId) {
-                        invalidateSelection();
-                        setSelectedId(nextId);
-                    }
-                })
-                .catch(() => {
-                    if (generation !== listGeneration.current) return;
-                    setPage(null);
-                    setError("Findings could not be loaded.");
-                    invalidateSelection();
-                    setSelectedId(null);
-                })
-                .finally(() => {
-                    if (generation === listGeneration.current) setLoading(false);
-                });
+            void reloadWorkspace();
         }, 180);
         return () => {
             window.clearTimeout(timer);
             listGeneration.current += 1;
         };
-        // invalidateSelection is intentionally state-local and generation guarded.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [
-        snapshotId,
-        search,
-        family,
-        severity,
-        confidence,
-        effectiveStatus,
-        evidenceState,
-        sort,
-        pageNumber,
-    ]);
+    }, [reloadVersion, reloadWorkspace]);
 
     useEffect(() => {
-        if (!selectedId) {
-            invalidateSelection();
-            return;
-        }
+        if (!selectedId) return;
         const generation = ++detailGeneration.current;
         const controller = new AbortController();
         const timer = window.setTimeout(() => {
@@ -217,17 +260,7 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
             controller.abort();
             detailGeneration.current += 1;
         };
-    }, [selectedId, snapshotId]);
-
-    function invalidateSelection() {
-        detailGeneration.current += 1;
-        saveGeneration.current += 1;
-        setSelected(null);
-        setHistory(null);
-        setSource(null);
-        setDetailError(null);
-        setSaveMessage("");
-    }
+    }, [invalidateSelection, selectedId, snapshotId]);
 
     const selectFinding = (findingId: string) => {
         if (findingId === selectedId) return;
@@ -241,6 +274,7 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
         const generation = ++saveGeneration.current;
         setSaving(true);
         setSaveMessage("");
+        setReviewNotice("");
         setDetailError(null);
         try {
             const updated = await updateFindingReview(findingId, {
@@ -255,23 +289,15 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
             setReasonCode(updated.reason_code ?? "");
             setNote(updated.note);
             setSaveMessage("Review saved.");
-            setPage((current) =>
-                current
-                    ? {
-                          ...current,
-                          items: current.items.map((item) =>
-                              item.finding_id === updated.finding_id ? updated : item,
-                          ),
-                      }
-                    : current,
-            );
-            const [nextHistory, nextSummary] = await Promise.all([
-                getFindingHistory(findingId),
-                getFindingSummary(snapshotId),
-            ]);
-            if (generation !== saveGeneration.current || findingId !== selectedId) return;
-            setHistory(nextHistory);
-            setSummary(nextSummary);
+            requestWorkspaceReload();
+            try {
+                const nextHistory = await getFindingHistory(findingId);
+                if (generation === saveGeneration.current && findingId === selectedId) {
+                    setHistory(nextHistory);
+                }
+            } catch {
+                // The saved decision remains authoritative when history refresh fails.
+            }
         } catch (caught) {
             if (generation !== saveGeneration.current || findingId !== selectedId) return;
             if (caught instanceof ApiError && caught.status === 409 && caught.currentFinding) {
@@ -280,9 +306,18 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
                 setReviewStatus(current.review_status);
                 setReasonCode(current.reason_code ?? "");
                 setNote(current.note);
-                setDetailError(
+                setReviewNotice(
                     "Another review update was saved first. Current local state has been reloaded.",
                 );
+                requestWorkspaceReload();
+                try {
+                    const nextHistory = await getFindingHistory(findingId);
+                    if (generation === saveGeneration.current && findingId === selectedId) {
+                        setHistory(nextHistory);
+                    }
+                } catch {
+                    // The safe conflict detail remains usable when history refresh fails.
+                }
             } else {
                 setDetailError("The review decision could not be saved.");
             }
@@ -329,6 +364,12 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
                     ))}
                 </dl>
             </div>
+
+            {!summary.reconciliation_complete ? (
+                <p className="selection-status" role="status">
+                    {reconciliationMessage(summary)}
+                </p>
+            ) : null}
 
             <div className="finding-toolbar" aria-label="Finding filters">
                 <label className="search-field">
@@ -392,6 +433,11 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
             {error ? (
                 <p className="error-message" role="alert">
                     {error}
+                </p>
+            ) : null}
+            {reviewNotice ? (
+                <p className="error-message" role="alert">
+                    {reviewNotice}
                 </p>
             ) : null}
             {loading ? <p className="selection-status">Loading findings…</p> : null}
@@ -664,4 +710,17 @@ function formatEvidence(items: Array<[string, number]>): string {
     return items.length
         ? items.map(([name, value]) => `${name.replaceAll("_", " ")}: ${value}`).join(", ")
         : "Not applicable";
+}
+
+function reconciliationMessage(summary: FindingSummary): string {
+    if (summary.reconciliation_skip_reason === "truncated-scan") {
+        return "Automatic finding resolution was skipped because the latest scan was truncated. Observed findings were retained.";
+    }
+    if (summary.reconciliation_skip_reason === "parse-gaps") {
+        return "Automatic finding resolution was skipped because parse gaps made absence unreliable. Observed findings were retained.";
+    }
+    if (summary.reconciliation_skip_reason === "superseded-by-newer-analysis") {
+        return "This completed scan was superseded by a newer analysis and did not change finding lifecycle state.";
+    }
+    return "Automatic finding resolution was not completed for the latest scan.";
 }

@@ -28,7 +28,7 @@ from zscripts.domain.repository_review import (
     SymbolRecord,
 )
 
-DATABASE_SCHEMA_VERSION = 3
+DATABASE_SCHEMA_VERSION = 4
 SYMBOL_SORT_COLUMNS: dict[str, str] = {
     "qualified_name": "qualified_name",
     "kind": "kind",
@@ -176,6 +176,9 @@ class AnalysisStatusRecord:
     started_at: str
     completed_at: str | None
     snapshot_id: str | None
+    repository_generation: int
+    lifecycle_reconciled: bool
+    reconciliation_skip_reason: str | None
 
 
 class SnapshotNotFoundError(LookupError):
@@ -224,13 +227,38 @@ class SnapshotStore:
             self._upsert_repository(connection, repository)
             connection.execute(
                 """
+                UPDATE repositories
+                SET latest_analysis_generation = latest_analysis_generation + 1
+                WHERE repository_id = ?
+                """,
+                (repository.repository_id,),
+            )
+            generation_row = connection.execute(
+                """
+                SELECT latest_analysis_generation
+                FROM repositories
+                WHERE repository_id = ?
+                """,
+                (repository.repository_id,),
+            ).fetchone()
+            if generation_row is None:
+                raise RuntimeError("Repository disappeared before analysis generation allocation.")
+            connection.execute(
+                """
                 INSERT INTO analyses (
                     analysis_id, repository_id, state, progress_completed,
                     progress_total, progress_phase, message, started_at,
-                    completed_at, snapshot_id
-                ) VALUES (?, ?, ?, 0, 0, 'discovery', NULL, ?, NULL, NULL)
+                    completed_at, snapshot_id, repository_generation,
+                    lifecycle_reconciled, reconciliation_skip_reason
+                ) VALUES (?, ?, ?, 0, 0, 'discovery', NULL, ?, NULL, NULL, ?, 0, NULL)
                 """,
-                (analysis_id, repository.repository_id, AnalysisState.STARTED.value, started_at),
+                (
+                    analysis_id,
+                    repository.repository_id,
+                    AnalysisState.STARTED.value,
+                    started_at,
+                    int(generation_row["latest_analysis_generation"]),
+                ),
             )
 
     def update_analysis_progress(
@@ -278,19 +306,52 @@ class SnapshotStore:
             raise ValueError("Only completed snapshots may be promoted.")
         with self._transaction() as connection:
             self._upsert_repository(connection, evidence.repository)
+            analysis = connection.execute(
+                """
+                SELECT a.repository_id, a.repository_generation,
+                       r.latest_analysis_generation
+                FROM analyses a
+                JOIN repositories r USING (repository_id)
+                WHERE a.analysis_id = ?
+                """,
+                (analysis_id,),
+            ).fetchone()
+            if analysis is None:
+                raise RuntimeError("Analysis state disappeared before atomic snapshot promotion.")
+            if str(analysis["repository_id"]) != evidence.repository.repository_id:
+                raise RuntimeError("Analysis repository changed before atomic snapshot promotion.")
             existing = connection.execute(
                 "SELECT 1 FROM snapshots WHERE snapshot_id = ?",
                 (evidence.snapshot.snapshot_id,),
             ).fetchone()
             if existing is None:
                 self._insert_snapshot(connection, evidence)
-            self._reconcile_findings(connection, evidence)
+            authoritative = int(analysis["repository_generation"]) == int(
+                analysis["latest_analysis_generation"]
+            )
+            reconciliation_skip_reason: str | None
+            if not authoritative:
+                reconciliation_skip_reason = "superseded-by-newer-analysis"
+            elif evidence.snapshot.truncated:
+                reconciliation_skip_reason = "truncated-scan"
+            elif evidence.snapshot.parse_gap_count > 0:
+                reconciliation_skip_reason = "parse-gaps"
+            else:
+                reconciliation_skip_reason = None
+            if authoritative:
+                self._reconcile_findings(
+                    connection,
+                    evidence,
+                    resolve_missing=reconciliation_skip_reason is None,
+                )
             updated = connection.execute(
                 """
                 UPDATE analyses
                 SET state = ?, progress_completed = ?, progress_total = ?,
                     progress_phase = 'completed', message = NULL,
-                    completed_at = ?, snapshot_id = ?
+                    completed_at = ?, snapshot_id = ?,
+                    lifecycle_reconciled = ?,
+                    reconciliation_skip_reason = ?
                 WHERE analysis_id = ?
                 """,
                 (
@@ -299,6 +360,8 @@ class SnapshotStore:
                     evidence.snapshot.included_file_count,
                     evidence.snapshot.completed_at,
                     evidence.snapshot.snapshot_id,
+                    int(authoritative),
+                    reconciliation_skip_reason,
                     analysis_id,
                 ),
             )
@@ -800,21 +863,31 @@ class SnapshotStore:
                 """,
                 (snapshot.repository_id,),
             ).fetchall()
+            reconciliation = connection.execute(
+                """
+                SELECT lifecycle_reconciled, reconciliation_skip_reason
+                FROM analyses
+                WHERE repository_id = ? AND state = 'completed'
+                ORDER BY repository_generation DESC, completed_at DESC, analysis_id DESC
+                LIMIT 1
+                """,
+                (snapshot.repository_id,),
+            ).fetchone()
         severity = {"high": 0, "medium": 0, "low": 0}
         active = resolved = needs_action = accepted = dismissed = low_confidence = 0
         for row in rows:
             state = str(row["evidence_state"])
             if state == "active":
                 active += 1
+                status = str(row["review_status"])
+                if status == "needs-action":
+                    needs_action += 1
+                elif status == "accepted":
+                    accepted += 1
+                elif status == "dismissed":
+                    dismissed += 1
             else:
                 resolved += 1
-            status = str(row["review_status"])
-            if status == "needs-action":
-                needs_action += 1
-            elif status == "accepted":
-                accepted += 1
-            elif status == "dismissed":
-                dismissed += 1
             severity[str(row["severity"])] += 1
             if str(row["confidence"]) == "low":
                 low_confidence += 1
@@ -826,6 +899,19 @@ class SnapshotStore:
             "dismissed": dismissed,
             "severity": severity,
             "low_confidence": low_confidence,
+            "reconciliation_complete": (
+                reconciliation is not None
+                and bool(reconciliation["lifecycle_reconciled"])
+                and reconciliation["reconciliation_skip_reason"] is None
+            ),
+            "lifecycle_reconciled": (
+                bool(reconciliation["lifecycle_reconciled"]) if reconciliation is not None else False
+            ),
+            "reconciliation_skip_reason": (
+                str(reconciliation["reconciliation_skip_reason"])
+                if reconciliation is not None and reconciliation["reconciliation_skip_reason"] is not None
+                else ("analysis-status-unavailable" if reconciliation is None else None)
+            ),
         }
 
     def list_findings(
@@ -862,35 +948,9 @@ class SnapshotStore:
         snapshot = self.get_snapshot(snapshot_id)
         conditions = [
             "f.repository_id = ?",
-            """
-            (
-                EXISTS (
-                    SELECT 1 FROM finding_occurrences current_o
-                    WHERE current_o.finding_id = f.finding_id
-                      AND current_o.snapshot_id = ?
-                )
-                OR f.resolved_snapshot_id = ?
-            )
-            """,
-            """
-            o.snapshot_id = CASE
-                WHEN EXISTS (
-                    SELECT 1 FROM finding_occurrences current_o
-                    WHERE current_o.finding_id = f.finding_id
-                      AND current_o.snapshot_id = ?
-                )
-                THEN ?
-                ELSE f.last_seen_snapshot_id
-            END
-            """,
+            "o.snapshot_id = f.last_seen_snapshot_id",
         ]
-        parameters: list[object] = [
-            snapshot.repository_id,
-            snapshot_id,
-            snapshot_id,
-            snapshot_id,
-            snapshot_id,
-        ]
+        parameters: list[object] = [snapshot.repository_id]
         if family is not None:
             conditions.append("o.family = ?")
             parameters.append(family)
@@ -1094,6 +1154,46 @@ class SnapshotStore:
         if current < 3:
             _execute_schema(connection, _SCHEMA_V3)
             connection.execute("UPDATE schema_version SET version = 3")
+        if current < 4:
+            _execute_schema(connection, _SCHEMA_V4)
+            connection.execute(
+                """
+                UPDATE analyses AS current_analysis
+                SET repository_generation = (
+                    SELECT COUNT(*)
+                    FROM analyses AS ordered_analysis
+                    WHERE ordered_analysis.repository_id = current_analysis.repository_id
+                      AND (
+                          ordered_analysis.started_at < current_analysis.started_at
+                          OR (
+                              ordered_analysis.started_at = current_analysis.started_at
+                              AND ordered_analysis.analysis_id <= current_analysis.analysis_id
+                          )
+                      )
+                )
+                """
+            )
+            connection.execute(
+                """
+                UPDATE repositories
+                SET latest_analysis_generation = COALESCE(
+                    (
+                        SELECT MAX(repository_generation)
+                        FROM analyses
+                        WHERE analyses.repository_id = repositories.repository_id
+                    ),
+                    0
+                )
+                """
+            )
+            connection.execute(
+                """
+                UPDATE analyses
+                SET lifecycle_reconciled = 1
+                WHERE state = 'completed'
+                """
+            )
+            connection.execute("UPDATE schema_version SET version = 4")
 
     @staticmethod
     def _upsert_repository(
@@ -1430,6 +1530,8 @@ class SnapshotStore:
     def _reconcile_findings(
         connection: sqlite3.Connection,
         evidence: AnalysisEvidence,
+        *,
+        resolve_missing: bool,
     ) -> None:
         snapshot = evidence.snapshot
         observed = {item.finding_id for item in evidence.findings}
@@ -1495,6 +1597,9 @@ class SnapshotStore:
                 """,
                 (item.finding_id, event_type, snapshot.snapshot_id, snapshot.completed_at),
             )
+
+        if not resolve_missing:
+            return
 
         active_rows = connection.execute(
             """
@@ -1621,6 +1726,11 @@ def _analysis_from_row(row: sqlite3.Row) -> AnalysisStatusRecord:
         started_at=str(row["started_at"]),
         completed_at=str(row["completed_at"]) if row["completed_at"] is not None else None,
         snapshot_id=str(row["snapshot_id"]) if row["snapshot_id"] is not None else None,
+        repository_generation=int(row["repository_generation"]),
+        lifecycle_reconciled=bool(row["lifecycle_reconciled"]),
+        reconciliation_skip_reason=(
+            str(row["reconciliation_skip_reason"]) if row["reconciliation_skip_reason"] is not None else None
+        ),
     )
 
 
@@ -1759,7 +1869,7 @@ def _get_finding_in_connection(
             f"""
             {_FINDING_SELECT}
             WHERE o.finding_id = ? AND o.snapshot_id = f.last_seen_snapshot_id
-            """,
+            """,  # nosec B608
             (finding_id,),
         ).fetchone()
     else:
@@ -1767,17 +1877,14 @@ def _get_finding_in_connection(
             f"""
             {_FINDING_SELECT}
             WHERE o.finding_id = ?
-              AND (
-                  o.snapshot_id = ?
-                  OR (
-                      f.resolved_snapshot_id = ?
-                      AND o.snapshot_id = f.last_seen_snapshot_id
-                  )
+              AND o.snapshot_id = f.last_seen_snapshot_id
+              AND f.repository_id = (
+                  SELECT repository_id
+                  FROM snapshots
+                  WHERE snapshot_id = ?
               )
-            ORDER BY CASE WHEN o.snapshot_id = ? THEN 0 ELSE 1 END
-            LIMIT 1
-            """,
-            (finding_id, snapshot_id, snapshot_id, snapshot_id),
+            """,  # nosec B608
+            (finding_id, snapshot_id),
         ).fetchone()
     return _stored_finding_from_row(row) if row is not None else None
 
@@ -2128,6 +2235,20 @@ CREATE INDEX IF NOT EXISTS idx_findings_repository_state
     ON findings(repository_id, evidence_state, last_seen_snapshot_id);
 CREATE INDEX IF NOT EXISTS idx_review_events_finding
     ON finding_review_events(finding_id, event_id DESC);
+"""
+
+_SCHEMA_V4 = """
+ALTER TABLE repositories
+    ADD COLUMN latest_analysis_generation INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE analyses
+    ADD COLUMN repository_generation INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE analyses
+    ADD COLUMN lifecycle_reconciled INTEGER NOT NULL DEFAULT 0
+        CHECK (lifecycle_reconciled IN (0, 1));
+ALTER TABLE analyses
+    ADD COLUMN reconciliation_skip_reason TEXT;
+CREATE INDEX IF NOT EXISTS idx_analyses_repository_generation
+    ON analyses(repository_id, repository_generation DESC);
 """
 
 

@@ -317,6 +317,9 @@ def test_findings_api_filters_reviews_conflicts_and_redacts_paths(tmp_path: Path
         assert summary.status_code == 200
         assert summary.json()["supported"] is True
         assert summary.json()["active"] == len(evidence.findings)
+        assert summary.json()["reconciliation_complete"] is True
+        assert summary.json()["lifecycle_reconciled"] is True
+        assert summary.json()["reconciliation_skip_reason"] is None
 
         page = client.get(
             f"/api/snapshots/{snapshot_id}/findings",

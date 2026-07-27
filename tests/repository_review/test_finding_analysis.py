@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from zscripts.application.repository_review import RepositoryReviewService
+from zscripts.domain.repository_review import AnalysisState, ScanLimits
 from zscripts.infrastructure.finding_analysis import FindingAnalyzer
 from zscripts.infrastructure.repository_discovery import AnalysisCancelled
 from zscripts.infrastructure.snapshot_store import ReviewConflictError, SnapshotStore
@@ -235,6 +236,249 @@ def test_cancelled_scan_does_not_resolve_existing_findings(tmp_path: Path) -> No
         service.analyze(repository, cancelled=lambda: True)
 
     assert service.finding_detail(finding.finding_id)["evidence_state"] == "active"
+
+
+def test_truncated_scan_persists_observed_evidence_without_resolving_omitted_finding(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    (repository / "z_omitted.py").write_text(
+        "def public_item():\n    return 1\n",
+        encoding="utf-8",
+    )
+    store = SnapshotStore(tmp_path / "data")
+    complete_service = RepositoryReviewService(store=store)
+    first = complete_service.analyze(repository)
+    finding = next(
+        item
+        for item in first.findings
+        if item.rule_id == "undocumented-public-symbol" and item.subject_keys == ("z_omitted.public_item",)
+    )
+    (repository / "a_included.py").write_text(
+        '"""Included before the file-count limit is reached."""\n',
+        encoding="utf-8",
+    )
+
+    partial_service = RepositoryReviewService(
+        store=store,
+        limits=ScanLimits(max_files=1),
+    )
+    partial = partial_service.analyze(repository)
+
+    assert partial.snapshot.truncated is True
+    assert store.get_snapshot(partial.snapshot.snapshot_id).snapshot_id == partial.snapshot.snapshot_id
+    current = complete_service.finding_detail(finding.finding_id)
+    assert current["evidence_state"] == "active"
+    assert current["last_seen_snapshot_id"] == first.snapshot.snapshot_id
+    history = complete_service.finding_history(finding.finding_id, page_size=20)["items"]
+    assert not any(item["event_type"] == "finding-resolved" for item in history)
+    summary = complete_service.finding_summary(partial.snapshot.snapshot_id)
+    assert summary["reconciliation_complete"] is False
+    assert summary["lifecycle_reconciled"] is True
+    assert summary["reconciliation_skip_reason"] == "truncated-scan"
+
+
+def test_parse_gap_scan_skips_absence_based_resolution(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    source = repository / "sample.py"
+    source.write_text("def public_item():\n    return 1\n", encoding="utf-8")
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    first = service.analyze(repository)
+    finding = next(
+        item
+        for item in first.findings
+        if item.rule_id == "undocumented-public-symbol" and item.subject_keys == ("sample.public_item",)
+    )
+    source.write_text("def public_item(:\n", encoding="utf-8")
+
+    partial = service.analyze(repository)
+
+    assert partial.snapshot.parse_gap_count == 1
+    current = service.finding_detail(finding.finding_id)
+    assert current["evidence_state"] == "active"
+    assert current["last_seen_snapshot_id"] == first.snapshot.snapshot_id
+    history = service.finding_history(finding.finding_id, page_size=20)["items"]
+    assert not any(item["event_type"] == "finding-resolved" for item in history)
+    summary = service.finding_summary(partial.snapshot.snapshot_id)
+    assert summary["reconciliation_complete"] is False
+    assert summary["lifecycle_reconciled"] is True
+    assert summary["reconciliation_skip_reason"] == "parse-gaps"
+
+
+def test_repository_generation_prevents_stale_completion_from_reconciling_lifecycle(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    source = repository / "sample.py"
+    source.write_text("def public_item():\n    return 1\n", encoding="utf-8")
+    store = SnapshotStore(tmp_path / "authoritative-data")
+    service = RepositoryReviewService(store=store)
+    baseline = service.analyze(repository)
+    finding = next(
+        item
+        for item in baseline.findings
+        if item.rule_id == "undocumented-public-symbol" and item.subject_keys == ("sample.public_item",)
+    )
+
+    source.write_text(
+        'def public_item():\n    """Older scan would resolve the finding."""\n    return 1\n',
+        encoding="utf-8",
+    )
+    scan_a = RepositoryReviewService(data_directory=tmp_path / "scan-a-data").analyze(repository)
+    source.write_text(
+        "# newer content\ndef public_item():\n    return 2\n",
+        encoding="utf-8",
+    )
+    scan_b = RepositoryReviewService(data_directory=tmp_path / "scan-b-data").analyze(repository)
+
+    analysis_a = store.allocate_analysis_id()
+    store.begin_analysis(
+        analysis_id=analysis_a,
+        repository=scan_a.repository,
+        started_at="2026-07-27T10:00:00.000Z",
+    )
+    analysis_b = store.allocate_analysis_id()
+    store.begin_analysis(
+        analysis_id=analysis_b,
+        repository=scan_b.repository,
+        started_at="2026-07-27T10:00:01.000Z",
+    )
+    store.save_completed_snapshot(analysis_b, scan_b)
+    store.save_completed_snapshot(analysis_a, scan_a)
+
+    assert {item.snapshot_id for item in store.list_snapshots(scan_a.repository.repository_id)} >= {
+        scan_a.snapshot.snapshot_id,
+        scan_b.snapshot.snapshot_id,
+    }
+    current = service.finding_detail(finding.finding_id)
+    assert current["evidence_state"] == "active"
+    assert current["last_seen_snapshot_id"] == scan_b.snapshot.snapshot_id
+    stale_status = store.get_analysis(analysis_a)
+    authoritative_status = store.get_analysis(analysis_b)
+    assert stale_status is not None
+    assert stale_status.lifecycle_reconciled is False
+    assert stale_status.reconciliation_skip_reason == "superseded-by-newer-analysis"
+    assert authoritative_status is not None
+    assert authoritative_status.lifecycle_reconciled is True
+    history = service.finding_history(finding.finding_id, page_size=20)["items"]
+    assert not any(
+        item["snapshot_id"] == scan_a.snapshot.snapshot_id
+        and item["event_type"] in {"finding-resolved", "finding-reactivated"}
+        for item in history
+    )
+
+
+def test_analysis_generations_are_scoped_per_repository(tmp_path: Path) -> None:
+    store = SnapshotStore(tmp_path / "data")
+    evidences = []
+    for name in ("first", "second"):
+        repository = tmp_path / name
+        repository.mkdir()
+        (repository / "sample.py").write_text(
+            f'"""{name} repository."""\n',
+            encoding="utf-8",
+        )
+        evidences.append(
+            RepositoryReviewService(data_directory=tmp_path / f"{name}-source").analyze(repository)
+        )
+
+    statuses = []
+    for index, evidence in enumerate(evidences):
+        analysis_id = store.allocate_analysis_id()
+        store.begin_analysis(
+            analysis_id=analysis_id,
+            repository=evidence.repository,
+            started_at=f"2026-07-27T10:00:0{index}.000Z",
+        )
+        store.save_completed_snapshot(analysis_id, evidence)
+        status = store.get_analysis(analysis_id)
+        assert status is not None
+        statuses.append(status)
+
+    assert [status.repository_generation for status in statuses] == [1, 1]
+    assert all(status.state is AnalysisState.COMPLETED for status in statuses)
+    assert all(status.lifecycle_reconciled for status in statuses)
+
+
+def test_current_repository_lifecycle_is_consistent_for_all_supported_snapshots(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    source = repository / "sample.py"
+    source.write_text("def public_item():\n    return 1\n", encoding="utf-8")
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    first = service.analyze(repository)
+    finding = next(
+        item
+        for item in first.findings
+        if item.rule_id == "undocumented-public-symbol" and item.subject_keys == ("sample.public_item",)
+    )
+    source.write_text(
+        'def public_item():\n    """Documented now."""\n    return 1\n',
+        encoding="utf-8",
+    )
+    second = service.analyze(repository)
+    source.write_text(
+        '# unrelated metadata change\ndef public_item():\n    """Documented now."""\n    return 1\n',
+        encoding="utf-8",
+    )
+    third = service.analyze(repository)
+
+    for snapshot in (first.snapshot, second.snapshot, third.snapshot):
+        summary = service.finding_summary(snapshot.snapshot_id)
+        page = service.findings(
+            snapshot.snapshot_id,
+            family="documentation",
+            evidence_state="resolved",
+        )
+        detail = service.finding_detail(finding.finding_id, snapshot.snapshot_id)
+        assert summary["resolved"] == 1
+        assert page["total"] == 1
+        assert page["items"][0]["finding_id"] == finding.finding_id
+        assert detail["finding_id"] == finding.finding_id
+        assert detail["last_seen_snapshot_id"] == first.snapshot.snapshot_id
+        assert detail["resolved_snapshot_id"] == second.snapshot.snapshot_id
+
+    other_repository = tmp_path / "other"
+    other_repository.mkdir()
+    (other_repository / "other.py").write_text('"""No finding."""\n', encoding="utf-8")
+    other = service.analyze(other_repository)
+    with pytest.raises(LookupError):
+        service.finding_detail(finding.finding_id, other.snapshot.snapshot_id)
+
+
+def test_summary_review_counts_match_current_filtered_queue(tmp_path: Path) -> None:
+    repository = tmp_path / "findings"
+    shutil.copytree(FIXTURES / "findings", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    chosen = list(evidence.findings[:3])
+    for item, status in zip(chosen, ("needs-action", "accepted", "dismissed"), strict=True):
+        service.update_finding_review(
+            item.finding_id,
+            expected_version=0,
+            review_status=status,
+            note="",
+            reason_code=None,
+        )
+
+    summary = service.finding_summary(evidence.snapshot.snapshot_id)
+    active_page = service.findings(evidence.snapshot.snapshot_id, evidence_state="active")
+    assert summary["active"] == active_page["total"]
+    for status, summary_key in (
+        ("needs-action", "needs_action"),
+        ("accepted", "accepted"),
+        ("dismissed", "dismissed"),
+    ):
+        filtered = service.findings(
+            evidence.snapshot.snapshot_id,
+            effective_status=status,
+        )
+        assert summary[summary_key] == filtered["total"] == 1
 
 
 def test_ambiguous_relationships_do_not_contribute_to_resolved_fan_metrics(

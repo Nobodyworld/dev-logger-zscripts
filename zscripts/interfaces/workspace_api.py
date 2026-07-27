@@ -299,6 +299,9 @@ class FindingSummaryResponse(_StrictModel):
     dismissed: int
     severity: dict[str, int]
     low_confidence: int
+    reconciliation_complete: bool
+    lifecycle_reconciled: bool
+    reconciliation_skip_reason: str | None
 
 
 class FindingPageResponse(_StrictModel):

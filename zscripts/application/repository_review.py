@@ -20,7 +20,9 @@ from zscripts.domain.repository_review import (
     AnalysisEvidence,
     AnalysisState,
     CycleGroupRecord,
+    FindingEvidenceRecord,
     GraphNodeRecord,
+    MetricRecord,
     RelationshipRecord,
     RepositoryRecord,
     ScanLimits,
@@ -28,6 +30,7 @@ from zscripts.domain.repository_review import (
     SymbolRecord,
     stable_digest,
 )
+from zscripts.infrastructure.finding_analysis import FindingAnalyzer, finding_rules
 from zscripts.infrastructure.python_analyzer import PythonAnalyzer
 from zscripts.infrastructure.relationship_analysis import (
     RelationshipAnalyzer,
@@ -101,6 +104,7 @@ class RepositoryReviewService:
         discovery: RepositoryDiscovery | None = None,
         analyzer: PythonAnalyzer | None = None,
         relationship_analyzer: RelationshipAnalyzer | None = None,
+        finding_analyzer: FindingAnalyzer | None = None,
     ) -> None:
         self.limits = limits or ScanLimits()
         self.store = store or SnapshotStore(data_directory)
@@ -110,6 +114,7 @@ class RepositoryReviewService:
         )
         self.analyzer = analyzer or PythonAnalyzer()
         self.relationship_analyzer = relationship_analyzer or RelationshipAnalyzer()
+        self.finding_analyzer = finding_analyzer or FindingAnalyzer()
 
     def analyze(
         self,
@@ -174,6 +179,18 @@ class RepositoryReviewService:
             )
             if cancellation():
                 raise AnalysisCancelled("Repository analysis was cancelled.")
+            report("findings", 0, len(analysis.symbols), "")
+            finding_analysis = self.finding_analyzer.analyze(
+                discovery.repository,
+                discovery.files,
+                analysis.modules,
+                analysis.symbols,
+                relationship_analysis.nodes,
+                relationship_analysis.relationships,
+                relationship_analysis.cycles,
+            )
+            if cancellation():
+                raise AnalysisCancelled("Repository analysis was cancelled.")
             report("storage", len(analysis.files), len(analysis.files), "")
             diagnostics = tuple(
                 sorted(
@@ -191,6 +208,8 @@ class RepositoryReviewService:
                 graph_nodes=relationship_analysis.nodes,
                 relationships=relationship_analysis.relationships,
                 cycles=relationship_analysis.cycles,
+                metrics=finding_analysis.metrics,
+                findings=finding_analysis.findings,
                 truncated=discovery.truncated,
             )
             completed_at = _utc_now()
@@ -222,6 +241,8 @@ class RepositoryReviewService:
                 graph_nodes=relationship_analysis.nodes,
                 relationships=relationship_analysis.relationships,
                 cycles=relationship_analysis.cycles,
+                metrics=finding_analysis.metrics,
+                findings=finding_analysis.findings,
             )
             self.store.save_completed_snapshot(job_id, evidence)
             report(
@@ -264,6 +285,7 @@ class RepositoryReviewService:
         repository = self.store.get_snapshot_repository(snapshot_id)
         counts = self.store.overview_counts(snapshot_id)
         relationship_counts = self.store.relationship_overview_counts(snapshot_id)
+        finding_counts = self.store.finding_overview_counts(snapshot_id)
         return {
             "repository": _public_repository(repository),
             "snapshot": _public_snapshot(snapshot),
@@ -277,8 +299,134 @@ class RepositoryReviewService:
                 "methods": counts.get("method", 0),
                 "parse_gaps": snapshot.parse_gap_count,
                 **relationship_counts,
+                **finding_counts,
             },
         }
+
+    def finding_summary(self, snapshot_id: str) -> dict[str, object]:
+        snapshot = self.store.get_snapshot(snapshot_id)
+        if not _version_at_least(snapshot.schema_version, 3):
+            return {
+                "supported": False,
+                "active": 0,
+                "resolved": 0,
+                "needs_action": 0,
+                "accepted": 0,
+                "dismissed": 0,
+                "severity": {"high": 0, "medium": 0, "low": 0},
+                "low_confidence": 0,
+                "reconciliation_complete": False,
+                "lifecycle_reconciled": False,
+                "reconciliation_skip_reason": "unsupported-snapshot-schema",
+            }
+        return {"supported": True, **self.store.finding_summary(snapshot_id)}
+
+    def findings(
+        self,
+        snapshot_id: str,
+        *,
+        family: str | None = None,
+        severity: str | None = None,
+        confidence: str | None = None,
+        effective_status: str | None = None,
+        evidence_state: str | None = None,
+        search: str = "",
+        sort: str = "severity",
+        direction: str = "desc",
+        page: int = 1,
+        page_size: int = 50,
+    ) -> dict[str, object]:
+        snapshot = self.store.get_snapshot(snapshot_id)
+        if not _version_at_least(snapshot.schema_version, 3):
+            return {
+                "supported": False,
+                "items": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+            }
+        result = self.store.list_findings(
+            snapshot_id,
+            family=family,
+            severity=severity,
+            confidence=confidence,
+            effective_status=effective_status,
+            evidence_state=evidence_state,
+            search=search,
+            sort=sort,
+            direction=direction,
+            page=page,
+            page_size=page_size,
+        )
+        return {
+            "supported": True,
+            "items": [public_finding(item) for item in result.items],
+            "total": result.total,
+            "page": result.page,
+            "page_size": result.page_size,
+        }
+
+    def finding_detail(self, finding_id: str, snapshot_id: str | None = None) -> dict[str, object]:
+        item = self.store.get_finding(finding_id, snapshot_id=snapshot_id)
+        if item is None:
+            raise LookupError("Finding was not found.")
+        return public_finding(item)
+
+    def finding_history(
+        self,
+        finding_id: str,
+        *,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> dict[str, object]:
+        events, total = self.store.finding_history(
+            finding_id,
+            page=page,
+            page_size=page_size,
+        )
+        return {
+            "items": [
+                {
+                    "event_id": item.event_id,
+                    "finding_id": item.finding_id,
+                    "event_type": item.event_type,
+                    "snapshot_id": item.snapshot_id,
+                    "review_status": item.review_status,
+                    "reason_code": item.reason_code,
+                    "note": item.note,
+                    "review_version": item.review_version,
+                    "event_at": item.event_at,
+                }
+                for item in events
+            ],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+    def update_finding_review(
+        self,
+        finding_id: str,
+        *,
+        expected_version: int,
+        review_status: str,
+        note: str,
+        reason_code: str | None,
+    ) -> dict[str, object]:
+        return public_finding(
+            self.store.update_finding_review(
+                finding_id,
+                expected_version=expected_version,
+                review_status=review_status,
+                note=note,
+                reason_code=reason_code,
+                updated_at=_utc_now(),
+            )
+        )
+
+    @staticmethod
+    def finding_rules() -> tuple[dict[str, object], ...]:
+        return finding_rules()
 
     def symbols(
         self,
@@ -706,6 +854,8 @@ def _snapshot_identifier(
     graph_nodes: Sequence[GraphNodeRecord],
     relationships: Sequence[RelationshipRecord],
     cycles: Sequence[CycleGroupRecord],
+    metrics: Sequence[MetricRecord],
+    findings: Sequence[FindingEvidenceRecord],
     truncated: bool,
 ) -> str:
     return stable_digest(
@@ -724,6 +874,8 @@ def _snapshot_identifier(
             "graph_nodes": [item.node_id for item in graph_nodes],
             "relationships": [item.relationship_id for item in relationships],
             "cycles": [item.cycle_id for item in cycles],
+            "metrics": [item.metric_id for item in metrics],
+            "findings": [item.finding_id for item in findings],
             "truncated": truncated,
         },
     )
@@ -844,6 +996,44 @@ def public_cycle(cycle: CycleGroupRecord) -> dict[str, object]:
         "relationship_type": cycle.relationship_type,
         "member_node_ids": cycle.member_node_ids,
         "edge_ids": cycle.edge_ids,
+    }
+
+
+def public_finding(item: object) -> dict[str, object]:
+    """Return a combined finding occurrence/lifecycle/review representation."""
+
+    evidence = getattr(item, "evidence")
+    lifecycle = getattr(item, "lifecycle")
+    review = getattr(item, "review")
+    return {
+        "finding_id": evidence.finding_id,
+        "rule_id": evidence.rule_id,
+        "rule_version": evidence.rule_version,
+        "family": evidence.family,
+        "title": evidence.title,
+        "explanation": evidence.explanation,
+        "suggested_action": evidence.suggested_action,
+        "severity": evidence.severity,
+        "confidence": evidence.confidence,
+        "subject_type": evidence.subject_type,
+        "subject_keys": evidence.subject_keys,
+        "affected_node_ids": evidence.affected_node_ids,
+        "relative_path": evidence.relative_path,
+        "line": evidence.line,
+        "metric_evidence": evidence.metric_evidence,
+        "threshold_evidence": evidence.threshold_evidence,
+        "repository_id": lifecycle.repository_id,
+        "first_seen_snapshot_id": lifecycle.first_seen_snapshot_id,
+        "last_seen_snapshot_id": lifecycle.last_seen_snapshot_id,
+        "evidence_state": lifecycle.evidence_state,
+        "resolved_snapshot_id": lifecycle.resolved_snapshot_id,
+        "review_status": review.review_status,
+        "effective_status": ("resolved" if lifecycle.evidence_state == "resolved" else review.review_status),
+        "note": review.note,
+        "reason_code": review.reason_code,
+        "review_version": review.version,
+        "decided_at": review.decided_at,
+        "updated_at": review.updated_at,
     }
 
 
@@ -982,6 +1172,7 @@ __all__ = [
     "SourceEvidence",
     "SourceEvidenceError",
     "public_cycle",
+    "public_finding",
     "public_graph_node",
     "public_relationship",
     "public_repository",

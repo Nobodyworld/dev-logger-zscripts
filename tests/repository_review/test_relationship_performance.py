@@ -6,10 +6,14 @@ from pathlib import Path
 
 from zscripts.application.repository_review import RepositoryReviewService
 from zscripts.domain.repository_review import GraphNodeRecord, RelationshipRecord
+from zscripts.infrastructure.finding_analysis import FindingAnalyzer
+from zscripts.infrastructure.python_analyzer import PythonAnalyzer
 from zscripts.infrastructure.relationship_analysis import (
+    RelationshipAnalyzer,
     bounded_neighborhood,
     strongly_connected_components,
 )
+from zscripts.infrastructure.repository_discovery import RepositoryDiscovery
 
 
 def test_medium_public_fixture_relationship_performance(tmp_path: Path) -> None:
@@ -72,6 +76,59 @@ def test_bounded_large_synthetic_graph_performance() -> None:
     assert len(neighborhood.nodes) <= 40
     assert len(neighborhood.relationships) <= 80
     assert neighborhood.truncated is True
+
+
+def test_bounded_findings_query_and_evaluation_performance(tmp_path: Path) -> None:
+    repository = tmp_path / "finding-performance"
+    _write_finding_repository(repository, modules=80, symbols_per_module=6)
+
+    discovery = RepositoryDiscovery().discover(repository)
+    analysis = PythonAnalyzer().analyze(discovery.files)
+    relationships = RelationshipAnalyzer().analyze(
+        analysis.modules,
+        analysis.symbols,
+        analysis.type_references,
+    )
+    metric_started = time.perf_counter()
+    findings = FindingAnalyzer().analyze(
+        discovery.repository,
+        discovery.files,
+        analysis.modules,
+        analysis.symbols,
+        relationships.nodes,
+        relationships.relationships,
+        relationships.cycles,
+    )
+    evaluation_seconds = time.perf_counter() - metric_started
+
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    lifecycle_started = time.perf_counter()
+    evidence = service.analyze(repository)
+    lifecycle_seconds = time.perf_counter() - lifecycle_started
+    query_started = time.perf_counter()
+    page = service.findings(
+        evidence.snapshot.snapshot_id,
+        page=1,
+        page_size=100,
+        sort="qualified_subject",
+        direction="asc",
+    )
+    query_seconds = time.perf_counter() - query_started
+    summary_started = time.perf_counter()
+    summary = service.finding_summary(evidence.snapshot.snapshot_id)
+    summary_seconds = time.perf_counter() - summary_started
+    payload_size = len(json.dumps(page, separators=(",", ":")).encode())
+
+    assert len(findings.metrics) >= 4_000
+    assert len(findings.findings) >= 900
+    assert evaluation_seconds < 5
+    assert lifecycle_seconds < 15
+    assert query_seconds < 1
+    assert summary_seconds < 1
+    assert page["total"] == len(evidence.findings)
+    assert len(page["items"]) == 100
+    assert summary["active"] == len(evidence.findings)
+    assert payload_size < 1_000_000
 
 
 def _write_medium_repository(
@@ -142,3 +199,28 @@ def _large_synthetic_graph(
         for index in range(edge_count)
     )
     return nodes, relationships
+
+
+def _write_finding_repository(
+    root: Path,
+    *,
+    modules: int,
+    symbols_per_module: int,
+) -> None:
+    package = root / "fixture"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text('"""Bounded findings fixture."""\n', encoding="utf-8")
+    for module_index in range(modules):
+        lines: list[str] = []
+        for symbol_index in range(symbols_per_module):
+            lines.extend(
+                (
+                    f"def candidate_{module_index:03d}_{symbol_index:02d}():\n",
+                    "    return 1\n",
+                    "\n",
+                )
+            )
+        (package / f"module_{module_index:03d}.py").write_text(
+            "".join(lines),
+            encoding="utf-8",
+        )

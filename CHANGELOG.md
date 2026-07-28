@@ -4,6 +4,11 @@
 
 ### Added
 
+- Deterministic repository metrics and conservative finding candidates with
+  stable repository-scoped identities, schema-v3 lifecycle reconciliation,
+  optimistic review decisions/history, bounded API/CLI queries, and the
+  accessible Findings workspace. Rule-set version advances to 4; analyzer
+  version remains 3.
 - Correct bounded relationship discovery and resolution with server-side node
   search, complete neighborhood request identities, proven qualified-name
   bindings, and conservative `Literal`/`Annotated` handling. Analyzer and
@@ -24,6 +29,15 @@
   frontend, and packaged-workspace tests plus named CI/quality operations.
 - Public repository-review architecture, configuration, privacy, dependency,
   workflow, data-deletion, and static-analysis limitation documentation.
+
+### Fixed
+
+- Finding lifecycle reconciliation now skips absence-based resolution for
+  truncated scans and parse gaps, orders overlapping analyses by
+  repository-local generation, applies current-repository lifecycle semantics
+  consistently across summary/list/detail queries, and refreshes bounded
+  frontend queues after review saves or conflicts. SQLite schema advances to 4;
+  analyzer/evidence/rule-set versions remain 3/3/4.
 
 - Evidence-backed consumer and ownership review for the seven temporary legacy
   helper compatibility points, plus the public-beta deprecation notice. The

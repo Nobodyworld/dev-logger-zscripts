@@ -2,9 +2,10 @@ import type { Overview } from "../types";
 
 interface OverviewViewProps {
     overview: Overview;
+    onOpenFindings: (preset: string) => void;
 }
 
-export function OverviewView({ overview }: OverviewViewProps) {
+export function OverviewView({ overview, onOpenFindings }: OverviewViewProps) {
     const { counts, snapshot } = overview;
     const summary = [
         ["Files analyzed", counts.files_analyzed.toLocaleString()],
@@ -52,6 +53,27 @@ export function OverviewView({ overview }: OverviewViewProps) {
                     <dd className="mono">{snapshot.source_fingerprint.slice(0, 16)}</dd>
                 </div>
             </dl>
+            <div className="finding-overview-links" aria-label="Open filtered findings">
+                {[
+                    ["Active findings", counts.active_findings, "active"],
+                    ["Needs action", counts.needs_action_findings, "needs-action"],
+                    ["Resolved this scan", counts.resolved_since_last_scan, "resolved"],
+                    [
+                        "High confidence / severity",
+                        counts.high_confidence_high_severity_findings,
+                        "high-confidence-severity",
+                    ],
+                ].map(([label, value, preset]) => (
+                    <button
+                        type="button"
+                        key={label}
+                        onClick={() => onOpenFindings(String(preset))}
+                    >
+                        <span>{label}</span>
+                        <strong>{Number(value).toLocaleString()}</strong>
+                    </button>
+                ))}
+            </div>
         </section>
     );
 }

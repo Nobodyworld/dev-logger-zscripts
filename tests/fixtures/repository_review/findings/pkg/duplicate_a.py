@@ -1,0 +1,2 @@
+class SharedName:
+    pass

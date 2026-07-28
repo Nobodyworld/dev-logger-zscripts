@@ -1,5 +1,8 @@
 import type {
     CycleGroup,
+    Finding,
+    FindingHistory,
+    FindingSummary,
     GraphNode,
     GraphNodePage,
     Overview,
@@ -66,6 +69,10 @@ export const overview: Overview = {
         inheritance_edges: 1,
         cycle_groups: 1,
         largest_cycle_size: 2,
+        active_findings: 4,
+        needs_action_findings: 1,
+        resolved_since_last_scan: 0,
+        high_confidence_high_severity_findings: 1,
     },
 };
 
@@ -196,6 +203,82 @@ export const cycleGroup: CycleGroup = {
     relationship_type: "imports",
     member_node_ids: [moduleA.node_id, moduleB.node_id],
     edge_ids: [importRelationship.relationship_id],
+};
+
+export const finding: Finding = {
+    finding_id: "finding-0123456789abcdef",
+    rule_id: "high-parameter-count",
+    rule_version: "1",
+    family: "parameters",
+    title: "<img src=x onerror=alert(1)>",
+    explanation: "Parameter count is 9; the experimental threshold is greater than 8.",
+    suggested_action: "Review the measured structure.",
+    severity: "low",
+    confidence: "high",
+    subject_type: "symbol",
+    subject_keys: ["pkg.metrics.complex_target"],
+    affected_node_ids: ["symbol-complex-fixture"],
+    relative_path: "pkg/metrics.py",
+    line: 4,
+    metric_evidence: [["parameter_count", 9]],
+    threshold_evidence: [["parameter_count", 8]],
+    repository_id: repository.repository_id,
+    first_seen_snapshot_id: snapshot.snapshot_id,
+    last_seen_snapshot_id: snapshot.snapshot_id,
+    evidence_state: "active",
+    resolved_snapshot_id: null,
+    review_status: "new",
+    effective_status: "new",
+    note: "",
+    reason_code: null,
+    review_version: 0,
+    decided_at: "2026-07-24T12:00:01.000Z",
+    updated_at: "2026-07-24T12:00:01.000Z",
+};
+
+export const secondFinding: Finding = {
+    ...finding,
+    finding_id: "finding-second-0123456789abcdef",
+    rule_id: "orphan-looking-candidate",
+    family: "orphan-candidate",
+    title: "Orphan-looking public symbol candidate",
+    confidence: "low",
+    subject_keys: ["pkg.metrics.orphan_candidate"],
+    affected_node_ids: ["symbol-orphan-fixture"],
+    line: 20,
+};
+
+export const findingSummary: FindingSummary = {
+    supported: true,
+    active: 2,
+    resolved: 0,
+    needs_action: 0,
+    accepted: 0,
+    dismissed: 0,
+    severity: { high: 0, medium: 0, low: 2 },
+    low_confidence: 1,
+    reconciliation_complete: true,
+    lifecycle_reconciled: true,
+    reconciliation_skip_reason: null,
+};
+
+export const findingHistory: FindingHistory = {
+    items: [
+        {
+            event_id: 1,
+            finding_id: finding.finding_id,
+            event_type: "finding-first-seen",
+            snapshot_id: snapshot.snapshot_id,
+            review_status: null,
+            reason_code: null,
+            note: "",
+            review_version: null,
+            event_at: "2026-07-24T12:00:01.000Z",
+        },
+    ],
+    total: 1,
+    page: 1,
+    page_size: 50,
 };
 
 export function response(payload: object, status = 200): Response {

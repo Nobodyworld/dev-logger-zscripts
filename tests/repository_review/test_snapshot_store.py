@@ -80,6 +80,10 @@ def test_snapshot_round_trip_filters_and_source_evidence(tmp_path: Path) -> None
         "inheritance_edges": 0,
         "cycle_groups": 0,
         "largest_cycle_size": 0,
+        "active_findings": 3,
+        "needs_action_findings": 0,
+        "resolved_since_last_scan": 0,
+        "high_confidence_high_severity_findings": 0,
     }
     assert first.relationships
     assert service.store.list_graph_nodes(first.snapshot.snapshot_id)
@@ -166,6 +170,11 @@ def test_snapshot_promotion_rolls_back_all_evidence_on_failure(
             "cycle_groups",
             "cycle_members",
             "cycle_edges",
+            "metrics",
+            "finding_occurrences",
+            "findings",
+            "finding_reviews",
+            "finding_review_events",
         ):
             assert connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
 
@@ -222,8 +231,12 @@ def test_mvp_schema_migrates_without_reinterpreting_old_snapshot(tmp_path: Path)
     assert service.relationship_summary("old-snapshot")["supported"] is False
     assert service.relationships("old-snapshot")["items"] == []
     assert service.cycles("old-snapshot")["items"] == []
+    assert service.finding_summary("old-snapshot")["supported"] is False
+    assert service.findings("old-snapshot")["items"] == []
     with sqlite3.connect(database) as connection:
-        assert connection.execute("SELECT version FROM schema_version").fetchone()[0] == 2
+        assert (
+            connection.execute("SELECT version FROM schema_version").fetchone()[0] == DATABASE_SCHEMA_VERSION
+        )
         assert (
             connection.execute(
                 "SELECT COUNT(*) FROM relationships WHERE snapshot_id = 'old-snapshot'"
@@ -232,3 +245,117 @@ def test_mvp_schema_migrates_without_reinterpreting_old_snapshot(tmp_path: Path)
         )
     with store._connect() as connection:
         assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+
+
+def test_relationship_schema_v2_migrates_without_finding_reinterpretation(
+    tmp_path: Path,
+) -> None:
+    data = tmp_path / "data"
+    data.mkdir()
+    database = data / "repository-review.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TABLE schema_version (version INTEGER NOT NULL)")
+        connection.execute("INSERT INTO schema_version (version) VALUES (2)")
+        connection.executescript(snapshot_store_module._SCHEMA_V1)
+        connection.executescript(snapshot_store_module._SCHEMA_V2)
+        connection.execute(
+            """
+            INSERT INTO repositories (
+                repository_id, display_name, canonical_path, git_root, branch,
+                git_sha, dirty, staged, untracked, configuration_digest,
+                source_roots_json, test_roots_json
+            ) VALUES ('v2-repository', 'v2', ?, NULL, NULL, NULL, 0, 0, 0, 'config', '[]', '[]')
+            """,
+            (str(tmp_path / "v2"),),
+        )
+        connection.execute(
+            """
+            INSERT INTO snapshots (
+                snapshot_id, repository_id, analyzer_version, schema_version,
+                rule_set_version, state, source_fingerprint, file_count,
+                included_file_count, module_count, symbol_count, started_at,
+                completed_at, duration_ms, truncated, parse_gap_count
+            ) VALUES (
+                'v2-snapshot', 'v2-repository', '3', '2', '3', 'completed',
+                'source', 0, 0, 0, 0, '2026-01-01T00:00:00.000Z',
+                '2026-01-01T00:00:00.000Z', 0, 0, 0
+            )
+            """
+        )
+
+    store = SnapshotStore(data)
+    service = RepositoryReviewService(store=store)
+
+    assert store.get_snapshot("v2-snapshot").schema_version == "2"
+    assert service.relationship_summary("v2-snapshot")["supported"] is True
+    assert service.finding_summary("v2-snapshot")["supported"] is False
+    with sqlite3.connect(database) as connection:
+        assert (
+            connection.execute("SELECT version FROM schema_version").fetchone()[0] == DATABASE_SCHEMA_VERSION
+        )
+        assert connection.execute("SELECT COUNT(*) FROM findings").fetchone()[0] == 0
+
+
+def test_finding_schema_v3_migrates_analysis_generations_idempotently(
+    tmp_path: Path,
+) -> None:
+    data = tmp_path / "data"
+    data.mkdir()
+    database = data / "repository-review.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TABLE schema_version (version INTEGER NOT NULL)")
+        connection.execute("INSERT INTO schema_version (version) VALUES (3)")
+        connection.executescript(snapshot_store_module._SCHEMA_V1)
+        connection.executescript(snapshot_store_module._SCHEMA_V2)
+        connection.executescript(snapshot_store_module._SCHEMA_V3)
+        connection.execute(
+            """
+            INSERT INTO repositories (
+                repository_id, display_name, canonical_path, git_root, branch,
+                git_sha, dirty, staged, untracked, configuration_digest,
+                source_roots_json, test_roots_json
+            ) VALUES ('repository', 'repository', ?, NULL, NULL, NULL, 0, 0, 0, 'config', '[]', '[]')
+            """,
+            (str(tmp_path / "repository"),),
+        )
+        connection.executemany(
+            """
+            INSERT INTO analyses (
+                analysis_id, repository_id, state, progress_completed,
+                progress_total, progress_phase, message, started_at,
+                completed_at, snapshot_id
+            ) VALUES (?, 'repository', 'started', 0, 0, 'discovery', NULL, ?, NULL, NULL)
+            """,
+            (
+                ("analysis-00000001", "2026-07-27T10:00:00.000Z"),
+                ("analysis-00000002", "2026-07-27T10:00:01.000Z"),
+            ),
+        )
+
+    first = SnapshotStore(data)
+    second = SnapshotStore(data)
+
+    assert first.database_path == second.database_path
+    with sqlite3.connect(database) as connection:
+        connection.row_factory = sqlite3.Row
+        rows = connection.execute(
+            """
+            SELECT repository_generation, lifecycle_reconciled,
+                   reconciliation_skip_reason
+            FROM analyses
+            ORDER BY analysis_id
+            """
+        ).fetchall()
+        repository = connection.execute(
+            """
+            SELECT latest_analysis_generation
+            FROM repositories
+            WHERE repository_id = 'repository'
+            """
+        ).fetchone()
+        version = connection.execute("SELECT version FROM schema_version").fetchone()[0]
+    assert [row["repository_generation"] for row in rows] == [1, 2]
+    assert [row["lifecycle_reconciled"] for row in rows] == [0, 0]
+    assert all(row["reconciliation_skip_reason"] is None for row in rows)
+    assert repository["latest_analysis_generation"] == 2
+    assert version == DATABASE_SCHEMA_VERSION

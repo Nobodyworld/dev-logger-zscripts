@@ -37,3 +37,11 @@ Graph queries use allowlisted modes, relationship types, resolution statuses,
 and sort behavior. Depth, nodes, edges, and cycle results are bounded before
 serialization. The localhost workspace retains strict same-origin CSP, embeds
 no remote runtime assets, and performs no ordinary outbound request.
+
+Metric and finding analysis consumes the same bounded static evidence and never
+executes the project. Findings use conservative candidate language where
+static syntax cannot prove runtime behavior. Review notes are explicit local
+user data: they are length-bounded, excluded from canonical snapshot evidence,
+and never sent outbound. Review updates use allowlisted states/reasons and
+optimistic versions; lifecycle reconciliation occurs only with a completed,
+transactionally promoted snapshot.

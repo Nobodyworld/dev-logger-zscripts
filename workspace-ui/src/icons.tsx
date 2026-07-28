@@ -55,6 +55,25 @@ export function FindingsIcon(props: IconProps) {
     );
 }
 
+export function CompareIcon(props: IconProps) {
+    return (
+        <svg {...common} {...props}>
+            <path d="M4 7h13M14 4l3 3-3 3" />
+            <path d="M20 17H7M10 14l-3 3 3 3" />
+        </svg>
+    );
+}
+
+export function HandoffIcon(props: IconProps) {
+    return (
+        <svg {...common} {...props}>
+            <path d="M5 4h10l4 4v12H5z" />
+            <path d="M15 4v4h4M8 13h8M8 16h6" />
+            <path d="m10 10 2-2 2 2" />
+        </svg>
+    );
+}
+
 export function MenuIcon(props: IconProps) {
     return (
         <svg {...common} {...props}>

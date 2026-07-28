@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from zscripts.domain.repository_comparison import SavedHandoffRecord
 from zscripts.domain.repository_review import (
     AnalysisEvidence,
     AnalysisState,
@@ -20,6 +21,7 @@ from zscripts.domain.repository_review import (
     FindingEvidenceRecord,
     FindingLifecycleRecord,
     GraphNodeRecord,
+    MetricRecord,
     RelationshipRecord,
     RepositoryRecord,
     ReviewDecisionRecord,
@@ -28,7 +30,7 @@ from zscripts.domain.repository_review import (
     SymbolRecord,
 )
 
-DATABASE_SCHEMA_VERSION = 4
+DATABASE_SCHEMA_VERSION = 5
 SYMBOL_SORT_COLUMNS: dict[str, str] = {
     "qualified_name": "qualified_name",
     "kind": "kind",
@@ -179,6 +181,28 @@ class AnalysisStatusRecord:
     repository_generation: int
     lifecycle_reconciled: bool
     reconciliation_skip_reason: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ComparisonSnapshotEvidence:
+    """Exact immutable evidence loaded for one transient comparison."""
+
+    repository: RepositoryRecord
+    snapshot: SnapshotRecord
+    observed_branch: str | None
+    observed_git_sha: str | None
+    observed_dirty: bool
+    observed_staged: bool
+    observed_untracked: bool
+    lifecycle_reconciled: bool
+    reconciliation_skip_reason: str | None
+    files: tuple[FileRecord, ...]
+    symbols: tuple[SymbolRecord, ...]
+    graph_nodes: tuple[GraphNodeRecord, ...]
+    relationships: tuple[RelationshipRecord, ...]
+    cycles: tuple[CycleGroupRecord, ...]
+    metrics: tuple[MetricRecord, ...]
+    findings: tuple[FindingEvidenceRecord, ...]
 
 
 class SnapshotNotFoundError(LookupError):
@@ -1101,6 +1125,265 @@ class SnapshotStore:
                 raise RuntimeError("Updated finding disappeared.")
             return result
 
+    def comparison_snapshot(self, snapshot_id: str) -> ComparisonSnapshotEvidence:
+        """Load exact immutable comparison evidence without current lifecycle substitution."""
+
+        snapshot = self.get_snapshot(snapshot_id)
+        repository = self.get_snapshot_repository(snapshot_id)
+        with self._connect() as connection:
+            snapshot_row = connection.execute(
+                """
+                SELECT observed_branch, observed_git_sha, observed_dirty,
+                       observed_staged, observed_untracked
+                FROM snapshots
+                WHERE snapshot_id = ?
+                """,
+                (snapshot_id,),
+            ).fetchone()
+            if snapshot_row is None:
+                raise SnapshotNotFoundError("Completed snapshot was not found.")
+            analysis = connection.execute(
+                """
+                SELECT lifecycle_reconciled, reconciliation_skip_reason
+                FROM analyses
+                WHERE snapshot_id = ? AND state = 'completed'
+                ORDER BY repository_generation DESC, analysis_id DESC
+                LIMIT 1
+                """,
+                (snapshot_id,),
+            ).fetchone()
+            file_rows = connection.execute(
+                """
+                SELECT * FROM files
+                WHERE snapshot_id = ?
+                ORDER BY relative_path, file_id
+                """,
+                (snapshot_id,),
+            ).fetchall()
+            symbol_rows = connection.execute(
+                """
+                SELECT * FROM symbols
+                WHERE snapshot_id = ?
+                ORDER BY language, kind, qualified_name, symbol_id
+                """,
+                (snapshot_id,),
+            ).fetchall()
+            node_rows = connection.execute(
+                """
+                SELECT * FROM graph_nodes
+                WHERE snapshot_id = ?
+                ORDER BY node_type, qualified_name, node_id
+                """,
+                (snapshot_id,),
+            ).fetchall()
+            relationship_rows = connection.execute(
+                """
+                SELECT * FROM relationships
+                WHERE snapshot_id = ?
+                ORDER BY relationship_type, source_id,
+                         COALESCE(target_id, unresolved_target, ''),
+                         relative_path, line, column_number, relationship_id
+                """,
+                (snapshot_id,),
+            ).fetchall()
+            cycle_rows = connection.execute(
+                """
+                SELECT * FROM cycle_groups
+                WHERE snapshot_id = ?
+                ORDER BY relationship_type, cycle_id
+                """,
+                (snapshot_id,),
+            ).fetchall()
+            cycle_member_rows = connection.execute(
+                """
+                SELECT cycle_id, node_id FROM cycle_members
+                WHERE snapshot_id = ?
+                ORDER BY cycle_id, node_id
+                """,
+                (snapshot_id,),
+            ).fetchall()
+            cycle_edge_rows = connection.execute(
+                """
+                SELECT cycle_id, relationship_id FROM cycle_edges
+                WHERE snapshot_id = ?
+                ORDER BY cycle_id, relationship_id
+                """,
+                (snapshot_id,),
+            ).fetchall()
+            metric_rows = connection.execute(
+                """
+                SELECT * FROM metrics
+                WHERE snapshot_id = ?
+                ORDER BY subject_type, subject_id, metric_name, metric_id
+                """,
+                (snapshot_id,),
+            ).fetchall()
+            finding_rows = connection.execute(
+                """
+                SELECT * FROM finding_occurrences
+                WHERE snapshot_id = ?
+                ORDER BY rule_id, subject_keys_json, finding_id
+                """,
+                (snapshot_id,),
+            ).fetchall()
+        members: dict[str, list[str]] = {}
+        for row in cycle_member_rows:
+            members.setdefault(str(row["cycle_id"]), []).append(str(row["node_id"]))
+        edges: dict[str, list[str]] = {}
+        for row in cycle_edge_rows:
+            edges.setdefault(str(row["cycle_id"]), []).append(str(row["relationship_id"]))
+        cycles = tuple(
+            CycleGroupRecord(
+                cycle_id=str(row["cycle_id"]),
+                relationship_type=str(row["relationship_type"]),
+                member_node_ids=tuple(members.get(str(row["cycle_id"]), ())),
+                edge_ids=tuple(edges.get(str(row["cycle_id"]), ())),
+            )
+            for row in cycle_rows
+        )
+        return ComparisonSnapshotEvidence(
+            repository=repository,
+            snapshot=snapshot,
+            observed_branch=(
+                str(snapshot_row["observed_branch"]) if snapshot_row["observed_branch"] is not None else None
+            ),
+            observed_git_sha=(
+                str(snapshot_row["observed_git_sha"])
+                if snapshot_row["observed_git_sha"] is not None
+                else None
+            ),
+            observed_dirty=bool(snapshot_row["observed_dirty"]),
+            observed_staged=bool(snapshot_row["observed_staged"]),
+            observed_untracked=bool(snapshot_row["observed_untracked"]),
+            lifecycle_reconciled=bool(analysis["lifecycle_reconciled"]) if analysis else False,
+            reconciliation_skip_reason=(
+                str(analysis["reconciliation_skip_reason"])
+                if analysis is not None and analysis["reconciliation_skip_reason"] is not None
+                else ("analysis-status-unavailable" if analysis is None else None)
+            ),
+            files=tuple(_file_from_row(row) for row in file_rows),
+            symbols=tuple(_symbol_from_row(row) for row in symbol_rows),
+            graph_nodes=tuple(_graph_node_from_row(row) for row in node_rows),
+            relationships=tuple(_relationship_from_row(row) for row in relationship_rows),
+            cycles=cycles,
+            metrics=tuple(_metric_from_row(row) for row in metric_rows),
+            findings=tuple(_finding_evidence_from_row(row) for row in finding_rows),
+        )
+
+    def current_findings(
+        self,
+        repository_id: str,
+        finding_ids: tuple[str, ...],
+    ) -> tuple[StoredFindingRecord, ...]:
+        """Load bounded current lifecycle/review state separately from occurrences."""
+
+        if len(finding_ids) > 50:
+            raise ValueError("Current finding selection exceeds 50 items.")
+        if not finding_ids:
+            return ()
+        placeholders = ",".join("?" for _ in finding_ids)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                {_FINDING_SELECT}
+                WHERE f.repository_id = ?
+                  AND o.snapshot_id = f.last_seen_snapshot_id
+                  AND o.finding_id IN ({placeholders})
+                ORDER BY o.finding_id
+                """,  # nosec B608 - placeholders only, with a fixed maximum.
+                (repository_id, *finding_ids),
+            ).fetchall()
+        return tuple(_stored_finding_from_row(row) for row in rows)
+
+    def save_handoff(self, record: SavedHandoffRecord) -> SavedHandoffRecord:
+        """Persist one immutable local handoff after validating snapshot ownership."""
+
+        if len(record.task_objective) > 4_000:
+            raise ValueError("Handoff objective exceeds 4,000 characters.")
+        if len(record.selection_json.encode("utf-8")) > 500_000:
+            raise ValueError("Handoff selection exceeds the storage budget.")
+        if len(record.rendered_markdown) > 100_000:
+            raise ValueError("Handoff Markdown exceeds the storage budget.")
+        if len(record.rendered_json.encode("utf-8")) > 500_000:
+            raise ValueError("Handoff JSON exceeds the storage budget.")
+        with self._transaction() as connection:
+            target = connection.execute(
+                "SELECT repository_id FROM snapshots WHERE snapshot_id = ?",
+                (record.target_snapshot_id,),
+            ).fetchone()
+            if target is None:
+                raise SnapshotNotFoundError("Target snapshot was not found.")
+            if str(target["repository_id"]) != record.repository_id:
+                raise ValueError("Target snapshot belongs to another repository.")
+            if record.baseline_snapshot_id is not None:
+                baseline = connection.execute(
+                    "SELECT repository_id FROM snapshots WHERE snapshot_id = ?",
+                    (record.baseline_snapshot_id,),
+                ).fetchone()
+                if baseline is None:
+                    raise SnapshotNotFoundError("Baseline snapshot was not found.")
+                if str(baseline["repository_id"]) != record.repository_id:
+                    raise ValueError("Baseline snapshot belongs to another repository.")
+            connection.execute(
+                """
+                INSERT INTO saved_handoffs (
+                    handoff_id, repository_id, target_snapshot_id,
+                    baseline_snapshot_id, comparison_id, selection_json,
+                    task_objective, format_version, rendered_digest,
+                    rendered_markdown, rendered_json, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.handoff_id,
+                    record.repository_id,
+                    record.target_snapshot_id,
+                    record.baseline_snapshot_id,
+                    record.comparison_id,
+                    record.selection_json,
+                    record.task_objective,
+                    record.format_version,
+                    record.rendered_digest,
+                    record.rendered_markdown,
+                    record.rendered_json,
+                    record.created_at,
+                    record.updated_at,
+                ),
+            )
+        return record
+
+    def list_handoffs(
+        self,
+        *,
+        repository_id: str | None = None,
+        limit: int = 100,
+    ) -> tuple[SavedHandoffRecord, ...]:
+        if limit < 1 or limit > 100:
+            raise ValueError("Saved handoff limit is outside the supported range.")
+        clauses = ""
+        parameters: tuple[object, ...] = ()
+        if repository_id is not None:
+            clauses = "WHERE repository_id = ?"
+            parameters = (repository_id,)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT * FROM saved_handoffs
+                {clauses}
+                ORDER BY created_at DESC, handoff_id
+                LIMIT ?
+                """,  # nosec B608 - optional clause is fixed above.
+                (*parameters, limit),
+            ).fetchall()
+        return tuple(_saved_handoff_from_row(row) for row in rows)
+
+    def get_handoff(self, handoff_id: str) -> SavedHandoffRecord | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM saved_handoffs WHERE handoff_id = ?",
+                (handoff_id,),
+            ).fetchone()
+        return _saved_handoff_from_row(row) if row is not None else None
+
     def get_file(self, snapshot_id: str, relative_path: str) -> FileRecord | None:
         with self._connect() as connection:
             row = connection.execute(
@@ -1194,6 +1477,9 @@ class SnapshotStore:
                 """
             )
             connection.execute("UPDATE schema_version SET version = 4")
+        if current < 5:
+            _execute_schema(connection, _SCHEMA_V5)
+            connection.execute("UPDATE schema_version SET version = 5")
 
     @staticmethod
     def _upsert_repository(
@@ -1245,8 +1531,10 @@ class SnapshotStore:
                 snapshot_id, repository_id, analyzer_version, schema_version,
                 rule_set_version, state, source_fingerprint, file_count,
                 included_file_count, module_count, symbol_count, started_at,
-                completed_at, duration_ms, truncated, parse_gap_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                completed_at, duration_ms, truncated, parse_gap_count,
+                observed_branch, observed_git_sha, observed_dirty,
+                observed_staged, observed_untracked
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 snapshot.snapshot_id,
@@ -1265,6 +1553,11 @@ class SnapshotStore:
                 snapshot.duration_ms,
                 int(snapshot.truncated),
                 snapshot.parse_gap_count,
+                evidence.repository.branch,
+                evidence.repository.git_sha,
+                int(evidence.repository.dirty),
+                int(evidence.repository.staged),
+                int(evidence.repository.untracked),
             ),
         )
         connection.executemany(
@@ -1814,6 +2107,45 @@ def _relationship_from_row(row: sqlite3.Row) -> RelationshipRecord:
     )
 
 
+def _metric_from_row(row: sqlite3.Row) -> MetricRecord:
+    return MetricRecord(
+        metric_id=str(row["metric_id"]),
+        subject_id=str(row["subject_id"]),
+        subject_type=str(row["subject_type"]),
+        metric_name=str(row["metric_name"]),
+        numeric_value=float(row["numeric_value"]),
+        unit=str(row["unit"]),
+        analyzer_version=str(row["analyzer_version"]),
+        relative_path=str(row["relative_path"]) if row["relative_path"] is not None else None,
+        line=int(row["line"]) if row["line"] is not None else None,
+    )
+
+
+def _finding_evidence_from_row(row: sqlite3.Row) -> FindingEvidenceRecord:
+    return FindingEvidenceRecord(
+        finding_id=str(row["finding_id"]),
+        rule_id=str(row["rule_id"]),
+        rule_version=str(row["rule_version"]),
+        family=str(row["family"]),
+        title=str(row["title"]),
+        explanation=str(row["explanation"]),
+        suggested_action=str(row["suggested_action"]),
+        severity=str(row["severity"]),
+        confidence=str(row["confidence"]),
+        subject_type=str(row["subject_type"]),
+        subject_keys=tuple(str(item) for item in json.loads(str(row["subject_keys_json"]))),
+        affected_node_ids=tuple(str(item) for item in json.loads(str(row["affected_node_ids_json"]))),
+        relative_path=str(row["relative_path"]) if row["relative_path"] is not None else None,
+        line=int(row["line"]) if row["line"] is not None else None,
+        metric_evidence=tuple(
+            (str(name), float(value)) for name, value in json.loads(str(row["metric_evidence_json"]))
+        ),
+        threshold_evidence=tuple(
+            (str(name), float(value)) for name, value in json.loads(str(row["threshold_evidence_json"]))
+        ),
+    )
+
+
 def _stored_finding_from_row(row: sqlite3.Row) -> StoredFindingRecord:
     evidence = FindingEvidenceRecord(
         finding_id=str(row["o_finding_id"]),
@@ -1857,6 +2189,27 @@ def _stored_finding_from_row(row: sqlite3.Row) -> StoredFindingRecord:
         updated_at=str(row["r_updated_at"]),
     )
     return StoredFindingRecord(evidence=evidence, lifecycle=lifecycle, review=review)
+
+
+def _saved_handoff_from_row(row: sqlite3.Row) -> SavedHandoffRecord:
+    return SavedHandoffRecord(
+        handoff_id=str(row["handoff_id"]),
+        repository_id=str(row["repository_id"]),
+        target_snapshot_id=str(row["target_snapshot_id"]),
+        baseline_snapshot_id=(
+            str(row["baseline_snapshot_id"]) if row["baseline_snapshot_id"] is not None else None
+        ),
+        comparison_id=str(row["comparison_id"]) if row["comparison_id"] is not None else None,
+        selection_json=str(row["selection_json"]),
+        task_objective=str(row["task_objective"]),
+        format_version=str(row["format_version"]),
+        rendered_digest=str(row["rendered_digest"]),
+        rendered_markdown=str(row["rendered_markdown"]),
+        rendered_json=str(row["rendered_json"]),
+        created_at=str(row["created_at"]),
+        updated_at=str(row["updated_at"]),
+        local_only=True,
+    )
 
 
 def _get_finding_in_connection(
@@ -2251,9 +2604,68 @@ CREATE INDEX IF NOT EXISTS idx_analyses_repository_generation
     ON analyses(repository_id, repository_generation DESC);
 """
 
+_SCHEMA_V5 = """
+ALTER TABLE snapshots ADD COLUMN observed_branch TEXT;
+ALTER TABLE snapshots ADD COLUMN observed_git_sha TEXT;
+ALTER TABLE snapshots
+    ADD COLUMN observed_dirty INTEGER NOT NULL DEFAULT 0 CHECK (observed_dirty IN (0, 1));
+ALTER TABLE snapshots
+    ADD COLUMN observed_staged INTEGER NOT NULL DEFAULT 0 CHECK (observed_staged IN (0, 1));
+ALTER TABLE snapshots
+    ADD COLUMN observed_untracked INTEGER NOT NULL DEFAULT 0 CHECK (observed_untracked IN (0, 1));
+UPDATE snapshots
+SET observed_branch = (
+        SELECT branch FROM repositories
+        WHERE repositories.repository_id = snapshots.repository_id
+    ),
+    observed_git_sha = (
+        SELECT git_sha FROM repositories
+        WHERE repositories.repository_id = snapshots.repository_id
+    ),
+    observed_dirty = COALESCE(
+        (
+            SELECT dirty FROM repositories
+            WHERE repositories.repository_id = snapshots.repository_id
+        ),
+        0
+    ),
+    observed_staged = COALESCE(
+        (
+            SELECT staged FROM repositories
+            WHERE repositories.repository_id = snapshots.repository_id
+        ),
+        0
+    ),
+    observed_untracked = COALESCE(
+        (
+            SELECT untracked FROM repositories
+            WHERE repositories.repository_id = snapshots.repository_id
+        ),
+        0
+    );
+CREATE TABLE IF NOT EXISTS saved_handoffs (
+    handoff_id TEXT PRIMARY KEY,
+    repository_id TEXT NOT NULL REFERENCES repositories(repository_id),
+    target_snapshot_id TEXT NOT NULL REFERENCES snapshots(snapshot_id),
+    baseline_snapshot_id TEXT REFERENCES snapshots(snapshot_id),
+    comparison_id TEXT,
+    selection_json TEXT NOT NULL CHECK (length(selection_json) <= 500000),
+    task_objective TEXT NOT NULL CHECK (length(task_objective) <= 4000),
+    format_version TEXT NOT NULL,
+    rendered_digest TEXT NOT NULL,
+    rendered_markdown TEXT NOT NULL CHECK (length(rendered_markdown) <= 100000),
+    rendered_json TEXT NOT NULL CHECK (length(rendered_json) <= 500000),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_saved_handoffs_repository_created
+    ON saved_handoffs(repository_id, created_at DESC, handoff_id);
+"""
+
 
 __all__ = [
     "AnalysisStatusRecord",
+    "ComparisonSnapshotEvidence",
     "DATABASE_SCHEMA_VERSION",
     "FindingPage",
     "GraphNodePage",

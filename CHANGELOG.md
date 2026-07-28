@@ -4,6 +4,13 @@
 
 ### Added
 
+- Deterministic same-repository snapshot comparison across files, symbols,
+  relationships, cycles, metrics, and finding occurrences, with explicit
+  compatibility/partial evidence and a bounded Compare workspace.
+- Versioned local handoff rendering with explicit evidence/note selection,
+  deterministic Markdown/JSON, budgets and omitted counts, clipboard/download
+  actions, and immutable saved handoffs. SQLite schema advances to 5;
+  analyzer/evidence/rule-set versions remain 3/3/4.
 - Deterministic repository metrics and conservative finding candidates with
   stable repository-scoped identities, schema-v3 lifecycle reconciliation,
   optimistic review decisions/history, bounded API/CLI queries, and the

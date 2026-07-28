@@ -11,6 +11,8 @@ import {
 } from "./api";
 import { RepositoryControls } from "./components/RepositoryControls";
 import { RepositoryHeader } from "./components/RepositoryHeader";
+import { CompareView } from "./components/CompareView";
+import { HandoffView } from "./components/HandoffView";
 import { OverviewView } from "./components/OverviewView";
 import { FindingsView } from "./components/FindingsView";
 import { RelationshipsView } from "./components/RelationshipsView";
@@ -186,6 +188,20 @@ export function App() {
                                 key={overview.snapshot.snapshot_id}
                                 snapshotId={overview.snapshot.snapshot_id}
                                 preset={findingPreset}
+                            />
+                        ) : null}
+                        {activeView === "compare" ? (
+                            <CompareView
+                                key={`${overview.repository.repository_id}:${overview.snapshot.snapshot_id}`}
+                                repositoryId={overview.repository.repository_id}
+                                targetSnapshotId={overview.snapshot.snapshot_id}
+                            />
+                        ) : null}
+                        {activeView === "handoff" ? (
+                            <HandoffView
+                                key={`${overview.repository.repository_id}:${overview.snapshot.snapshot_id}`}
+                                repositoryId={overview.repository.repository_id}
+                                targetSnapshotId={overview.snapshot.snapshot_id}
                             />
                         ) : null}
                     </>

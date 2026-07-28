@@ -4,15 +4,23 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import threading
 import time
 import tokenize
+import uuid
 from collections.abc import Callable, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
+from zscripts.domain.repository_comparison import (
+    HANDOFF_FORMAT_VERSION,
+    HandoffRenderResult,
+    HandoffSelection,
+    SavedHandoffRecord,
+)
 from zscripts.domain.repository_review import (
     ANALYZER_VERSION,
     RULE_SET_VERSION,
@@ -30,7 +38,15 @@ from zscripts.domain.repository_review import (
     SymbolRecord,
     stable_digest,
 )
+from zscripts.infrastructure.comparison_analysis import (
+    COMPARISON_SECTIONS,
+    ComparisonResult,
+    compare_snapshots,
+    comparison_delta_payload,
+    comparison_summary_payload,
+)
 from zscripts.infrastructure.finding_analysis import FindingAnalyzer, finding_rules
+from zscripts.infrastructure.handoff_rendering import render_handoff, selection_json
 from zscripts.infrastructure.python_analyzer import PythonAnalyzer
 from zscripts.infrastructure.relationship_analysis import (
     RelationshipAnalyzer,
@@ -279,6 +295,239 @@ class RepositoryReviewService:
 
     def get_snapshot(self, snapshot_id: str) -> SnapshotRecord:
         return self.store.get_snapshot(snapshot_id)
+
+    def comparison_snapshots(self, repository_id: str) -> dict[str, object]:
+        """Return same-repository completed snapshots with compatibility metadata."""
+
+        repository = self.store.get_repository(repository_id)
+        if repository is None:
+            raise LookupError("Repository was not found.")
+        items: list[dict[str, object]] = []
+        for snapshot in self.store.list_snapshots(repository_id):
+            evidence = self.store.comparison_snapshot(snapshot.snapshot_id)
+            items.append(
+                {
+                    **_public_snapshot(snapshot),
+                    "branch": evidence.observed_branch,
+                    "git_sha": evidence.observed_git_sha,
+                    "dirty": evidence.observed_dirty,
+                    "staged": evidence.observed_staged,
+                    "untracked": evidence.observed_untracked,
+                    "lifecycle_reconciled": evidence.lifecycle_reconciled,
+                    "reconciliation_skip_reason": evidence.reconciliation_skip_reason,
+                }
+            )
+        return {
+            "repository": _public_repository(repository),
+            "snapshots": items,
+        }
+
+    def comparison_summary(
+        self,
+        baseline_snapshot_id: str,
+        target_snapshot_id: str,
+    ) -> dict[str, object]:
+        result = self._comparison_result(baseline_snapshot_id, target_snapshot_id)
+        return comparison_summary_payload(result.summary)
+
+    def comparison_items(
+        self,
+        baseline_snapshot_id: str,
+        target_snapshot_id: str,
+        *,
+        section: str,
+        change_type: str | None = None,
+        search: str = "",
+        sort: str = "logical_key",
+        direction: str = "asc",
+        page: int = 1,
+        page_size: int = 50,
+    ) -> dict[str, object]:
+        """Filter and page one allowlisted deterministic comparison section."""
+
+        if section not in COMPARISON_SECTIONS:
+            raise ValueError("Unsupported comparison section.")
+        if change_type is not None and change_type not in {
+            "added",
+            "removed",
+            "not-observed",
+            "changed",
+        }:
+            raise ValueError("Unsupported comparison change type.")
+        if len(search) > 200:
+            raise ValueError("Comparison search is too long.")
+        if sort not in {"logical_key", "label", "change_type"}:
+            raise ValueError("Unsupported comparison sort.")
+        if direction not in {"asc", "desc"}:
+            raise ValueError("Unsupported comparison direction.")
+        if page < 1 or page_size < 1 or page_size > 100:
+            raise ValueError("Comparison pagination is outside the supported range.")
+        result = self._comparison_result(baseline_snapshot_id, target_snapshot_id)
+        compatibility = next(
+            item for item in result.summary.compatibility.sections if item.section == section
+        )
+        items = list(result.section(section))
+        if change_type is not None:
+            items = [item for item in items if item.change_type == change_type]
+        if search:
+            needle = search.casefold()
+            items = [
+                item
+                for item in items
+                if needle in item.label.casefold() or needle in item.logical_key.casefold()
+            ]
+        items.sort(
+            key=lambda item: (str(getattr(item, sort)).casefold(), item.delta_id),
+            reverse=direction == "desc",
+        )
+        total = len(items)
+        offset = (page - 1) * page_size
+        page_items = items[offset : offset + page_size]
+        payload_items = [comparison_delta_payload(item) for item in page_items]
+        if section == "findings":
+            finding_ids = tuple(
+                sorted(
+                    {
+                        finding_id
+                        for item in page_items
+                        for finding_id in (
+                            getattr(item, "target_finding_id", None),
+                            getattr(item, "baseline_finding_id", None),
+                        )
+                        if finding_id is not None
+                    }
+                )
+            )[:50]
+            current = {
+                item.evidence.finding_id: item
+                for item in self.store.current_findings(
+                    result.summary.identity.repository_id,
+                    finding_ids,
+                )
+            }
+            for payload in payload_items:
+                finding_id = payload.get("target_finding_id") or payload.get("baseline_finding_id")
+                item = current.get(str(finding_id)) if finding_id is not None else None
+                payload["current_state"] = (
+                    {
+                        "evidence_state": item.lifecycle.evidence_state,
+                        "review_status": item.review.review_status,
+                        "severity": item.evidence.severity,
+                        "confidence": item.evidence.confidence,
+                    }
+                    if item is not None
+                    else None
+                )
+        return {
+            "comparison_id": result.summary.identity.comparison_id,
+            "section": section,
+            "section_status": compatibility.status,
+            "reason_codes": list(compatibility.reason_codes),
+            "items": payload_items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "truncated": page * page_size < total,
+        }
+
+    def preview_handoff(self, selection: HandoffSelection) -> dict[str, object]:
+        target = self.store.comparison_snapshot(selection.target_snapshot_id)
+        baseline = (
+            self.store.comparison_snapshot(selection.baseline_snapshot_id)
+            if selection.baseline_snapshot_id is not None
+            else None
+        )
+        comparison: ComparisonResult | None = None
+        if baseline is not None:
+            comparison = compare_snapshots(baseline, target)
+            if (
+                selection.comparison_id is not None
+                and selection.comparison_id != comparison.summary.identity.comparison_id
+            ):
+                raise ValueError("Handoff comparison identity does not match the snapshots.")
+        elif selection.comparison_id is not None:
+            raise ValueError("A comparison ID requires a baseline snapshot.")
+        finding_ids = tuple(dict.fromkeys(selection.selected_finding_ids))
+        current = self.store.current_findings(target.snapshot.repository_id, finding_ids)
+        rendered = render_handoff(
+            selection=selection,
+            repository=target.repository,
+            target=target,
+            baseline=baseline,
+            comparison=comparison,
+            current_findings=current,
+        )
+        return _public_handoff_render(rendered)
+
+    def save_handoff(self, selection: HandoffSelection) -> dict[str, object]:
+        preview = self.preview_handoff(selection)
+        target = self.store.get_snapshot(selection.target_snapshot_id)
+        created_at = _utc_now()
+        record = SavedHandoffRecord(
+            handoff_id=f"handoff-{uuid.uuid4().hex}",
+            repository_id=target.repository_id,
+            target_snapshot_id=selection.target_snapshot_id,
+            baseline_snapshot_id=selection.baseline_snapshot_id,
+            comparison_id=selection.comparison_id,
+            selection_json=selection_json(selection),
+            task_objective=selection.task_objective,
+            format_version=HANDOFF_FORMAT_VERSION,
+            rendered_digest=str(preview["rendered_digest"]),
+            rendered_markdown=str(preview["markdown"]),
+            rendered_json=json.dumps(
+                preview["json_payload"],
+                ensure_ascii=False,
+                sort_keys=True,
+                indent=2,
+            )
+            + "\n",
+            created_at=created_at,
+            updated_at=created_at,
+        )
+        return _public_saved_handoff(self.store.save_handoff(record), include_rendered=True)
+
+    def list_handoffs(
+        self,
+        *,
+        repository_id: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, object]:
+        return {
+            "items": [
+                _public_saved_handoff(item, include_rendered=False)
+                for item in self.store.list_handoffs(
+                    repository_id=repository_id,
+                    limit=limit,
+                )
+            ]
+        }
+
+    def get_handoff(self, handoff_id: str) -> dict[str, object]:
+        item = self.store.get_handoff(handoff_id)
+        if item is None:
+            raise LookupError("Saved handoff was not found.")
+        return _public_saved_handoff(item, include_rendered=True)
+
+    def handoff_markdown(self, handoff_id: str) -> str:
+        item = self.store.get_handoff(handoff_id)
+        if item is None:
+            raise LookupError("Saved handoff was not found.")
+        return item.rendered_markdown
+
+    def handoff_json(self, handoff_id: str) -> str:
+        item = self.store.get_handoff(handoff_id)
+        if item is None:
+            raise LookupError("Saved handoff was not found.")
+        return item.rendered_json
+
+    def _comparison_result(
+        self,
+        baseline_snapshot_id: str,
+        target_snapshot_id: str,
+    ) -> ComparisonResult:
+        baseline = self.store.comparison_snapshot(baseline_snapshot_id)
+        target = self.store.comparison_snapshot(target_snapshot_id)
+        return compare_snapshots(baseline, target)
 
     def overview(self, snapshot_id: str) -> dict[str, object]:
         snapshot = self.store.get_snapshot(snapshot_id)
@@ -1035,6 +1284,47 @@ def public_finding(item: object) -> dict[str, object]:
         "decided_at": review.decided_at,
         "updated_at": review.updated_at,
     }
+
+
+def _public_handoff_render(rendered: HandoffRenderResult) -> dict[str, object]:
+    return {
+        "handoff_format_version": rendered.handoff_format_version,
+        "markdown": rendered.markdown,
+        "json_payload": json.loads(rendered.normalized_json),
+        "rendered_digest": rendered.rendered_digest,
+        "truncated": rendered.truncated,
+        "omitted_counts": dict(rendered.omitted_counts),
+        "warnings": list(rendered.warnings),
+        "markdown_character_count": rendered.markdown_character_count,
+        "json_byte_count": rendered.json_byte_count,
+    }
+
+
+def _public_saved_handoff(
+    record: SavedHandoffRecord,
+    *,
+    include_rendered: bool,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "handoff_id": record.handoff_id,
+        "repository_id": record.repository_id,
+        "target_snapshot_id": record.target_snapshot_id,
+        "baseline_snapshot_id": record.baseline_snapshot_id,
+        "comparison_id": record.comparison_id,
+        "selection": json.loads(record.selection_json),
+        "task_objective": record.task_objective,
+        "format_version": record.format_version,
+        "rendered_digest": record.rendered_digest,
+        "markdown_character_count": len(record.rendered_markdown),
+        "json_byte_count": len(record.rendered_json.encode("utf-8")),
+        "created_at": record.created_at,
+        "updated_at": record.updated_at,
+        "local_only": True,
+    }
+    if include_rendered:
+        payload["markdown"] = record.rendered_markdown
+        payload["json_payload"] = json.loads(record.rendered_json)
+    return payload
 
 
 def _select_graph_mode(

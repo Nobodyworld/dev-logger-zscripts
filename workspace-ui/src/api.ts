@@ -6,11 +6,18 @@ import type {
     FindingHistory,
     FindingPage,
     FindingSummary,
+    ComparisonPage,
+    ComparisonSection,
+    ComparisonSnapshot,
+    ComparisonSummary,
     GraphMode,
     GraphNodePage,
     RelationshipNeighborhood,
     RelationshipSummary,
     Repository,
+    HandoffPreview,
+    HandoffSelectionRequest,
+    SavedHandoff,
     Snapshot,
     SourceEvidence,
     SymbolPage,
@@ -216,7 +223,11 @@ export interface FindingQuery {
     pageSize: number;
 }
 
-export function getFindings(snapshotId: string, query: FindingQuery): Promise<FindingPage> {
+export function getFindings(
+    snapshotId: string,
+    query: FindingQuery,
+    signal?: AbortSignal,
+): Promise<FindingPage> {
     const parameters = new URLSearchParams({
         search: query.search,
         sort: query.sort,
@@ -231,7 +242,102 @@ export function getFindings(snapshotId: string, query: FindingQuery): Promise<Fi
     if (query.evidenceState) parameters.set("evidence_state", query.evidenceState);
     return request<FindingPage>(
         `/api/snapshots/${encodeURIComponent(snapshotId)}/findings?${parameters.toString()}`,
+        { signal },
     );
+}
+
+export async function getComparisonSnapshots(
+    repositoryId: string,
+    signal?: AbortSignal,
+): Promise<{ repository: Repository; snapshots: ComparisonSnapshot[] }> {
+    return request<{ repository: Repository; snapshots: ComparisonSnapshot[] }>(
+        `/api/repositories/${encodeURIComponent(repositoryId)}/comparison-snapshots`,
+        { signal },
+    );
+}
+
+export function getComparisonSummary(
+    baselineSnapshotId: string,
+    targetSnapshotId: string,
+    signal?: AbortSignal,
+): Promise<ComparisonSummary> {
+    const parameters = new URLSearchParams({
+        baseline_snapshot_id: baselineSnapshotId,
+        target_snapshot_id: targetSnapshotId,
+    });
+    return request<ComparisonSummary>(`/api/comparisons/summary?${parameters.toString()}`, {
+        signal,
+    });
+}
+
+export function getComparisonItems(
+    query: {
+        baselineSnapshotId: string;
+        targetSnapshotId: string;
+        section: ComparisonSection;
+        changeType: string;
+        search: string;
+        sort: "logical_key" | "label" | "change_type";
+        direction: "asc" | "desc";
+        page: number;
+        pageSize: number;
+    },
+    signal?: AbortSignal,
+): Promise<ComparisonPage> {
+    const parameters = new URLSearchParams({
+        baseline_snapshot_id: query.baselineSnapshotId,
+        target_snapshot_id: query.targetSnapshotId,
+        section: query.section,
+        search: query.search,
+        sort: query.sort,
+        direction: query.direction,
+        page: String(query.page),
+        page_size: String(query.pageSize),
+    });
+    if (query.changeType) parameters.set("change_type", query.changeType);
+    return request<ComparisonPage>(`/api/comparisons/items?${parameters.toString()}`, {
+        signal,
+    });
+}
+
+export function previewHandoff(
+    selection: HandoffSelectionRequest,
+    signal?: AbortSignal,
+): Promise<HandoffPreview> {
+    return request<HandoffPreview>("/api/handoffs/preview", {
+        method: "POST",
+        signal,
+        body: JSON.stringify(selection),
+    });
+}
+
+export function saveHandoff(
+    selection: HandoffSelectionRequest,
+    signal?: AbortSignal,
+): Promise<SavedHandoff> {
+    return request<SavedHandoff>("/api/handoffs", {
+        method: "POST",
+        signal,
+        body: JSON.stringify(selection),
+    });
+}
+
+export async function listHandoffs(
+    repositoryId: string,
+    signal?: AbortSignal,
+): Promise<SavedHandoff[]> {
+    const parameters = new URLSearchParams({ repository_id: repositoryId, limit: "100" });
+    const payload = await request<{ items: SavedHandoff[] }>(
+        `/api/handoffs?${parameters.toString()}`,
+        { signal },
+    );
+    return payload.items;
+}
+
+export function getSavedHandoff(handoffId: string, signal?: AbortSignal): Promise<SavedHandoff> {
+    return request<SavedHandoff>(`/api/handoffs/${encodeURIComponent(handoffId)}`, {
+        signal,
+    });
 }
 
 export function getFinding(

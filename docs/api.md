@@ -105,3 +105,30 @@ Review updates require the current integer `version`; stale writes return `409`
 with a generic conflict message and the current safe record. Notes are limited
 to 2,000 characters and reason codes are allowlisted. Older schema snapshots
 return `supported: false` rather than synthesizing findings.
+
+Snapshot comparison and local handoffs use:
+
+- `GET /api/repositories/{repository_id}/comparison-snapshots`
+- `GET /api/comparisons/summary?baseline_snapshot_id=&target_snapshot_id=`
+- `GET /api/comparisons/items?baseline_snapshot_id=&target_snapshot_id=&section=`
+- `POST /api/handoffs/preview`
+- `POST /api/handoffs`
+- `GET /api/handoffs?repository_id=`
+- `GET /api/handoffs/{handoff_id}`
+- `GET /api/handoffs/{handoff_id}/markdown`
+- `GET /api/handoffs/{handoff_id}/json`
+
+Comparison sections are `files`, `symbols`, `relationships`, `cycles`,
+`metrics`, and `findings`. Change, sort, direction, search, and pagination
+tokens are allowlisted; searches are at most 200 characters and pages at most
+100 records. Both snapshots must exist in the same repository:
+cross-repository requests return `400`, missing snapshots return `404`, and
+validation errors remain generic. Responses carry per-section compatibility/
+reason codes and use repository-relative evidence only.
+
+Handoff request arrays and the objective are bounded by typed models. Preview
+does not create a comparison or saved record. Saved records remain local and
+immutable. Markdown downloads use `text/markdown`; JSON downloads use
+`application/json`; filenames are server-selected and cannot contain request
+paths or header control characters. Notes are absent unless their finding IDs
+are included in the explicit note-selection field.

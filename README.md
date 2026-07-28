@@ -144,8 +144,8 @@ Global flags such as `--config`, `--set`, `--adapter`, `--enable-telemetry`,
 The workspace is a local-first product slice for scanning an ordinary Python
 repository without importing or executing it. It stores metadata-only snapshots
 outside the analyzed repository and serves responsive Overview, Symbols,
-focused Relationships, and reviewable Findings views from one localhost-only
-process.
+focused Relationships, reviewable Findings, deterministic Compare, and bounded
+local Handoff views from one localhost-only process.
 
 ```sh
 # Editable development checkout
@@ -176,6 +176,9 @@ lifecycle, and explicit local review decision without changing the analyzed
 repository. The Findings view uses the repository's current lifecycle even
 when an older supported snapshot is selected, and it visibly skips automatic
 resolution when truncation or parse gaps make absence unreliable.
+Compare matches immutable evidence by conservative logical keys and never
+infers renames. Handoffs include only explicitly selected bounded evidence;
+review notes require a separate per-finding opt-in and remain local.
 Review the complete [repository review guide](docs/repository-review.md) for
 installation, API, storage/deletion, privacy, exclusions, limitations, and
 validation details.

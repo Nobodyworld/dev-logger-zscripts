@@ -103,6 +103,32 @@ does not rewind review decisions or active/resolved state. Summary, queue, and
 detail queries therefore use one current occurrence per stable finding from its
 `last_seen_snapshot_id`.
 
+The Compare view selects two completed snapshots from the same repository and
+calculates a transient comparison. Target defaults to the selected snapshot and
+baseline to its immediately previous completed snapshot. Files match by
+repository-relative path; symbols by language, kind, and qualified name;
+relationships by logical endpoint names and evidence occurrence; cycles by
+relationship type and sorted logical members; metrics by logical subject and
+metric name; and findings by rule and stable subject. A rename is deliberately
+reported as one removal and one addition.
+
+Each comparison section is independently `supported`, `partial`, or
+`unavailable`. Version differences, truncation, parse gaps, old evidence
+schemas, and incomplete/superseded lifecycle reconciliation are explicit.
+When target evidence is incomplete, an absent subject is **not observed in
+partial target evidence**, not claimed removed. Current finding lifecycle and
+review status are labeled separately from immutable snapshot occurrence.
+
+The Handoff view renders selected comparison deltas, findings, analysis gaps,
+and a plain-text objective as deterministic Markdown and normalized JSON.
+Version-1 budgets allow 8 sections, 50 items per section, 50 findings, 20
+explicit notes of at most 1,000 characters, a 4,000-character objective,
+100,000 Markdown characters, and 500,000 JSON bytes. Deterministic truncation
+always reports omitted counts. Review notes are excluded unless the user
+separately enables the exact finding. Copy uses the clipboard only after an
+explicit click; downloads are same-origin Markdown or JSON blobs with fixed
+media types. Saved handoffs are immutable local records and can be reopened.
+
 Finding families cover dependency and inheritance cycles, exact duplicate-name
 candidates, size, complexity, nesting, parameter count, coupling, inheritance
 depth, public-documentation absence, complexity without nearby recognized test
@@ -172,8 +198,8 @@ being analyzed. Strings and forward references are parsed only as bounded
 textual names; annotations are never evaluated. Ordinary calls and assignments
 do not imply composition, and this slice does not build a function-level call
 graph. Resolved static evidence remains a source-level claim, not proof of
-runtime behavior. Architecture scoring, comparisons, and handoffs remain later
-roadmap phases.
+runtime behavior. Architecture scoring, semantic rename detection, and generic
+per-view exports remain later roadmap phases.
 
 ## Determinism and persistence
 
@@ -203,7 +229,9 @@ evidence rows.
 Database schema v3 adds immutable metric/finding occurrences and
 repository-scoped finding lifecycle, review, and append-only event records.
 Database schema v4 adds repository-local analysis generations and reconciliation
-status to mutable storage. Migration from v1–v3 is versioned, transactional,
+status to mutable storage. Database schema v5 records snapshot-observed Git/
+worktree state and immutable local saved handoffs without changing canonical
+snapshot identity. Migration from v1–v4 is versioned, transactional,
 idempotent, and does not reset existing local data. Older snapshots retain
 their identity; unsupported finding routes return explicit empty data instead
 of reinterpreting old evidence. Analyzer version `3`, evidence schema version
@@ -223,7 +251,9 @@ still persist immutable snapshots but report
 `superseded-by-newer-analysis` and cannot mutate lifecycle state. `dismissed`
 is a human review decision and is distinct from automatic `resolved` evidence state.
 Canonical snapshot evidence includes metrics and finding occurrences but never
-review state, notes, or timestamps.
+review state, notes, handoff selections, objectives, or timestamps. Comparison
+format `1` and handoff format `1` are separately versioned; analyzer/evidence/
+rule-set versions remain `3`/`3`/`4`.
 
 The Relationships workspace discovers focus nodes through a bounded server-side
 query rather than only the summary sample. Search is case-insensitive over
@@ -271,9 +301,10 @@ String and byte literal values in stored signature/default and decorator
 displays are normalized to placeholders. Explicit `__all__` names and Python
 identifiers remain metadata.
 Finding notes are local user data and may contain sensitive text; they are not
-canonical evidence or export data. Delete the SQLite database while the
-workspace is stopped to remove snapshots, lifecycle history, decisions, and
-notes.
+canonical evidence and enter a handoff only after explicit per-finding opt-in.
+Saved handoffs can therefore contain user-selected notes and objectives. Delete
+the SQLite database while the workspace is stopped to remove snapshots,
+lifecycle history, decisions, notes, and saved handoffs.
 
 The source drawer rereads only the selected repository-relative file, verifies
 its current SHA-256 hash against the snapshot, rejects traversal and symlinks,
@@ -317,6 +348,15 @@ The same process serves the SPA and these experimental routes:
 - `GET /api/snapshots/{snapshot_id}/relationships`
 - `GET /api/snapshots/{snapshot_id}/relationships/neighborhood`
 - `GET /api/snapshots/{snapshot_id}/cycles`
+- `GET /api/repositories/{repository_id}/comparison-snapshots`
+- `GET /api/comparisons/summary`
+- `GET /api/comparisons/items`
+- `POST /api/handoffs/preview`
+- `POST /api/handoffs`
+- `GET /api/handoffs`
+- `GET /api/handoffs/{handoff_id}`
+- `GET /api/handoffs/{handoff_id}/markdown`
+- `GET /api/handoffs/{handoff_id}/json`
 
 Request models reject unknown fields. Validation responses are generic and do
 not reflect user-supplied local paths. Symbol sort fields and SQL identifiers

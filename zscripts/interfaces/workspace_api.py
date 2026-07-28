@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -21,6 +21,10 @@ from zscripts.application.repository_review import (
     public_repository,
     public_snapshot,
     public_symbol,
+)
+from zscripts.domain.repository_comparison import (
+    DEFAULT_HANDOFF_BUDGET,
+    HandoffSelection,
 )
 from zscripts.domain.repository_review import AnalysisState
 from zscripts.infrastructure.snapshot_store import ReviewConflictError, SnapshotNotFoundError
@@ -361,6 +365,186 @@ class FindingRulesResponse(_StrictModel):
     rules: list[FindingRuleResponse]
 
 
+class ComparisonSnapshotResponse(SnapshotResponse):
+    branch: str | None
+    git_sha: str | None
+    dirty: bool
+    staged: bool
+    untracked: bool
+    lifecycle_reconciled: bool
+    reconciliation_skip_reason: str | None
+
+
+class ComparisonSnapshotListResponse(_StrictModel):
+    repository: RepositoryResponse
+    snapshots: list[ComparisonSnapshotResponse]
+
+
+class ComparisonIdentityResponse(_StrictModel):
+    comparison_id: str
+    repository_id: str
+    baseline_snapshot_id: str
+    target_snapshot_id: str
+    comparison_format_version: str
+
+
+class ComparisonSectionCompatibilityResponse(_StrictModel):
+    section: Literal["files", "symbols", "relationships", "cycles", "metrics", "findings"]
+    status: Literal["supported", "partial", "unavailable"]
+    reason_codes: list[str]
+
+
+class ComparisonCompatibilityResponse(_StrictModel):
+    same_repository: bool
+    baseline_analyzer_version: str
+    target_analyzer_version: str
+    baseline_schema_version: str
+    target_schema_version: str
+    baseline_rule_set_version: str
+    target_rule_set_version: str
+    baseline_truncated: bool
+    target_truncated: bool
+    baseline_parse_gap_count: int
+    target_parse_gap_count: int
+    baseline_lifecycle_reconciled: bool
+    target_lifecycle_reconciled: bool
+    baseline_reconciliation_skip_reason: str | None
+    target_reconciliation_skip_reason: str | None
+    sections: list[ComparisonSectionCompatibilityResponse]
+
+
+class ComparisonSummaryResponse(_StrictModel):
+    identity: ComparisonIdentityResponse
+    compatibility: ComparisonCompatibilityResponse
+    counts: dict[str, int]
+    equal_snapshots: bool
+
+
+class CurrentFindingStateResponse(_StrictModel):
+    evidence_state: Literal["active", "resolved"]
+    review_status: Literal["new", "reviewed", "needs-action", "accepted", "dismissed"]
+    severity: Literal["high", "medium", "low"]
+    confidence: Literal["high", "medium", "low"]
+
+
+class ComparisonItemResponse(_StrictModel):
+    delta_id: str
+    change_type: Literal["added", "removed", "not-observed", "changed"]
+    logical_key: str
+    label: str
+    relative_path: str | None = None
+    baseline: dict[str, Any] | None = None
+    target: dict[str, Any] | None = None
+    relationship_type: str | None = None
+    source: str | None = None
+    target_name: str | None = None
+    members: list[str] | None = None
+    baseline_cycle_id: str | None = None
+    target_cycle_id: str | None = None
+    subject: str | None = None
+    metric_name: str | None = None
+    unit: str | None = None
+    baseline_value: float | None = None
+    target_value: float | None = None
+    absolute_delta: float | None = None
+    direction: str | None = None
+    percentage_delta: float | None = None
+    rule_id: str | None = None
+    subject_keys: list[str] | None = None
+    baseline_finding_id: str | None = None
+    target_finding_id: str | None = None
+    baseline_rule_version: str | None = None
+    target_rule_version: str | None = None
+    occurrence_state: str | None = None
+    current_state: CurrentFindingStateResponse | None = None
+
+
+class ComparisonPageResponse(_StrictModel):
+    comparison_id: str
+    section: Literal["files", "symbols", "relationships", "cycles", "metrics", "findings"]
+    section_status: Literal["supported", "partial", "unavailable"]
+    reason_codes: list[str]
+    items: list[ComparisonItemResponse]
+    total: int
+    page: int
+    page_size: int
+    truncated: bool
+
+
+class ComparisonSummaryQuery(_StrictModel):
+    baseline_snapshot_id: str = Field(min_length=1, max_length=128)
+    target_snapshot_id: str = Field(min_length=1, max_length=128)
+
+
+class ComparisonItemsQuery(ComparisonSummaryQuery):
+    section: Literal["files", "symbols", "relationships", "cycles", "metrics", "findings"]
+    change_type: Literal["added", "removed", "not-observed", "changed"] | None = None
+    search: str = Field(default="", max_length=200)
+    sort: Literal["logical_key", "label", "change_type"] = "logical_key"
+    direction: Literal["asc", "desc"] = "asc"
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=50, ge=1, le=100)
+
+
+class HandoffSelectionRequest(_StrictModel):
+    target_snapshot_id: str = Field(min_length=1, max_length=128)
+    baseline_snapshot_id: str | None = Field(default=None, min_length=1, max_length=128)
+    comparison_id: str | None = Field(default=None, min_length=1, max_length=128)
+    enabled_sections: list[
+        Literal[
+            "comparison",
+            "files",
+            "symbols",
+            "relationships",
+            "cycles",
+            "metrics",
+            "findings",
+            "task-objective",
+        ]
+    ] = Field(max_length=8)
+    selected_delta_ids: list[str] = Field(default_factory=list, max_length=400)
+    selected_finding_ids: list[str] = Field(default_factory=list, max_length=200)
+    selected_cycle_ids: list[str] = Field(default_factory=list, max_length=100)
+    include_current_review_status: bool = False
+    explicit_review_note_finding_ids: list[str] = Field(default_factory=list, max_length=20)
+    task_objective: str = Field(default="", max_length=4_000)
+
+
+class HandoffPreviewResponse(_StrictModel):
+    handoff_format_version: str
+    markdown: str
+    json_payload: dict[str, Any]
+    rendered_digest: str
+    truncated: bool
+    omitted_counts: dict[str, int]
+    warnings: list[str]
+    markdown_character_count: int
+    json_byte_count: int
+
+
+class SavedHandoffResponse(_StrictModel):
+    handoff_id: str
+    repository_id: str
+    target_snapshot_id: str
+    baseline_snapshot_id: str | None
+    comparison_id: str | None
+    selection: dict[str, Any]
+    task_objective: str
+    format_version: str
+    rendered_digest: str
+    markdown_character_count: int
+    json_byte_count: int
+    created_at: str
+    updated_at: str
+    local_only: bool
+    markdown: str | None = None
+    json_payload: dict[str, Any] | None = None
+
+
+class SavedHandoffListResponse(_StrictModel):
+    items: list[SavedHandoffResponse]
+
+
 class HealthResponse(_StrictModel):
     status: Literal["ok"]
     service: Literal["repository-review"]
@@ -467,6 +651,51 @@ def create_workspace_app(
                 public_snapshot(snapshot) for snapshot in review_service.list_snapshots(repository_id)
             ]
         }
+
+    @app.get(
+        "/api/repositories/{repository_id}/comparison-snapshots",
+        response_model=ComparisonSnapshotListResponse,
+    )
+    def comparison_snapshots(repository_id: str) -> dict[str, object]:
+        try:
+            return review_service.comparison_snapshots(repository_id)
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="Repository was not found.") from exc
+
+    @app.get("/api/comparisons/summary", response_model=ComparisonSummaryResponse)
+    def comparison_summary(
+        query: Annotated[ComparisonSummaryQuery, Query()],
+    ) -> dict[str, object]:
+        try:
+            return review_service.comparison_summary(
+                query.baseline_snapshot_id,
+                query.target_snapshot_id,
+            )
+        except SnapshotNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Snapshot was not found.") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Comparison is invalid.") from exc
+
+    @app.get("/api/comparisons/items", response_model=ComparisonPageResponse)
+    def comparison_items(
+        query: Annotated[ComparisonItemsQuery, Query()],
+    ) -> dict[str, object]:
+        try:
+            return review_service.comparison_items(
+                query.baseline_snapshot_id,
+                query.target_snapshot_id,
+                section=query.section,
+                change_type=query.change_type,
+                search=query.search,
+                sort=query.sort,
+                direction=query.direction,
+                page=query.page,
+                page_size=query.page_size,
+            )
+        except SnapshotNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Snapshot was not found.") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Comparison query is invalid.") from exc
 
     @app.get("/api/snapshots/{snapshot_id}", response_model=SnapshotDetailResponse)
     def snapshot(snapshot_id: str) -> dict[str, object]:
@@ -778,6 +1007,68 @@ def create_workspace_app(
     def finding_rule_catalog() -> dict[str, object]:
         return {"rules": list(review_service.finding_rules())}
 
+    @app.post("/api/handoffs/preview", response_model=HandoffPreviewResponse)
+    def preview_handoff(request: HandoffSelectionRequest) -> dict[str, object]:
+        try:
+            return review_service.preview_handoff(_handoff_selection(request))
+        except SnapshotNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Snapshot was not found.") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Handoff selection is invalid.") from exc
+
+    @app.post("/api/handoffs", response_model=SavedHandoffResponse, status_code=201)
+    def save_handoff(request: HandoffSelectionRequest) -> dict[str, object]:
+        try:
+            return review_service.save_handoff(_handoff_selection(request))
+        except SnapshotNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Snapshot was not found.") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Handoff selection is invalid.") from exc
+
+    @app.get("/api/handoffs", response_model=SavedHandoffListResponse)
+    def saved_handoffs(
+        repository_id: Annotated[str | None, Query(min_length=16, max_length=128)] = None,
+        limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    ) -> dict[str, object]:
+        try:
+            return review_service.list_handoffs(
+                repository_id=repository_id,
+                limit=limit,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Handoff query is invalid.") from exc
+
+    @app.get("/api/handoffs/{handoff_id}", response_model=SavedHandoffResponse)
+    def saved_handoff(handoff_id: str) -> dict[str, object]:
+        try:
+            return review_service.get_handoff(handoff_id)
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="Saved handoff was not found.") from exc
+
+    @app.get("/api/handoffs/{handoff_id}/markdown")
+    def saved_handoff_markdown(handoff_id: str) -> Response:
+        try:
+            content = review_service.handoff_markdown(handoff_id)
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="Saved handoff was not found.") from exc
+        return Response(
+            content=content,
+            media_type="text/markdown",
+            headers={"Content-Disposition": (f'attachment; filename="{_download_name(handoff_id, "md")}"')},
+        )
+
+    @app.get("/api/handoffs/{handoff_id}/json")
+    def saved_handoff_json(handoff_id: str) -> Response:
+        try:
+            content = review_service.handoff_json(handoff_id)
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail="Saved handoff was not found.") from exc
+        return Response(
+            content=content,
+            media_type="application/json",
+            headers={"Content-Disposition": (f'attachment; filename="{_download_name(handoff_id, "json")}"')},
+        )
+
     static_root = Path(__file__).resolve().parents[1] / "workspace_static"
     assets = static_root / "assets"
     if assets.is_dir():
@@ -868,6 +1159,31 @@ def _persisted_job_payload(job: Any) -> dict[str, object]:
         "snapshot_id": job.snapshot_id,
         "message": job.message,
     }
+
+
+def _handoff_selection(request: HandoffSelectionRequest) -> HandoffSelection:
+    return HandoffSelection(
+        target_snapshot_id=request.target_snapshot_id,
+        baseline_snapshot_id=request.baseline_snapshot_id,
+        comparison_id=request.comparison_id,
+        enabled_sections=tuple(request.enabled_sections),
+        selected_delta_ids=tuple(request.selected_delta_ids),
+        selected_finding_ids=tuple(request.selected_finding_ids),
+        selected_cycle_ids=tuple(request.selected_cycle_ids),
+        include_current_review_status=request.include_current_review_status,
+        explicit_review_note_finding_ids=tuple(request.explicit_review_note_finding_ids),
+        task_objective=request.task_objective,
+        budget_policy=DEFAULT_HANDOFF_BUDGET,
+    )
+
+
+def _download_name(handoff_id: str, extension: str) -> str:
+    safe_id = "".join(
+        character
+        for character in handoff_id
+        if character.isascii() and (character.isalnum() or character in {"-", "_"})
+    )[:80]
+    return f"repository-handoff-{safe_id or 'local'}.{extension}"
 
 
 __all__ = [

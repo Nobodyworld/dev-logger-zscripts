@@ -1,0 +1,231 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+
+import { CompareView } from "../components/CompareView";
+import type {
+    ComparisonItem,
+    ComparisonPage,
+    ComparisonSection,
+    ComparisonSnapshot,
+    ComparisonSummary,
+} from "../types";
+import { olderSnapshot, repository, response, snapshot } from "./fixtures";
+
+const comparisonSnapshots: ComparisonSnapshot[] = [
+    {
+        ...snapshot,
+        analyzer_version: "3",
+        schema_version: "3",
+        rule_set_version: "4",
+        branch: "main",
+        git_sha: repository.git_sha,
+        dirty: false,
+        staged: false,
+        untracked: false,
+        lifecycle_reconciled: false,
+        reconciliation_skip_reason: "parse-gaps",
+    },
+    {
+        ...olderSnapshot,
+        analyzer_version: "3",
+        schema_version: "3",
+        rule_set_version: "4",
+        branch: "main",
+        git_sha: "older0123456789",
+        dirty: false,
+        staged: false,
+        untracked: false,
+        lifecycle_reconciled: true,
+        reconciliation_skip_reason: null,
+    },
+];
+
+const summary: ComparisonSummary = {
+    identity: {
+        comparison_id: "comparison-0123456789abcdef",
+        repository_id: repository.repository_id,
+        baseline_snapshot_id: olderSnapshot.snapshot_id,
+        target_snapshot_id: snapshot.snapshot_id,
+        comparison_format_version: "1",
+    },
+    compatibility: {
+        same_repository: true,
+        baseline_analyzer_version: "3",
+        target_analyzer_version: "3",
+        baseline_schema_version: "3",
+        target_schema_version: "3",
+        baseline_rule_set_version: "4",
+        target_rule_set_version: "4",
+        baseline_truncated: false,
+        target_truncated: false,
+        baseline_parse_gap_count: 0,
+        target_parse_gap_count: 1,
+        baseline_lifecycle_reconciled: true,
+        target_lifecycle_reconciled: false,
+        baseline_reconciliation_skip_reason: null,
+        target_reconciliation_skip_reason: "parse-gaps",
+        sections: [
+            {
+                section: "files",
+                status: "partial",
+                reason_codes: ["target-parse-gaps"],
+            },
+            { section: "symbols", status: "partial", reason_codes: ["target-parse-gaps"] },
+            {
+                section: "relationships",
+                status: "partial",
+                reason_codes: ["target-parse-gaps"],
+            },
+            { section: "cycles", status: "partial", reason_codes: ["target-parse-gaps"] },
+            { section: "metrics", status: "partial", reason_codes: ["target-parse-gaps"] },
+            {
+                section: "findings",
+                status: "partial",
+                reason_codes: ["target-parse-gaps", "target-lifecycle-incomplete"],
+            },
+        ],
+    },
+    counts: {
+        files_added: 1,
+        files_removed: 0,
+        files_not_observed: 1,
+        files_changed: 1,
+    },
+    equal_snapshots: false,
+};
+
+const fileItem: ComparisonItem = {
+    delta_id: "delta-file-0123456789abcdef",
+    change_type: "changed",
+    logical_key: "pkg/module.py",
+    label: "pkg/module.py",
+    relative_path: "pkg/module.py",
+    baseline: { parse_status: "parsed", size_bytes: 10 },
+    target: { parse_status: "parsed", size_bytes: 12 },
+};
+
+const symbolItem: ComparisonItem = {
+    delta_id: "delta-symbol-0123456789abcdef",
+    change_type: "added",
+    logical_key: "python|class|pkg.NewType",
+    label: "pkg.NewType",
+    relative_path: "pkg/module.py",
+};
+
+describe("CompareView", () => {
+    it("loads snapshots, exposes partial status, filters, paginates, and selects details", async () => {
+        const fetchMock = comparisonFetch();
+        vi.stubGlobal("fetch", fetchMock);
+        const user = userEvent.setup();
+        render(
+            <CompareView
+                repositoryId={repository.repository_id}
+                targetSnapshotId={snapshot.snapshot_id}
+            />,
+        );
+
+        expect(await screen.findByRole("heading", { name: "Compare" })).toBeTruthy();
+        expect(await screen.findByRole("button", { name: /pkg\/module\.py/ })).toBeTruthy();
+        expect(screen.getByRole("status").textContent).toContain("partial");
+        expect(screen.getByText("Repository-relative path")).toBeTruthy();
+
+        await user.type(screen.getByPlaceholderText("Search files"), "module");
+        await user.selectOptions(screen.getByLabelText("Change"), "changed");
+        await user.click(screen.getByRole("tab", { name: "Symbols" }));
+
+        expect(await screen.findByRole("button", { name: /pkg\.NewType/ })).toBeTruthy();
+        await waitFor(() => {
+            expect(
+                fetchMock.mock.calls.some(([input]) => {
+                    const url = String(input);
+                    return (
+                        url.includes("section=symbols") &&
+                        url.includes("search=module") &&
+                        url.includes("change_type=changed")
+                    );
+                }),
+            ).toBe(true);
+        });
+
+        const metricsTab = screen.getByRole("tab", { name: "Metrics" });
+        metricsTab.focus();
+        await user.keyboard("{Enter}");
+        expect(metricsTab.getAttribute("aria-selected")).toBe("true");
+        await waitFor(() => {
+            expect(
+                fetchMock.mock.calls.some(([input]) => String(input).includes("section=metrics")),
+            ).toBe(true);
+        });
+    });
+
+    it("ignores a stale section response after a newer request succeeds", async () => {
+        let resolveFiles!: (value: Response) => void;
+        const filesPromise = new Promise<Response>((resolve) => {
+            resolveFiles = resolve;
+        });
+        const fetchMock = vi.fn((input: RequestInfo | URL) => {
+            const url = String(input);
+            if (url.includes("comparison-snapshots")) {
+                return Promise.resolve(response({ repository, snapshots: comparisonSnapshots }));
+            }
+            if (url.includes("/comparisons/summary")) return Promise.resolve(response(summary));
+            if (url.includes("section=files")) return filesPromise;
+            if (url.includes("section=symbols")) {
+                return Promise.resolve(response(page("symbols", [symbolItem])));
+            }
+            return Promise.resolve(response({ detail: "Unexpected request" }, 500));
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        const user = userEvent.setup();
+        render(
+            <CompareView
+                repositoryId={repository.repository_id}
+                targetSnapshotId={snapshot.snapshot_id}
+            />,
+        );
+
+        await screen.findByRole("heading", { name: "Compare" });
+        await waitFor(() => {
+            expect(
+                fetchMock.mock.calls.some(([input]) => String(input).includes("section=files")),
+            ).toBe(true);
+        });
+        await user.click(screen.getByRole("tab", { name: "Symbols" }));
+        expect(await screen.findByRole("button", { name: /pkg\.NewType/ })).toBeTruthy();
+        resolveFiles(response(page("files", [fileItem])));
+
+        await waitFor(() => {
+            expect(screen.queryByRole("button", { name: /^changed pkg\/module\.py/ })).toBeNull();
+            expect(screen.getByRole("button", { name: /pkg\.NewType/ })).toBeTruthy();
+        });
+    });
+});
+
+function comparisonFetch() {
+    return vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("comparison-snapshots")) {
+            return response({ repository, snapshots: comparisonSnapshots });
+        }
+        if (url.includes("/comparisons/summary")) return response(summary);
+        if (url.includes("section=symbols")) return response(page("symbols", [symbolItem]));
+        if (url.includes("section=metrics")) return response(page("metrics", []));
+        if (url.includes("/comparisons/items")) return response(page("files", [fileItem]));
+        return response({ detail: "Unexpected request" }, 500);
+    });
+}
+
+function page(section: ComparisonSection, items: ComparisonItem[]): ComparisonPage {
+    return {
+        comparison_id: summary.identity.comparison_id,
+        section,
+        section_status: "partial",
+        reason_codes: ["target-parse-gaps"],
+        items,
+        total: items.length,
+        page: 1,
+        page_size: 50,
+        truncated: false,
+    };
+}

@@ -45,7 +45,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
     font: inherit;
 }
 
@@ -62,7 +63,8 @@ input:disabled {
 
 button:focus-visible,
 input:focus-visible,
-select:focus-visible {
+select:focus-visible,
+textarea:focus-visible {
     outline: 3px solid color-mix(in srgb, var(--focus) 35%, transparent);
     outline-offset: 1px;
 }
@@ -1293,6 +1295,550 @@ select {
     color: var(--muted);
 }
 
+.review-view {
+    min-width: 0;
+    padding: 26px 34px 48px;
+}
+
+.view-heading {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 22px;
+}
+
+.view-heading h1,
+.view-heading h2 {
+    margin: 0;
+}
+
+.view-heading p:not(.eyebrow) {
+    max-width: 760px;
+    margin: 8px 0 0;
+    color: var(--muted);
+    line-height: 1.55;
+}
+
+.eyebrow {
+    margin: 0 0 6px;
+    color: var(--teal-dark);
+    font-size: 11px;
+    font-weight: 760;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.status-chip,
+.change-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.status-chip {
+    padding: 7px 10px;
+    color: var(--teal-dark);
+    background: var(--teal-soft);
+}
+
+.snapshot-pair,
+.snapshot-context {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.snapshot-pair label,
+.comparison-toolbar label,
+.handoff-inputs > label {
+    display: grid;
+    gap: 7px;
+    color: #34435a;
+    font-size: 12px;
+    font-weight: 680;
+}
+
+.snapshot-pair select,
+.comparison-toolbar select,
+.comparison-toolbar input,
+.handoff-inputs textarea {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    color: var(--ink);
+    background: #ffffff;
+}
+
+.snapshot-pair select,
+.comparison-toolbar select,
+.comparison-toolbar input {
+    min-height: 40px;
+    padding: 0 11px;
+}
+
+.handoff-inputs textarea {
+    resize: vertical;
+    padding: 10px 11px;
+    line-height: 1.5;
+}
+
+.snapshot-context {
+    margin-top: 10px;
+}
+
+.snapshot-facts {
+    display: grid;
+    gap: 3px;
+    padding: 11px 13px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--muted);
+    background: var(--surface-subtle);
+    font-size: 11px;
+}
+
+.snapshot-facts strong {
+    color: var(--ink);
+}
+
+.notice-banner,
+.global-error,
+.loading-state,
+.empty-panel {
+    margin: 16px 0;
+    padding: 12px 14px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.notice-banner {
+    border: 1px solid #a9d9d9;
+    color: #075d60;
+    background: var(--teal-soft);
+}
+
+.notice-banner--warning {
+    border-color: #e3c47b;
+    color: #6b4b00;
+    background: #fff8e6;
+}
+
+.loading-state,
+.empty-panel {
+    border: 1px solid var(--border);
+    color: var(--muted);
+    background: var(--surface-subtle);
+}
+
+.comparison-counts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1px;
+    margin: 18px 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--border);
+}
+
+.comparison-counts > div {
+    display: grid;
+    gap: 3px;
+    padding: 12px;
+    background: #ffffff;
+}
+
+.comparison-counts strong {
+    font-size: 20px;
+}
+
+.comparison-counts span {
+    color: var(--muted);
+    font-size: 10px;
+}
+
+.section-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 18px 0 12px;
+}
+
+.section-tab {
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: #34435a;
+    background: #ffffff;
+    font-size: 12px;
+    text-transform: capitalize;
+}
+
+.section-tab--active {
+    border-color: var(--teal);
+    color: var(--teal-dark);
+    background: var(--teal-soft);
+}
+
+.comparison-toolbar {
+    display: grid;
+    grid-template-columns: minmax(180px, 1.4fr) repeat(2, minmax(130px, 0.8fr)) auto;
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 14px;
+}
+
+.primary-button,
+.secondary-button {
+    min-height: 40px;
+    padding: 0 15px;
+    border-radius: var(--radius);
+    font-weight: 690;
+}
+
+.primary-button {
+    border: 1px solid var(--teal);
+    color: #ffffff;
+    background: var(--teal-dark);
+}
+
+.secondary-button {
+    border: 1px solid var(--border-strong);
+    color: var(--ink);
+    background: #ffffff;
+}
+
+.compact-button {
+    min-height: 38px;
+    padding-inline: 11px;
+    font-size: 11px;
+}
+
+.comparison-layout {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.1fr);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.comparison-list {
+    max-height: 620px;
+    overflow: auto;
+    border-right: 1px solid var(--border);
+}
+
+.comparison-row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 5px 10px;
+    padding: 13px;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--ink);
+    background: #ffffff;
+    text-align: left;
+}
+
+.comparison-row:hover,
+.comparison-row--selected {
+    background: var(--teal-soft);
+}
+
+.comparison-row strong,
+.comparison-row small {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.comparison-row small {
+    grid-column: 2;
+    color: var(--muted);
+}
+
+.change-badge {
+    grid-row: 1 / span 2;
+    align-self: start;
+    padding: 4px 7px;
+    color: #34435a;
+    background: #eef1f5;
+}
+
+.change-badge--added {
+    color: #1f653d;
+    background: #e6f6ec;
+}
+
+.change-badge--removed,
+.change-badge--not-observed-in-baseline,
+.change-badge--not-observed-in-target {
+    color: #784a00;
+    background: #fff1d5;
+}
+
+.change-badge--changed {
+    color: #354b8a;
+    background: #e9edff;
+}
+
+.comparison-details {
+    min-width: 0;
+    padding: 20px;
+    overflow-wrap: anywhere;
+}
+
+.comparison-details h2 {
+    margin: 0 0 16px;
+    font-size: 20px;
+}
+
+.comparison-details dl {
+    display: grid;
+    grid-template-columns: minmax(100px, 0.4fr) minmax(0, 1fr);
+    gap: 7px 14px;
+    margin: 0;
+    font-size: 12px;
+}
+
+.comparison-details dt {
+    color: var(--muted);
+}
+
+.comparison-details dd {
+    margin: 0;
+}
+
+.mono-wrap {
+    font-family: "Cascadia Code", Consolas, monospace;
+    overflow-wrap: anywhere;
+}
+
+.evidence-fields {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.evidence-fields h3 {
+    margin: 0 0 10px;
+    font-size: 14px;
+}
+
+.evidence-fields dl > div {
+    display: contents;
+}
+
+.pagination-row,
+.pagination-row > div,
+.handoff-actions,
+.handoff-preview__heading {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.pagination-row {
+    justify-content: space-between;
+    margin-top: 12px;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.handoff-builder {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(320px, 0.9fr) minmax(360px, 1.1fr);
+    gap: 18px;
+    margin-top: 20px;
+}
+
+.handoff-inputs,
+.handoff-preview {
+    min-width: 0;
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.handoff-inputs {
+    display: grid;
+    gap: 16px;
+}
+
+.handoff-inputs fieldset {
+    min-width: 0;
+    margin: 0;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.handoff-inputs legend {
+    padding: 0 6px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.checkbox-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+}
+
+.checkbox-grid label,
+.review-status-toggle,
+.note-opt-in {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    color: #34435a;
+    font-size: 11px;
+    text-transform: capitalize;
+}
+
+.budget-panel {
+    display: grid;
+    gap: 3px;
+    padding: 12px;
+    border-left: 3px solid var(--teal);
+    color: var(--muted);
+    background: var(--surface-subtle);
+    font-size: 10px;
+}
+
+.budget-panel strong {
+    color: var(--ink);
+    font-size: 11px;
+}
+
+.selection-list {
+    max-height: 360px;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.selection-list > label,
+.finding-selection {
+    display: grid;
+    gap: 8px;
+    padding: 11px 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.selection-list > label {
+    grid-template-columns: auto minmax(0, 1fr);
+}
+
+.selection-list > label:last-child,
+.finding-selection:last-child {
+    border-bottom: 0;
+}
+
+.selection-list label > span {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+}
+
+.selection-list small {
+    color: var(--muted);
+}
+
+.finding-selection > label:first-child {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px;
+}
+
+.note-opt-in {
+    margin-left: 24px;
+}
+
+.handoff-actions {
+    flex-wrap: wrap;
+}
+
+.handoff-preview {
+    align-self: start;
+}
+
+.handoff-preview__heading {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.handoff-preview__heading h2,
+.saved-handoffs h2 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.handoff-preview__heading span {
+    color: var(--muted);
+    font-size: 10px;
+}
+
+.handoff-preview__heading small {
+    min-width: 0;
+    flex-basis: 100%;
+    color: var(--muted);
+    font-size: 9px;
+    overflow-wrap: anywhere;
+}
+
+.markdown-preview {
+    max-height: 580px;
+    margin: 0 0 14px;
+    padding: 14px;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: #25344c;
+    background: var(--surface-subtle);
+    font:
+        11px/1.55 "Cascadia Code",
+        Consolas,
+        monospace;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.saved-handoffs {
+    display: grid;
+    gap: 8px;
+    margin-top: 24px;
+}
+
+.saved-handoff-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--ink);
+    background: #ffffff;
+    text-align: left;
+}
+
+.saved-handoff-row span,
+.saved-handoff-row small {
+    color: var(--muted);
+    font-size: 10px;
+}
+
 @media (max-width: 1180px) {
     .repository-controls {
         grid-template-columns: 1fr;
@@ -1316,6 +1862,17 @@ select {
 
     .finding-toolbar {
         grid-template-columns: repeat(3, minmax(150px, 1fr));
+    }
+
+    .comparison-layout,
+    .handoff-builder {
+        grid-template-columns: 1fr;
+    }
+
+    .comparison-list {
+        max-height: 360px;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
     }
 }
 
@@ -1383,7 +1940,8 @@ select {
     .repository-controls,
     .repository-header,
     .view,
-    .symbols-main {
+    .symbols-main,
+    .review-view {
         padding-inline: 20px;
     }
 
@@ -1569,6 +2127,38 @@ select {
         background: var(--navy);
         font-size: 10px;
         text-align: center;
+    }
+
+    .view-heading,
+    .snapshot-pair,
+    .snapshot-context {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .comparison-toolbar {
+        grid-template-columns: 1fr;
+    }
+
+    .comparison-counts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .comparison-details dl {
+        grid-template-columns: 1fr;
+    }
+
+    .checkbox-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .pagination-row {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .saved-handoff-row {
+        grid-template-columns: 1fr;
     }
 }
 

@@ -693,13 +693,14 @@ Issue: #80
 
 Deliver:
 
-- added, removed, and changed symbols;
-- signature, inheritance, and dependency deltas;
-- finding deltas and metric trends;
-- architecture drift;
-- configurable handoff builder;
-- copy-to-clipboard and bounded Markdown/JSON output;
-- selected-view exports.
+- [x] conservative file, symbol, relationship, cycle, metric, and
+  finding-occurrence deltas;
+- [x] explicit version/partial-evidence compatibility;
+- [x] bounded deterministic handoff selection and local saved records;
+- [x] explicit review-note opt-in, clipboard, and Markdown/JSON downloads.
+
+Architecture heuristics remain in #94. Generic selected-view exports remain in
+#96. This phase does not infer semantic renames or architecture drift.
 
 ### Phase 6 — framework enrichment
 

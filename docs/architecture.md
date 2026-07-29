@@ -37,7 +37,7 @@ flowchart LR
     E --> F["RepositoryReviewService"]
     F --> G["Experimental CLI"]
     F --> H["Loopback FastAPI interface"]
-    H --> I["React Overview, Symbols, Relationships, and Findings workspace"]
+    H --> I["React Overview, Symbols, Relationships, Findings, Compare, and Handoff workspace"]
 ```
 
 - `zscripts.domain.repository_review` owns immutable evidence and version
@@ -45,9 +45,10 @@ flowchart LR
 - `zscripts.infrastructure.repository_discovery`, `python_analyzer`,
   `relationship_analysis`, and `finding_analysis` treat the selected repository as untrusted input,
   never import it, and resolve only deterministic static evidence.
-- `zscripts.infrastructure.snapshot_store` persists only completed evidence
-  atomically outside the repository. Database schema v4 migrates v1–v3 data
-  without reinterpreting old snapshot identities.
+- `zscripts.infrastructure.snapshot_store` persists completed evidence
+  atomically outside the repository. Database schema v6 records known immutable
+  observation state in evidence-schema-v4 identities, preserves migrated v1–v5
+  observations as unknown, and stores integrity-checked local handoffs.
 - `zscripts.application.repository_review` is the single orchestration/query
   surface used by CLI and API.
 - `zscripts.interfaces.workspace_api` is a same-origin, localhost-only transport.
@@ -69,6 +70,15 @@ Repository-local generations ensure only the latest-started analysis can
 reconcile lifecycle state. Truncated scans and scans with parse gaps reconcile
 observed findings without resolving absent ones; stale completions persist only
 their immutable snapshots.
+
+`comparison_analysis` transiently joins two exact same-repository snapshots by
+language-neutral logical keys. It does not persist duplicate comparison
+results or regenerate old evidence. Comparison format 2 models partial absence
+independently on the baseline and target sides. `handoff_rendering` is a pure
+deterministic renderer over an exact, validated selection and versioned budget;
+format 2 hashes the final rendered Markdown and normalized JSON bytes, and only
+those verified strings are persisted. Mutable finding lifecycle/review data is
+joined separately and never presented as historical snapshot state.
 
 Generated frontend assets are copied into package data during the quality/build
 flow. The existing zipapp remains a lightweight CLI artifact; the workspace is

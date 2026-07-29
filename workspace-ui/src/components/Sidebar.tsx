@@ -1,6 +1,8 @@
 import {
     CloseIcon,
+    CompareIcon,
     FindingsIcon,
+    HandoffIcon,
     MenuIcon,
     OverviewIcon,
     RelationshipsIcon,
@@ -82,6 +84,24 @@ export function Sidebar({ activeView, open, onOpen, onClose, onSelect }: Sidebar
                     >
                         <FindingsIcon />
                         Findings
+                    </button>
+                    <button
+                        className={`nav-item ${activeView === "compare" ? "nav-item--active" : ""}`}
+                        type="button"
+                        aria-current={activeView === "compare" ? "page" : undefined}
+                        onClick={() => choose("compare")}
+                    >
+                        <CompareIcon />
+                        Compare
+                    </button>
+                    <button
+                        className={`nav-item ${activeView === "handoff" ? "nav-item--active" : ""}`}
+                        type="button"
+                        aria-current={activeView === "handoff" ? "page" : undefined}
+                        onClick={() => choose("handoff")}
+                    >
+                        <HandoffIcon />
+                        Handoff
                     </button>
                 </nav>
                 <p className="sidebar__beta">PUBLIC BETA — ACTIVE DEVELOPMENT</p>

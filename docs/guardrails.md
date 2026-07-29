@@ -45,3 +45,15 @@ user data: they are length-bounded, excluded from canonical snapshot evidence,
 and never sent outbound. Review updates use allowlisted states/reasons and
 optimistic versions; lifecycle reconciliation occurs only with a completed,
 transactionally promoted snapshot.
+
+Comparisons read immutable stored evidence only, reject cross-repository
+snapshot pairs, and surface old-schema, version, truncation, parse-gap, and
+superseded-analysis limitations. Incomplete target evidence cannot produce a
+strong removal claim.
+
+Handoffs are local, bounded, non-executable Markdown/JSON. Repository-derived
+text and task objectives are escaped for Markdown/React display. Review notes
+require explicit per-finding selection; clipboard access requires a click;
+download media types and filenames are fixed. Handoff creation performs no
+network request, filesystem picker, repository write, issue creation, or PR
+creation.

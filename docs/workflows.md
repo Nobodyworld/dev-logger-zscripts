@@ -81,6 +81,18 @@ permission errors before any partial files are left behind.
 9. Reopen the completed snapshot from the recent-repository/snapshot controls;
    completed rescans preserve review decisions and record resolved/reactivated
    lifecycle events.
+10. In Compare, choose a same-repository baseline and target, then inspect
+    bounded logical file/symbol/relationship/cycle/metric/finding deltas and
+    compatibility warnings.
+11. In Handoff, select only the needed deltas/findings, opt into individual
+    notes if appropriate, preview the deterministic budgets/omissions, then
+    copy, download Markdown/JSON, or save the local record for reopening.
+10. In Compare, choose a same-repository baseline and target, then inspect
+    bounded logical file/symbol/relationship/cycle/metric/finding deltas and
+    compatibility warnings.
+11. In Handoff, select only the needed deltas/findings, opt into individual
+    notes if appropriate, preview the deterministic budgets/omissions, then
+    copy, download Markdown/JSON, or save the local record for reopening.
 
 No repository command, framework setup, migration, hook, plugin, or analyzed
 Python module is executed. Use the experimental CLI when a deterministic JSON

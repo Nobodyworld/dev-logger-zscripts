@@ -260,4 +260,153 @@ export interface FindingHistory {
     page_size: number;
 }
 
-export type ViewName = "overview" | "symbols" | "relationships" | "findings";
+export interface ComparisonSnapshot extends Snapshot {
+    observed_state_known: boolean;
+    branch: string | null;
+    git_sha: string | null;
+    dirty: boolean | null;
+    staged: boolean | null;
+    untracked: boolean | null;
+    lifecycle_reconciled: boolean;
+    reconciliation_skip_reason: string | null;
+}
+
+export type ComparisonSection =
+    "files" | "symbols" | "relationships" | "cycles" | "metrics" | "findings";
+
+export type ComparisonChangeType =
+    "added" | "removed" | "not-observed-in-baseline" | "not-observed-in-target" | "changed";
+
+export interface ComparisonSectionCompatibility {
+    section: ComparisonSection;
+    status: "supported" | "partial" | "unavailable";
+    reason_codes: string[];
+}
+
+export interface ComparisonSummary {
+    identity: {
+        comparison_id: string;
+        repository_id: string;
+        baseline_snapshot_id: string;
+        target_snapshot_id: string;
+        comparison_format_version: string;
+    };
+    compatibility: {
+        same_repository: boolean;
+        baseline_analyzer_version: string;
+        target_analyzer_version: string;
+        baseline_schema_version: string;
+        target_schema_version: string;
+        baseline_rule_set_version: string;
+        target_rule_set_version: string;
+        baseline_truncated: boolean;
+        target_truncated: boolean;
+        baseline_parse_gap_count: number;
+        target_parse_gap_count: number;
+        baseline_lifecycle_reconciled: boolean;
+        target_lifecycle_reconciled: boolean;
+        baseline_reconciliation_skip_reason: string | null;
+        target_reconciliation_skip_reason: string | null;
+        sections: ComparisonSectionCompatibility[];
+    };
+    counts: Record<string, number>;
+    equal_snapshots: boolean;
+}
+
+export interface ComparisonItem {
+    delta_id: string;
+    change_type: ComparisonChangeType;
+    logical_key: string;
+    label: string;
+    relative_path: string | null;
+    baseline?: Record<string, unknown> | null;
+    target?: Record<string, unknown> | null;
+    relationship_type?: string | null;
+    source?: string | null;
+    target_name?: string | null;
+    members?: string[] | null;
+    baseline_cycle_id?: string | null;
+    target_cycle_id?: string | null;
+    subject?: string | null;
+    metric_name?: string | null;
+    unit?: string | null;
+    baseline_value?: number | null;
+    target_value?: number | null;
+    absolute_delta?: number | null;
+    direction?: string | null;
+    percentage_delta?: number | null;
+    rule_id?: string | null;
+    subject_keys?: string[] | null;
+    baseline_finding_id?: string | null;
+    target_finding_id?: string | null;
+    baseline_rule_version?: string | null;
+    target_rule_version?: string | null;
+    occurrence_state?: string | null;
+    current_state?: {
+        evidence_state: "active" | "resolved";
+        review_status: ReviewStatus;
+        severity: "high" | "medium" | "low";
+        confidence: "high" | "medium" | "low";
+    } | null;
+}
+
+export interface ComparisonPage {
+    comparison_id: string;
+    section: ComparisonSection;
+    section_status: "supported" | "partial" | "unavailable";
+    reason_codes: string[];
+    items: ComparisonItem[];
+    total: number;
+    page: number;
+    page_size: number;
+    truncated: boolean;
+}
+
+export interface HandoffSelectionRequest {
+    target_snapshot_id: string;
+    baseline_snapshot_id: string | null;
+    comparison_id: string | null;
+    enabled_sections: string[];
+    selected_delta_ids: string[];
+    selected_finding_ids: string[];
+    selected_cycle_ids: string[];
+    include_current_review_status: boolean;
+    explicit_review_note_finding_ids: string[];
+    task_objective: string;
+}
+
+export interface HandoffPreview {
+    handoff_format_version: string;
+    markdown: string;
+    normalized_json: string;
+    json_payload: Record<string, unknown>;
+    rendered_digest: string;
+    truncated: boolean;
+    omitted_counts: Record<string, number>;
+    warnings: string[];
+    markdown_character_count: number;
+    json_byte_count: number;
+}
+
+export interface SavedHandoff {
+    handoff_id: string;
+    repository_id: string;
+    target_snapshot_id: string;
+    baseline_snapshot_id: string | null;
+    comparison_id: string | null;
+    selection: HandoffSelectionRequest;
+    task_objective: string;
+    format_version: string;
+    rendered_digest: string;
+    markdown_character_count: number;
+    json_byte_count: number;
+    created_at: string;
+    updated_at: string;
+    local_only: boolean;
+    markdown?: string | null;
+    normalized_json?: string | null;
+    json_payload?: Record<string, unknown> | null;
+}
+
+export type ViewName =
+    "overview" | "symbols" | "relationships" | "findings" | "compare" | "handoff";

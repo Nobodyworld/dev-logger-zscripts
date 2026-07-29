@@ -150,6 +150,14 @@ zscripts experimental analyze PATH \
   200 characters. Review notes contain at most 2,000 characters. Finding
   thresholds are versioned product defaults rather than repository
   configuration in this slice.
+- Comparison item pages contain at most 100 records; section/change/sort tokens
+  are allowlisted and search text is limited to 200 characters.
+- Handoff format `2` fixes budgets at 8 sections, 50 items per section, 50
+  findings, 20 explicitly selected notes, 1,000 characters per note, 4,000
+  objective characters, 100,000 Markdown characters, and 500,000 JSON bytes.
+  Its digest covers the exact final Markdown and normalized JSON after those
+  budgets are applied. These safety limits are visible but not
+  repository-configurable in this slice.
 
 See [Experimental Repository Review Workspace](repository-review.md) for default
 exclusions, storage, and privacy details.

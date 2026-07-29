@@ -55,6 +55,7 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
     const [items, setItems] = useState<ComparisonItem[]>([]);
     const [findings, setFindings] = useState<Finding[]>([]);
     const [selectedDeltaIds, setSelectedDeltaIds] = useState<Set<string>>(new Set());
+    const [selectedCycleIds, setSelectedCycleIds] = useState<Set<string>>(new Set());
     const [selectedFindingIds, setSelectedFindingIds] = useState<Set<string>>(new Set());
     const [noteFindingIds, setNoteFindingIds] = useState<Set<string>>(new Set());
     const [enabledSections, setEnabledSections] = useState<Set<string>>(
@@ -64,6 +65,11 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
     const [objective, setObjective] = useState("");
     const [preview, setPreview] = useState<HandoffPreview | null>(null);
     const [previewKey, setPreviewKey] = useState<string | null>(null);
+    const [savedPreview, setSavedPreview] = useState<HandoffPreview | null>(null);
+    const [rehydratedComparisonId, setRehydratedComparisonId] = useState<string | null | undefined>(
+        undefined,
+    );
+    const [pendingRehydration, setPendingRehydration] = useState<SavedHandoff | null>(null);
     const [saved, setSaved] = useState<SavedHandoff[]>([]);
     const [loading, setLoading] = useState(true);
     const [actionBusy, setActionBusy] = useState(false);
@@ -71,11 +77,23 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
     const [notice, setNotice] = useState<string | null>(null);
     const loadGeneration = useRef(0);
     const actionGeneration = useRef(0);
+    const loadedPair = useRef("");
+    const normalPairChange = useRef(false);
 
     useEffect(() => {
         const controller = new AbortController();
         const generation = ++loadGeneration.current;
+        loadedPair.current = "";
         void (async () => {
+            setSelectedDeltaIds(new Set());
+            setSelectedCycleIds(new Set());
+            setSelectedFindingIds(new Set());
+            setNoteFindingIds(new Set());
+            setPreview(null);
+            setPreviewKey(null);
+            setSavedPreview(null);
+            setPendingRehydration(null);
+            setRehydratedComparisonId(undefined);
             setLoading(true);
             setError(null);
             try {
@@ -113,13 +131,37 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
         if (!baselineId || !targetId) return;
         const controller = new AbortController();
         const generation = ++loadGeneration.current;
+        const pairKey = `${baselineId}\0${targetId}`;
+        const pending =
+            pendingRehydration !== null &&
+            (pendingRehydration.selection.baseline_snapshot_id ??
+                pendingRehydration.selection.target_snapshot_id) === baselineId &&
+            pendingRehydration.selection.target_snapshot_id === targetId
+                ? pendingRehydration
+                : null;
+        const pairChanged = loadedPair.current !== pairKey;
+        loadedPair.current = pairKey;
         void (async () => {
             setLoading(true);
             setError(null);
             setItems([]);
             setFindings([]);
-            setPreview(null);
-            setPreviewKey(null);
+            setSummary(null);
+            if (pairChanged && pending === null) {
+                setSelectedDeltaIds(new Set());
+                setSelectedCycleIds(new Set());
+                setPreview(null);
+                setPreviewKey(null);
+                setSavedPreview(null);
+                setRehydratedComparisonId(undefined);
+                actionGeneration.current += 1;
+                if (normalPairChange.current) {
+                    setNotice(
+                        "Snapshot pair changed; comparison selections and preview were reset.",
+                    );
+                }
+                normalPairChange.current = false;
+            }
             try {
                 const [nextSummary, evidence] = await Promise.all([
                     getComparisonSummary(baselineId, targetId, controller.signal),
@@ -156,6 +198,19 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
                           ),
                 ]);
                 if (generation !== loadGeneration.current) return;
+                if (
+                    pending !== null &&
+                    (nextSummary.identity.baseline_snapshot_id !== baselineId ||
+                        nextSummary.identity.target_snapshot_id !==
+                            pending.selection.target_snapshot_id ||
+                        (pending.selection.comparison_id !== null &&
+                            nextSummary.identity.comparison_id !== pending.selection.comparison_id))
+                ) {
+                    setPendingRehydration(null);
+                    setActionBusy(false);
+                    setError("Saved handoff comparison no longer matches the selected snapshots.");
+                    return;
+                }
                 setSummary(nextSummary);
                 if (section === "findings" && "supported" in evidence) {
                     setFindings(evidence.items as Finding[]);
@@ -163,25 +218,53 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
                 } else if ("section" in evidence) {
                     setItems(evidence.items);
                 }
+                if (pending !== null) {
+                    setEnabledSections(new Set(pending.selection.enabled_sections));
+                    setSelectedDeltaIds(new Set(pending.selection.selected_delta_ids));
+                    setSelectedCycleIds(new Set(pending.selection.selected_cycle_ids));
+                    setSelectedFindingIds(new Set(pending.selection.selected_finding_ids));
+                    setNoteFindingIds(new Set(pending.selection.explicit_review_note_finding_ids));
+                    setIncludeReviewStatus(pending.selection.include_current_review_status);
+                    setObjective(pending.selection.task_objective);
+                    setRehydratedComparisonId(pending.selection.comparison_id);
+                    setSavedPreview(previewFromSaved(pending));
+                    setPreview(null);
+                    setPreviewKey(null);
+                    setPendingRehydration(null);
+                    setActionBusy(false);
+                    setNotice("Saved handoff reopened.");
+                }
                 setLoading(false);
             } catch (caught) {
                 if (controller.signal.aborted || generation !== loadGeneration.current) return;
                 setLoading(false);
+                if (pending !== null) {
+                    setPendingRehydration(null);
+                    setSavedPreview(null);
+                    setActionBusy(false);
+                }
                 setError(messageFrom(caught, "Selectable handoff evidence could not be loaded."));
             }
         })();
         return () => controller.abort();
-    }, [baselineId, section, targetId]);
+    }, [baselineId, pendingRehydration, section, targetId]);
+
+    const activeComparisonId =
+        summary?.identity.baseline_snapshot_id === baselineId &&
+        summary.identity.target_snapshot_id === targetId
+            ? summary.identity.comparison_id
+            : null;
 
     const selection = useMemo<HandoffSelectionRequest>(
         () => ({
             target_snapshot_id: targetId,
             baseline_snapshot_id: baselineId || null,
-            comparison_id: summary?.identity.comparison_id ?? null,
+            comparison_id:
+                rehydratedComparisonId !== undefined ? rehydratedComparisonId : activeComparisonId,
             enabled_sections: [...enabledSections].sort(),
             selected_delta_ids: [...selectedDeltaIds].sort(),
             selected_finding_ids: [...selectedFindingIds].sort(),
-            selected_cycle_ids: [],
+            selected_cycle_ids: [...selectedCycleIds].sort(),
             include_current_review_status: includeReviewStatus,
             explicit_review_note_finding_ids: [...noteFindingIds].sort(),
             task_objective: objective,
@@ -193,13 +276,15 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
             noteFindingIds,
             objective,
             selectedDeltaIds,
+            selectedCycleIds,
             selectedFindingIds,
-            summary?.identity.comparison_id,
+            activeComparisonId,
+            rehydratedComparisonId,
             targetId,
         ],
     );
     const selectionKey = useMemo(() => selectionIdentity(selection), [selection]);
-    const displayedPreview = previewKey === selectionKey ? preview : null;
+    const displayedPreview = savedPreview ?? (previewKey === selectionKey ? preview : null);
 
     const buildPreview = async () => {
         const generation = ++actionGeneration.current;
@@ -208,6 +293,8 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
         setNotice(null);
         setPreview(null);
         setPreviewKey(null);
+        setSavedPreview(null);
+        setPendingRehydration(null);
         try {
             const result = await previewHandoff(selection);
             if (generation !== actionGeneration.current) return;
@@ -234,8 +321,9 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
                 result,
                 ...current.filter((item) => item.handoff_id !== result.handoff_id),
             ]);
-            setPreview(previewFromSaved(result));
-            setPreviewKey(selectionKey);
+            setSavedPreview(previewFromSaved(result));
+            setPreview(null);
+            setPreviewKey(null);
             setNotice("Handoff saved locally.");
         } catch (caught) {
             if (generation !== actionGeneration.current) return;
@@ -249,27 +337,23 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
         const generation = ++actionGeneration.current;
         setActionBusy(true);
         setError(null);
+        setNotice(null);
+        setSavedPreview(null);
+        setPreview(null);
+        setPreviewKey(null);
         try {
             const result = await getSavedHandoff(handoffId);
             if (generation !== actionGeneration.current) return;
+            setPendingRehydration(result);
             setTargetId(result.selection.target_snapshot_id);
             setBaselineId(
                 result.selection.baseline_snapshot_id ?? result.selection.target_snapshot_id,
             );
-            setEnabledSections(new Set(result.selection.enabled_sections));
-            setSelectedDeltaIds(new Set(result.selection.selected_delta_ids));
-            setSelectedFindingIds(new Set(result.selection.selected_finding_ids));
-            setNoteFindingIds(new Set(result.selection.explicit_review_note_finding_ids));
-            setIncludeReviewStatus(result.selection.include_current_review_status);
-            setObjective(result.selection.task_objective);
-            setPreview(previewFromSaved(result));
-            setPreviewKey(selectionIdentity(result.selection));
-            setNotice("Saved handoff reopened.");
         } catch (caught) {
             if (generation !== actionGeneration.current) return;
+            setPendingRehydration(null);
             setError(messageFrom(caught, "The saved handoff could not be reopened."));
-        } finally {
-            if (generation === actionGeneration.current) setActionBusy(false);
+            setActionBusy(false);
         }
     };
 
@@ -284,6 +368,23 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
         }
     };
 
+    const changeSnapshotPair = (kind: "baseline" | "target", value: string) => {
+        normalPairChange.current =
+            selectedDeltaIds.size > 0 ||
+            selectedCycleIds.size > 0 ||
+            preview !== null ||
+            savedPreview !== null;
+        actionGeneration.current += 1;
+        setPendingRehydration(null);
+        setRehydratedComparisonId(undefined);
+        setSavedPreview(null);
+        setPreview(null);
+        setPreviewKey(null);
+        setSummary(null);
+        if (kind === "baseline") setBaselineId(value);
+        else setTargetId(value);
+    };
+
     return (
         <section className="review-view handoff-view" aria-labelledby="handoff-title">
             <div className="view-heading">
@@ -295,7 +396,7 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
                         sent off this machine.
                     </p>
                 </div>
-                <span className="status-chip">Format 1 · local only</span>
+                <span className="status-chip">Format 2 · local only</span>
             </div>
 
             <div className="snapshot-pair">
@@ -303,23 +404,24 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
                     Baseline
                     <select
                         value={baselineId}
-                        onChange={(event) => setBaselineId(event.target.value)}
+                        onChange={(event) => changeSnapshotPair("baseline", event.target.value)}
                     >
                         {snapshots.map((snapshot) => (
                             <option key={snapshot.snapshot_id} value={snapshot.snapshot_id}>
-                                {snapshot.completed_at} ·{" "}
-                                {snapshot.git_sha?.slice(0, 8) ?? "no SHA"}
+                                {snapshotOptionLabel(snapshot)}
                             </option>
                         ))}
                     </select>
                 </label>
                 <label>
                     Target
-                    <select value={targetId} onChange={(event) => setTargetId(event.target.value)}>
+                    <select
+                        value={targetId}
+                        onChange={(event) => changeSnapshotPair("target", event.target.value)}
+                    >
                         {snapshots.map((snapshot) => (
                             <option key={snapshot.snapshot_id} value={snapshot.snapshot_id}>
-                                {snapshot.completed_at} ·{" "}
-                                {snapshot.git_sha?.slice(0, 8) ?? "no SHA"}
+                                {snapshotOptionLabel(snapshot)}
                             </option>
                         ))}
                     </select>
@@ -503,11 +605,16 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
                 <div className="handoff-preview">
                     <div className="handoff-preview__heading">
                         <h2>Markdown preview</h2>
+                        {savedPreview ? <span>Immutable saved output</span> : null}
                         {displayedPreview ? (
-                            <span>
-                                {displayedPreview.markdown_character_count.toLocaleString()} chars ·{" "}
-                                {displayedPreview.json_byte_count.toLocaleString()} bytes
-                            </span>
+                            <>
+                                <span>
+                                    {displayedPreview.markdown_character_count.toLocaleString()}{" "}
+                                    chars · {displayedPreview.json_byte_count.toLocaleString()}{" "}
+                                    bytes
+                                </span>
+                                <small>Digest {displayedPreview.rendered_digest}</small>
+                            </>
                         ) : null}
                     </div>
                     {displayedPreview?.truncated ? (
@@ -547,11 +654,7 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
                                     className="secondary-button"
                                     onClick={() =>
                                         downloadBlob(
-                                            `${JSON.stringify(
-                                                displayedPreview.json_payload,
-                                                null,
-                                                2,
-                                            )}\n`,
+                                            displayedPreview.normalized_json,
                                             "repository-handoff.json",
                                             "application/json",
                                         )
@@ -611,6 +714,13 @@ function toggleSet(values: Set<string>, value: string): Set<string> {
     return next;
 }
 
+function snapshotOptionLabel(snapshot: ComparisonSnapshot): string {
+    const observation = snapshot.observed_state_known
+        ? `${snapshot.branch ?? "detached"} · ${snapshot.git_sha?.slice(0, 8) ?? "no SHA"}`
+        : "observation unknown";
+    return `${snapshot.completed_at} · ${observation}`;
+}
+
 function selectionIdentity(selection: HandoffSelectionRequest): string {
     return JSON.stringify({
         target_snapshot_id: selection.target_snapshot_id,
@@ -638,6 +748,7 @@ function previewFromSaved(saved: SavedHandoff): HandoffPreview {
     return {
         handoff_format_version: saved.format_version,
         markdown: saved.markdown ?? "",
+        normalized_json: saved.normalized_json ?? `${JSON.stringify(payload, null, 2)}\n`,
         json_payload: payload,
         rendered_digest: saved.rendered_digest,
         truncated: payload.truncated === true,

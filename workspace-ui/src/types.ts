@@ -261,11 +261,12 @@ export interface FindingHistory {
 }
 
 export interface ComparisonSnapshot extends Snapshot {
+    observed_state_known: boolean;
     branch: string | null;
     git_sha: string | null;
-    dirty: boolean;
-    staged: boolean;
-    untracked: boolean;
+    dirty: boolean | null;
+    staged: boolean | null;
+    untracked: boolean | null;
     lifecycle_reconciled: boolean;
     reconciliation_skip_reason: string | null;
 }
@@ -273,7 +274,8 @@ export interface ComparisonSnapshot extends Snapshot {
 export type ComparisonSection =
     "files" | "symbols" | "relationships" | "cycles" | "metrics" | "findings";
 
-export type ComparisonChangeType = "added" | "removed" | "not-observed" | "changed";
+export type ComparisonChangeType =
+    "added" | "removed" | "not-observed-in-baseline" | "not-observed-in-target" | "changed";
 
 export interface ComparisonSectionCompatibility {
     section: ComparisonSection;
@@ -376,6 +378,7 @@ export interface HandoffSelectionRequest {
 export interface HandoffPreview {
     handoff_format_version: string;
     markdown: string;
+    normalized_json: string;
     json_payload: Record<string, unknown>;
     rendered_digest: string;
     truncated: boolean;
@@ -401,6 +404,7 @@ export interface SavedHandoff {
     updated_at: string;
     local_only: boolean;
     markdown?: string | null;
+    normalized_json?: string | null;
     json_payload?: Record<string, unknown> | null;
 }
 

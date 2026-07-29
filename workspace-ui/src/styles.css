@@ -1579,7 +1579,8 @@ select {
 }
 
 .change-badge--removed,
-.change-badge--not-observed {
+.change-badge--not-observed-in-baseline,
+.change-badge--not-observed-in-target {
     color: #784a00;
     background: #fff1d5;
 }
@@ -1772,6 +1773,7 @@ select {
 }
 
 .handoff-preview__heading {
+    flex-wrap: wrap;
     justify-content: space-between;
     margin-bottom: 12px;
 }
@@ -1785,6 +1787,14 @@ select {
 .handoff-preview__heading span {
     color: var(--muted);
     font-size: 10px;
+}
+
+.handoff-preview__heading small {
+    min-width: 0;
+    flex-basis: 100%;
+    color: var(--muted);
+    font-size: 9px;
+    overflow-wrap: anywhere;
 }
 
 .markdown-preview {

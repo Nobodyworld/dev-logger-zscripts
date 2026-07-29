@@ -11,7 +11,11 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from zscripts.domain.repository_comparison import SavedHandoffRecord
+from zscripts.domain.repository_comparison import (
+    HANDOFF_FORMAT_VERSION,
+    SavedHandoffRecord,
+    rendered_output_digest,
+)
 from zscripts.domain.repository_review import (
     AnalysisEvidence,
     AnalysisState,
@@ -30,7 +34,7 @@ from zscripts.domain.repository_review import (
     SymbolRecord,
 )
 
-DATABASE_SCHEMA_VERSION = 5
+DATABASE_SCHEMA_VERSION = 6
 SYMBOL_SORT_COLUMNS: dict[str, str] = {
     "qualified_name": "qualified_name",
     "kind": "kind",
@@ -189,11 +193,12 @@ class ComparisonSnapshotEvidence:
 
     repository: RepositoryRecord
     snapshot: SnapshotRecord
+    observed_state_known: bool
     observed_branch: str | None
     observed_git_sha: str | None
-    observed_dirty: bool
-    observed_staged: bool
-    observed_untracked: bool
+    observed_dirty: bool | None
+    observed_staged: bool | None
+    observed_untracked: bool | None
     lifecycle_reconciled: bool
     reconciliation_skip_reason: str | None
     files: tuple[FileRecord, ...]
@@ -215,6 +220,10 @@ class ReviewConflictError(RuntimeError):
     def __init__(self, current: StoredFindingRecord) -> None:
         super().__init__("Finding review version conflict.")
         self.current = current
+
+
+class SavedHandoffIntegrityError(ValueError):
+    """Raised when persisted rendered handoff bytes fail their format digest."""
 
 
 class SnapshotStore:
@@ -1133,8 +1142,8 @@ class SnapshotStore:
         with self._connect() as connection:
             snapshot_row = connection.execute(
                 """
-                SELECT observed_branch, observed_git_sha, observed_dirty,
-                       observed_staged, observed_untracked
+                SELECT observed_state_known, observed_branch, observed_git_sha,
+                       observed_dirty, observed_staged, observed_untracked
                 FROM snapshots
                 WHERE snapshot_id = ?
                 """,
@@ -1241,20 +1250,24 @@ class SnapshotStore:
             )
             for row in cycle_rows
         )
+        observed_state_known = bool(snapshot_row["observed_state_known"])
         return ComparisonSnapshotEvidence(
             repository=repository,
             snapshot=snapshot,
+            observed_state_known=observed_state_known,
             observed_branch=(
-                str(snapshot_row["observed_branch"]) if snapshot_row["observed_branch"] is not None else None
+                str(snapshot_row["observed_branch"])
+                if observed_state_known and snapshot_row["observed_branch"] is not None
+                else None
             ),
             observed_git_sha=(
                 str(snapshot_row["observed_git_sha"])
-                if snapshot_row["observed_git_sha"] is not None
+                if observed_state_known and snapshot_row["observed_git_sha"] is not None
                 else None
             ),
-            observed_dirty=bool(snapshot_row["observed_dirty"]),
-            observed_staged=bool(snapshot_row["observed_staged"]),
-            observed_untracked=bool(snapshot_row["observed_untracked"]),
+            observed_dirty=bool(snapshot_row["observed_dirty"]) if observed_state_known else None,
+            observed_staged=bool(snapshot_row["observed_staged"]) if observed_state_known else None,
+            observed_untracked=bool(snapshot_row["observed_untracked"]) if observed_state_known else None,
             lifecycle_reconciled=bool(analysis["lifecycle_reconciled"]) if analysis else False,
             reconciliation_skip_reason=(
                 str(analysis["reconciliation_skip_reason"])
@@ -1298,6 +1311,7 @@ class SnapshotStore:
     def save_handoff(self, record: SavedHandoffRecord) -> SavedHandoffRecord:
         """Persist one immutable local handoff after validating snapshot ownership."""
 
+        _validate_saved_handoff_integrity(record)
         if len(record.task_objective) > 4_000:
             raise ValueError("Handoff objective exceeds 4,000 characters.")
         if len(record.selection_json.encode("utf-8")) > 500_000:
@@ -1382,7 +1396,11 @@ class SnapshotStore:
                 "SELECT * FROM saved_handoffs WHERE handoff_id = ?",
                 (handoff_id,),
             ).fetchone()
-        return _saved_handoff_from_row(row) if row is not None else None
+        if row is None:
+            return None
+        record = _saved_handoff_from_row(row)
+        _validate_saved_handoff_integrity(record)
+        return record
 
     def get_file(self, snapshot_id: str, relative_path: str) -> FileRecord | None:
         with self._connect() as connection:
@@ -1480,6 +1498,9 @@ class SnapshotStore:
         if current < 5:
             _execute_schema(connection, _SCHEMA_V5)
             connection.execute("UPDATE schema_version SET version = 5")
+        if current < 6:
+            _execute_schema(connection, _SCHEMA_V6)
+            connection.execute("UPDATE schema_version SET version = 6")
 
     @staticmethod
     def _upsert_repository(
@@ -1532,9 +1553,9 @@ class SnapshotStore:
                 rule_set_version, state, source_fingerprint, file_count,
                 included_file_count, module_count, symbol_count, started_at,
                 completed_at, duration_ms, truncated, parse_gap_count,
-                observed_branch, observed_git_sha, observed_dirty,
+                observed_state_known, observed_branch, observed_git_sha, observed_dirty,
                 observed_staged, observed_untracked
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 snapshot.snapshot_id,
@@ -1553,6 +1574,7 @@ class SnapshotStore:
                 snapshot.duration_ms,
                 int(snapshot.truncated),
                 snapshot.parse_gap_count,
+                1,
                 evidence.repository.branch,
                 evidence.repository.git_sha,
                 int(evidence.repository.dirty),
@@ -2212,6 +2234,18 @@ def _saved_handoff_from_row(row: sqlite3.Row) -> SavedHandoffRecord:
     )
 
 
+def _validate_saved_handoff_integrity(record: SavedHandoffRecord) -> None:
+    if record.format_version != HANDOFF_FORMAT_VERSION:
+        raise SavedHandoffIntegrityError("Saved handoff format is unsupported.")
+    expected = rendered_output_digest(
+        record.format_version,
+        record.rendered_markdown,
+        record.rendered_json,
+    )
+    if record.rendered_digest != expected:
+        raise SavedHandoffIntegrityError("Saved handoff rendered output failed integrity validation.")
+
+
 def _get_finding_in_connection(
     connection: sqlite3.Connection,
     finding_id: str,
@@ -2613,36 +2647,6 @@ ALTER TABLE snapshots
     ADD COLUMN observed_staged INTEGER NOT NULL DEFAULT 0 CHECK (observed_staged IN (0, 1));
 ALTER TABLE snapshots
     ADD COLUMN observed_untracked INTEGER NOT NULL DEFAULT 0 CHECK (observed_untracked IN (0, 1));
-UPDATE snapshots
-SET observed_branch = (
-        SELECT branch FROM repositories
-        WHERE repositories.repository_id = snapshots.repository_id
-    ),
-    observed_git_sha = (
-        SELECT git_sha FROM repositories
-        WHERE repositories.repository_id = snapshots.repository_id
-    ),
-    observed_dirty = COALESCE(
-        (
-            SELECT dirty FROM repositories
-            WHERE repositories.repository_id = snapshots.repository_id
-        ),
-        0
-    ),
-    observed_staged = COALESCE(
-        (
-            SELECT staged FROM repositories
-            WHERE repositories.repository_id = snapshots.repository_id
-        ),
-        0
-    ),
-    observed_untracked = COALESCE(
-        (
-            SELECT untracked FROM repositories
-            WHERE repositories.repository_id = snapshots.repository_id
-        ),
-        0
-    );
 CREATE TABLE IF NOT EXISTS saved_handoffs (
     handoff_id TEXT PRIMARY KEY,
     repository_id TEXT NOT NULL REFERENCES repositories(repository_id),
@@ -2662,6 +2666,12 @@ CREATE INDEX IF NOT EXISTS idx_saved_handoffs_repository_created
     ON saved_handoffs(repository_id, created_at DESC, handoff_id);
 """
 
+_SCHEMA_V6 = """
+ALTER TABLE snapshots
+    ADD COLUMN observed_state_known INTEGER NOT NULL DEFAULT 0
+        CHECK (observed_state_known IN (0, 1));
+"""
+
 
 __all__ = [
     "AnalysisStatusRecord",
@@ -2670,6 +2680,7 @@ __all__ = [
     "FindingPage",
     "GraphNodePage",
     "ReviewConflictError",
+    "SavedHandoffIntegrityError",
     "RelationshipPage",
     "SnapshotNotFoundError",
     "SnapshotStore",

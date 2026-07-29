@@ -16,8 +16,9 @@ const comparisonSnapshots: ComparisonSnapshot[] = [
     {
         ...snapshot,
         analyzer_version: "3",
-        schema_version: "3",
+        schema_version: "4",
         rule_set_version: "4",
+        observed_state_known: true,
         branch: "main",
         git_sha: repository.git_sha,
         dirty: false,
@@ -29,8 +30,9 @@ const comparisonSnapshots: ComparisonSnapshot[] = [
     {
         ...olderSnapshot,
         analyzer_version: "3",
-        schema_version: "3",
+        schema_version: "4",
         rule_set_version: "4",
+        observed_state_known: true,
         branch: "main",
         git_sha: "older0123456789",
         dirty: false,
@@ -43,18 +45,18 @@ const comparisonSnapshots: ComparisonSnapshot[] = [
 
 const summary: ComparisonSummary = {
     identity: {
-        comparison_id: "comparison-0123456789abcdef",
+        comparison_id: "comparison-test-id",
         repository_id: repository.repository_id,
         baseline_snapshot_id: olderSnapshot.snapshot_id,
         target_snapshot_id: snapshot.snapshot_id,
-        comparison_format_version: "1",
+        comparison_format_version: "2",
     },
     compatibility: {
         same_repository: true,
         baseline_analyzer_version: "3",
         target_analyzer_version: "3",
-        baseline_schema_version: "3",
-        target_schema_version: "3",
+        baseline_schema_version: "4",
+        target_schema_version: "4",
         baseline_rule_set_version: "4",
         target_rule_set_version: "4",
         baseline_truncated: false,
@@ -199,6 +201,39 @@ describe("CompareView", () => {
             expect(screen.queryByRole("button", { name: /^changed pkg\/module\.py/ })).toBeNull();
             expect(screen.getByRole("button", { name: /pkg\.NewType/ })).toBeTruthy();
         });
+    });
+
+    it("renders migrated snapshot observations as unknown", async () => {
+        const unknownSnapshots = comparisonSnapshots.map((item) => ({
+            ...item,
+            observed_state_known: false,
+            branch: null,
+            git_sha: null,
+            dirty: null,
+            staged: null,
+            untracked: null,
+        }));
+        const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+            const url = String(input);
+            if (url.includes("comparison-snapshots")) {
+                return response({ repository, snapshots: unknownSnapshots });
+            }
+            if (url.includes("/comparisons/summary")) return response(summary);
+            if (url.includes("/comparisons/items")) return response(page("files", [fileItem]));
+            return response({ detail: "Unexpected request" }, 500);
+        });
+        vi.stubGlobal("fetch", fetchMock);
+
+        render(
+            <CompareView
+                repositoryId={repository.repository_id}
+                targetSnapshotId={snapshot.snapshot_id}
+            />,
+        );
+
+        expect(await screen.findAllByText("Repository observation: unknown")).toHaveLength(2);
+        expect(screen.queryByText(/detached/)).toBeNull();
+        expect(screen.queryByText(/clean worktree/)).toBeNull();
     });
 });
 

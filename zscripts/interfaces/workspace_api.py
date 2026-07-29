@@ -27,7 +27,11 @@ from zscripts.domain.repository_comparison import (
     HandoffSelection,
 )
 from zscripts.domain.repository_review import AnalysisState
-from zscripts.infrastructure.snapshot_store import ReviewConflictError, SnapshotNotFoundError
+from zscripts.infrastructure.snapshot_store import (
+    ReviewConflictError,
+    SavedHandoffIntegrityError,
+    SnapshotNotFoundError,
+)
 
 LOCALHOST = "127.0.0.1"
 
@@ -366,11 +370,12 @@ class FindingRulesResponse(_StrictModel):
 
 
 class ComparisonSnapshotResponse(SnapshotResponse):
+    observed_state_known: bool
     branch: str | None
     git_sha: str | None
-    dirty: bool
-    staged: bool
-    untracked: bool
+    dirty: bool | None
+    staged: bool | None
+    untracked: bool | None
     lifecycle_reconciled: bool
     reconciliation_skip_reason: str | None
 
@@ -429,7 +434,13 @@ class CurrentFindingStateResponse(_StrictModel):
 
 class ComparisonItemResponse(_StrictModel):
     delta_id: str
-    change_type: Literal["added", "removed", "not-observed", "changed"]
+    change_type: Literal[
+        "added",
+        "removed",
+        "not-observed-in-baseline",
+        "not-observed-in-target",
+        "changed",
+    ]
     logical_key: str
     label: str
     relative_path: str | None = None
@@ -478,12 +489,24 @@ class ComparisonSummaryQuery(_StrictModel):
 
 class ComparisonItemsQuery(ComparisonSummaryQuery):
     section: Literal["files", "symbols", "relationships", "cycles", "metrics", "findings"]
-    change_type: Literal["added", "removed", "not-observed", "changed"] | None = None
+    change_type: (
+        Literal[
+            "added",
+            "removed",
+            "not-observed-in-baseline",
+            "not-observed-in-target",
+            "changed",
+        ]
+        | None
+    ) = None
     search: str = Field(default="", max_length=200)
     sort: Literal["logical_key", "label", "change_type"] = "logical_key"
     direction: Literal["asc", "desc"] = "asc"
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=50, ge=1, le=100)
+
+
+HandoffSelectionId = Annotated[str, Field(min_length=1, max_length=128)]
 
 
 class HandoffSelectionRequest(_StrictModel):
@@ -502,17 +525,21 @@ class HandoffSelectionRequest(_StrictModel):
             "task-objective",
         ]
     ] = Field(max_length=8)
-    selected_delta_ids: list[str] = Field(default_factory=list, max_length=400)
-    selected_finding_ids: list[str] = Field(default_factory=list, max_length=200)
-    selected_cycle_ids: list[str] = Field(default_factory=list, max_length=100)
+    selected_delta_ids: list[HandoffSelectionId] = Field(default_factory=list, max_length=400)
+    selected_finding_ids: list[HandoffSelectionId] = Field(default_factory=list, max_length=200)
+    selected_cycle_ids: list[HandoffSelectionId] = Field(default_factory=list, max_length=100)
     include_current_review_status: bool = False
-    explicit_review_note_finding_ids: list[str] = Field(default_factory=list, max_length=20)
+    explicit_review_note_finding_ids: list[HandoffSelectionId] = Field(
+        default_factory=list,
+        max_length=20,
+    )
     task_objective: str = Field(default="", max_length=4_000)
 
 
 class HandoffPreviewResponse(_StrictModel):
     handoff_format_version: str
     markdown: str
+    normalized_json: str
     json_payload: dict[str, Any]
     rendered_digest: str
     truncated: bool
@@ -538,6 +565,7 @@ class SavedHandoffResponse(_StrictModel):
     updated_at: str
     local_only: bool
     markdown: str | None = None
+    normalized_json: str | None = None
     json_payload: dict[str, Any] | None = None
 
 
@@ -548,7 +576,7 @@ class SavedHandoffListResponse(_StrictModel):
 class HealthResponse(_StrictModel):
     status: Literal["ok"]
     service: Literal["repository-review"]
-    schema_version: Literal["3"]
+    schema_version: Literal["4"]
 
 
 def create_workspace_app(
@@ -602,7 +630,7 @@ def create_workspace_app(
 
     @app.get("/api/health", response_model=HealthResponse)
     def health() -> dict[str, str]:
-        return {"status": "ok", "service": "repository-review", "schema_version": "3"}
+        return {"status": "ok", "service": "repository-review", "schema_version": "4"}
 
     @app.get("/api/repositories", response_model=RepositoryListResponse)
     def repositories() -> dict[str, object]:
@@ -1044,6 +1072,11 @@ def create_workspace_app(
             return review_service.get_handoff(handoff_id)
         except LookupError as exc:
             raise HTTPException(status_code=404, detail="Saved handoff was not found.") from exc
+        except SavedHandoffIntegrityError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail="Saved handoff failed integrity validation.",
+            ) from exc
 
     @app.get("/api/handoffs/{handoff_id}/markdown")
     def saved_handoff_markdown(handoff_id: str) -> Response:
@@ -1051,6 +1084,11 @@ def create_workspace_app(
             content = review_service.handoff_markdown(handoff_id)
         except LookupError as exc:
             raise HTTPException(status_code=404, detail="Saved handoff was not found.") from exc
+        except SavedHandoffIntegrityError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail="Saved handoff failed integrity validation.",
+            ) from exc
         return Response(
             content=content,
             media_type="text/markdown",
@@ -1063,6 +1101,11 @@ def create_workspace_app(
             content = review_service.handoff_json(handoff_id)
         except LookupError as exc:
             raise HTTPException(status_code=404, detail="Saved handoff was not found.") from exc
+        except SavedHandoffIntegrityError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail="Saved handoff failed integrity validation.",
+            ) from exc
         return Response(
             content=content,
             media_type="application/json",

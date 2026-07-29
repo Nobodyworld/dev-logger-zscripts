@@ -20,6 +20,7 @@ from zscripts.domain.repository_comparison import (
     HandoffRenderResult,
     HandoffSelection,
     SavedHandoffRecord,
+    rendered_output_digest,
 )
 from zscripts.domain.repository_review import (
     ANALYZER_VERSION,
@@ -39,6 +40,7 @@ from zscripts.domain.repository_review import (
     stable_digest,
 )
 from zscripts.infrastructure.comparison_analysis import (
+    COMPARISON_CHANGE_TYPES,
     COMPARISON_SECTIONS,
     ComparisonResult,
     compare_snapshots,
@@ -46,7 +48,11 @@ from zscripts.infrastructure.comparison_analysis import (
     comparison_summary_payload,
 )
 from zscripts.infrastructure.finding_analysis import FindingAnalyzer, finding_rules
-from zscripts.infrastructure.handoff_rendering import render_handoff, selection_json
+from zscripts.infrastructure.handoff_rendering import (
+    HANDOFF_SECTIONS,
+    render_handoff,
+    selection_json,
+)
 from zscripts.infrastructure.python_analyzer import PythonAnalyzer
 from zscripts.infrastructure.relationship_analysis import (
     RelationshipAnalyzer,
@@ -308,6 +314,7 @@ class RepositoryReviewService:
             items.append(
                 {
                     **_public_snapshot(snapshot),
+                    "observed_state_known": evidence.observed_state_known,
                     "branch": evidence.observed_branch,
                     "git_sha": evidence.observed_git_sha,
                     "dirty": evidence.observed_dirty,
@@ -347,12 +354,7 @@ class RepositoryReviewService:
 
         if section not in COMPARISON_SECTIONS:
             raise ValueError("Unsupported comparison section.")
-        if change_type is not None and change_type not in {
-            "added",
-            "removed",
-            "not-observed",
-            "changed",
-        }:
+        if change_type is not None and change_type not in COMPARISON_CHANGE_TYPES:
             raise ValueError("Unsupported comparison change type.")
         if len(search) > 200:
             raise ValueError("Comparison search is too long.")
@@ -431,56 +433,71 @@ class RepositoryReviewService:
         }
 
     def preview_handoff(self, selection: HandoffSelection) -> dict[str, object]:
-        target = self.store.comparison_snapshot(selection.target_snapshot_id)
+        _, rendered = self._render_handoff_selection(selection)
+        return _public_handoff_render(rendered)
+
+    def _render_handoff_selection(
+        self,
+        selection: HandoffSelection,
+    ) -> tuple[HandoffSelection, HandoffRenderResult]:
+        normalized = _normalize_handoff_selection(selection)
+        target = self.store.comparison_snapshot(normalized.target_snapshot_id)
         baseline = (
-            self.store.comparison_snapshot(selection.baseline_snapshot_id)
-            if selection.baseline_snapshot_id is not None
+            self.store.comparison_snapshot(normalized.baseline_snapshot_id)
+            if normalized.baseline_snapshot_id is not None
             else None
         )
         comparison: ComparisonResult | None = None
         if baseline is not None:
             comparison = compare_snapshots(baseline, target)
             if (
-                selection.comparison_id is not None
-                and selection.comparison_id != comparison.summary.identity.comparison_id
+                normalized.comparison_id is not None
+                and normalized.comparison_id != comparison.summary.identity.comparison_id
             ):
                 raise ValueError("Handoff comparison identity does not match the snapshots.")
-        elif selection.comparison_id is not None:
+        elif normalized.comparison_id is not None:
             raise ValueError("A comparison ID requires a baseline snapshot.")
-        finding_ids = tuple(dict.fromkeys(selection.selected_finding_ids))
+        if (
+            normalized.selected_delta_ids or normalized.selected_cycle_ids
+        ) and normalized.comparison_id is None:
+            raise ValueError("Selected comparison evidence requires an exact comparison ID.")
+        finding_ids = normalized.selected_finding_ids
         current = self.store.current_findings(target.snapshot.repository_id, finding_ids)
+        if {item.evidence.finding_id for item in current} != set(finding_ids):
+            raise ValueError("A selected finding is unknown or belongs to another repository.")
         rendered = render_handoff(
-            selection=selection,
+            selection=normalized,
             repository=target.repository,
             target=target,
             baseline=baseline,
             comparison=comparison,
             current_findings=current,
         )
-        return _public_handoff_render(rendered)
+        return normalized, rendered
 
     def save_handoff(self, selection: HandoffSelection) -> dict[str, object]:
-        preview = self.preview_handoff(selection)
-        target = self.store.get_snapshot(selection.target_snapshot_id)
+        normalized, rendered = self._render_handoff_selection(selection)
+        expected_digest = rendered_output_digest(
+            rendered.handoff_format_version,
+            rendered.markdown,
+            rendered.normalized_json,
+        )
+        if expected_digest != rendered.rendered_digest:
+            raise ValueError("Rendered handoff output failed integrity validation.")
+        target = self.store.get_snapshot(normalized.target_snapshot_id)
         created_at = _utc_now()
         record = SavedHandoffRecord(
             handoff_id=f"handoff-{uuid.uuid4().hex}",
             repository_id=target.repository_id,
-            target_snapshot_id=selection.target_snapshot_id,
-            baseline_snapshot_id=selection.baseline_snapshot_id,
-            comparison_id=selection.comparison_id,
-            selection_json=selection_json(selection),
-            task_objective=selection.task_objective,
+            target_snapshot_id=normalized.target_snapshot_id,
+            baseline_snapshot_id=normalized.baseline_snapshot_id,
+            comparison_id=normalized.comparison_id,
+            selection_json=selection_json(normalized),
+            task_objective=normalized.task_objective,
             format_version=HANDOFF_FORMAT_VERSION,
-            rendered_digest=str(preview["rendered_digest"]),
-            rendered_markdown=str(preview["markdown"]),
-            rendered_json=json.dumps(
-                preview["json_payload"],
-                ensure_ascii=False,
-                sort_keys=True,
-                indent=2,
-            )
-            + "\n",
+            rendered_digest=rendered.rendered_digest,
+            rendered_markdown=rendered.markdown,
+            rendered_json=rendered.normalized_json,
             created_at=created_at,
             updated_at=created_at,
         )
@@ -1112,6 +1129,11 @@ def _snapshot_identifier(
         {
             "repository_id": repository.repository_id,
             "configuration_digest": repository.configuration_digest,
+            "observed_branch": repository.branch,
+            "observed_git_sha": repository.git_sha,
+            "observed_dirty": repository.dirty,
+            "observed_staged": repository.staged,
+            "observed_untracked": repository.untracked,
             "source_fingerprint": source_fingerprint,
             "analyzer_version": ANALYZER_VERSION,
             "schema_version": SCHEMA_VERSION,
@@ -1127,6 +1149,25 @@ def _snapshot_identifier(
             "findings": [item.finding_id for item in findings],
             "truncated": truncated,
         },
+    )
+
+
+def _normalize_handoff_selection(selection: HandoffSelection) -> HandoffSelection:
+    enabled_set = set(selection.enabled_sections)
+    if not enabled_set.issubset(HANDOFF_SECTIONS):
+        raise ValueError("Unsupported handoff section.")
+    return HandoffSelection(
+        target_snapshot_id=selection.target_snapshot_id,
+        baseline_snapshot_id=selection.baseline_snapshot_id,
+        comparison_id=selection.comparison_id,
+        enabled_sections=tuple(section for section in HANDOFF_SECTIONS if section in enabled_set),
+        selected_delta_ids=tuple(sorted(set(selection.selected_delta_ids))),
+        selected_finding_ids=tuple(sorted(set(selection.selected_finding_ids))),
+        selected_cycle_ids=tuple(sorted(set(selection.selected_cycle_ids))),
+        include_current_review_status=selection.include_current_review_status,
+        explicit_review_note_finding_ids=tuple(sorted(set(selection.explicit_review_note_finding_ids))),
+        task_objective=selection.task_objective,
+        budget_policy=selection.budget_policy,
     )
 
 
@@ -1290,6 +1331,7 @@ def _public_handoff_render(rendered: HandoffRenderResult) -> dict[str, object]:
     return {
         "handoff_format_version": rendered.handoff_format_version,
         "markdown": rendered.markdown,
+        "normalized_json": rendered.normalized_json,
         "json_payload": json.loads(rendered.normalized_json),
         "rendered_digest": rendered.rendered_digest,
         "truncated": rendered.truncated,
@@ -1323,6 +1365,7 @@ def _public_saved_handoff(
     }
     if include_rendered:
         payload["markdown"] = record.rendered_markdown
+        payload["normalized_json"] = record.rendered_json
         payload["json_payload"] = json.loads(record.rendered_json)
     return payload
 

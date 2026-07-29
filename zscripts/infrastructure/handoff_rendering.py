@@ -11,6 +11,7 @@ from zscripts.domain.repository_comparison import (
     CycleDelta,
     HandoffRenderResult,
     HandoffSelection,
+    rendered_output_digest,
 )
 from zscripts.domain.repository_review import RepositoryRecord
 from zscripts.infrastructure.comparison_analysis import (
@@ -54,6 +55,7 @@ def render_handoff(
         raise ValueError("Task objective exceeds the handoff budget.")
     if len(selection.explicit_review_note_finding_ids) > budget.maximum_explicit_notes:
         raise ValueError("Too many review notes were selected.")
+    _validate_render_selection(selection, enabled, comparison)
 
     warnings = _analysis_warnings(target, baseline, comparison)
     omitted: dict[str, int] = {}
@@ -63,7 +65,7 @@ def render_handoff(
     changes: dict[str, list[dict[str, Any]]] = {}
     if comparison is not None:
         for section in COMPARISON_SECTIONS:
-            if section not in enabled or section == "findings":
+            if section not in enabled:
                 continue
             selected = [
                 item
@@ -147,6 +149,7 @@ def render_handoff(
         "repository_state": {
             "repository_id": repository.repository_id,
             "display_name": repository.display_name,
+            "observed_state_known": target.observed_state_known,
             "branch": target.observed_branch,
             "git_sha": target.observed_git_sha,
             "dirty": target.observed_dirty,
@@ -188,8 +191,6 @@ def render_handoff(
         normalized_json = _pretty_json(payload)
     markdown = _render_markdown(payload)
     if len(markdown) > budget.maximum_markdown_characters:
-        trailer = "\n\n> TRUNCATED: Markdown character budget reached.\n"
-        markdown = markdown[: budget.maximum_markdown_characters - len(trailer)] + trailer
         warnings.append("Markdown output reached the character budget.")
         omitted["markdown-characters"] = 1
         truncated = True
@@ -197,7 +198,17 @@ def render_handoff(
         payload["truncated"] = True
         payload["omitted_counts"] = dict(sorted(omitted.items()))
         normalized_json = _pretty_json(payload)
-    digest = _digest_payload(payload)
+        markdown = _render_markdown(payload)
+        trailer = "\n\n> TRUNCATED: Markdown character budget reached.\n"
+        if budget.maximum_markdown_characters <= len(trailer):
+            markdown = trailer[: budget.maximum_markdown_characters]
+        else:
+            markdown = markdown[: budget.maximum_markdown_characters - len(trailer)] + trailer
+    digest = rendered_output_digest(
+        HANDOFF_FORMAT_VERSION,
+        markdown,
+        normalized_json,
+    )
     return HandoffRenderResult(
         handoff_format_version=HANDOFF_FORMAT_VERSION,
         markdown=markdown,
@@ -215,6 +226,41 @@ def selection_json(selection: HandoffSelection) -> str:
     """Serialize a selection deterministically for local persistence."""
 
     return json.dumps(asdict(selection), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _validate_render_selection(
+    selection: HandoffSelection,
+    enabled: tuple[str, ...],
+    comparison: ComparisonResult | None,
+) -> None:
+    note_ids = set(selection.explicit_review_note_finding_ids)
+    if not note_ids.issubset(set(selection.selected_finding_ids)):
+        raise ValueError("Review-note selections must also be selected findings.")
+    if comparison is None:
+        if selection.selected_delta_ids or selection.selected_cycle_ids:
+            raise ValueError("Comparison evidence selections require a baseline snapshot.")
+        return
+
+    delta_sections = {
+        item.delta_id: section for section in COMPARISON_SECTIONS for item in comparison.section(section)
+    }
+    for delta_id in set(selection.selected_delta_ids):
+        section = delta_sections.get(delta_id)
+        if section is None:
+            raise ValueError("A selected comparison delta is unknown or stale.")
+        if section not in enabled:
+            raise ValueError("A selected comparison delta belongs to a disabled section.")
+
+    cycle_ids = {
+        cycle_id
+        for item in comparison.cycles
+        for cycle_id in (item.baseline_cycle_id, item.target_cycle_id)
+        if cycle_id is not None
+    }
+    if selection.selected_cycle_ids and "cycles" not in enabled:
+        raise ValueError("A selected cycle belongs to a disabled section.")
+    if not set(selection.selected_cycle_ids).issubset(cycle_ids):
+        raise ValueError("A selected cycle is unknown or stale.")
 
 
 def _analysis_warnings(
@@ -253,10 +299,17 @@ def _render_markdown(payload: dict[str, Any]) -> str:
         f"- Repository: {_md(state['display_name'])}",
         f"- Target snapshot: `{_md(state['target_snapshot_id'])}`",
         f"- Baseline snapshot: `{_md(state['baseline_snapshot_id'] or 'none')}`",
-        f"- Branch: `{_md(state['branch'] or 'detached')}`",
-        f"- Git SHA: `{_md(state['git_sha'] or 'unavailable')}`",
-        f"- Working tree: dirty={str(state['dirty']).lower()}, staged={str(state['staged']).lower()}, untracked={str(state['untracked']).lower()}",
     ]
+    if state["observed_state_known"]:
+        lines.extend(
+            [
+                f"- Branch: `{_md(state['branch'] or 'detached')}`",
+                f"- Git SHA: `{_md(state['git_sha'] or 'unavailable')}`",
+                f"- Working tree: dirty={str(state['dirty']).lower()}, staged={str(state['staged']).lower()}, untracked={str(state['untracked']).lower()}",
+            ]
+        )
+    else:
+        lines.append("- Repository observation: `unknown`")
     comparison = payload.get("comparison")
     if comparison is not None:
         lines.extend(["", "## Comparison", ""])
@@ -272,6 +325,7 @@ def _render_markdown(payload: dict[str, Any]) -> str:
         "relationships": "Relationships",
         "cycles": "Cycles",
         "metrics": "Metrics",
+        "findings": "Finding Occurrences",
     }
     for section, heading in headings.items():
         items = payload["selected_changes"].get(section, [])
@@ -315,18 +369,6 @@ def _render_markdown(payload: dict[str, Any]) -> str:
 
 def _pretty_json(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
-
-
-def _digest_payload(payload: dict[str, Any]) -> str:
-    import hashlib
-
-    canonical = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return hashlib.sha256(b"repository-handoff\0" + canonical).hexdigest()
 
 
 def _md(value: object) -> str:

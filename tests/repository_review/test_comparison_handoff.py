@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import sqlite3
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 from time import perf_counter
@@ -10,8 +11,13 @@ from time import perf_counter
 import pytest
 from fastapi.testclient import TestClient
 
-from zscripts.application.repository_review import RepositoryReviewService
-from zscripts.domain.repository_comparison import HandoffBudgetPolicy, HandoffSelection
+from zscripts.application.repository_review import RepositoryReviewService, _snapshot_identifier
+from zscripts.domain.repository_comparison import (
+    HANDOFF_FORMAT_VERSION,
+    HandoffBudgetPolicy,
+    HandoffSelection,
+    rendered_output_digest,
+)
 from zscripts.domain.repository_review import (
     CycleGroupRecord,
     FindingEvidenceRecord,
@@ -72,7 +78,7 @@ def test_comparison_is_stable_logical_and_partial_aware(tmp_path: Path) -> None:
     )
     assert partial["section_status"] == "partial"
     assert "target-truncated" in partial["reason_codes"]
-    assert any(item["change_type"] == "not-observed" for item in partial["items"])
+    assert any(item["change_type"] == "not-observed-in-target" for item in partial["items"])
 
 
 def test_comparison_rejects_other_repository_and_marks_old_sections(
@@ -278,6 +284,13 @@ def test_comparison_and_handoff_api_are_typed_bounded_and_download_safe(
 
         preview = client.post("/api/handoffs/preview", json=request)
         assert preview.status_code == 200
+        preview_payload = preview.json()
+        assert json.loads(preview_payload["normalized_json"]) == preview_payload["json_payload"]
+        assert preview_payload["rendered_digest"] == rendered_output_digest(
+            preview_payload["handoff_format_version"],
+            preview_payload["markdown"],
+            preview_payload["normalized_json"],
+        )
         saved = client.post("/api/handoffs", json=request)
         assert saved.status_code == 201
         handoff_id = saved.json()["handoff_id"]
@@ -289,7 +302,7 @@ def test_comparison_and_handoff_api_are_typed_bounded_and_download_safe(
         assert markdown.headers["content-disposition"].endswith('.md"')
         assert "\r" not in markdown.headers["content-disposition"]
         assert json_download.headers["content-type"].startswith("application/json")
-        assert json.loads(json_download.text)["handoff_format_version"] == "1"
+        assert json.loads(json_download.text)["handoff_format_version"] == HANDOFF_FORMAT_VERSION
         assert str(repository.resolve()) not in json.dumps(
             {
                 "snapshots": snapshots.json(),
@@ -322,7 +335,7 @@ def test_schema_v4_migrates_saved_handoffs_non_destructively(tmp_path: Path) -> 
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'saved_handoffs'"
         ).fetchone()
         foreign_keys = connection.execute("PRAGMA foreign_key_list(saved_handoffs)").fetchall()
-    assert version == DATABASE_SCHEMA_VERSION == 5
+    assert version == DATABASE_SCHEMA_VERSION == 6
     assert table == ("saved_handoffs",)
     assert foreign_keys
 
@@ -643,6 +656,403 @@ def test_comparison_performance_is_bounded_for_thousands_of_file_deltas(
     assert elapsed < 1.0
 
 
+def test_snapshot_identity_preserves_exact_repository_observations(tmp_path: Path) -> None:
+    repository = tmp_path / "observations"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    _git(repository, "init", "-b", "branch-a")
+    _git(repository, "config", "user.email", "repository-review@example.invalid")
+    _git(repository, "config", "user.name", "Repository Review")
+    _git(repository, "add", ".")
+    _git(repository, "commit", "-m", "fixture")
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+
+    branch_a = service.analyze(repository)
+    _git(repository, "switch", "-c", "branch-b")
+    branch_b = service.analyze(repository)
+    branch_b_repeat = service.analyze(repository)
+
+    assert branch_a.snapshot.snapshot_id != branch_b.snapshot.snapshot_id
+    assert branch_b_repeat.snapshot.snapshot_id == branch_b.snapshot.snapshot_id
+    choices = service.comparison_snapshots(branch_a.repository.repository_id)["snapshots"]
+    assert {item["branch"] for item in choices} == {"branch-a", "branch-b"}
+    assert all(item["observed_state_known"] is True for item in choices)
+    assert len(choices) == 2
+    assert str(repository.resolve()) not in json.dumps(choices)
+
+    def identifier(repository_state):
+        return _snapshot_identifier(
+            repository=repository_state,
+            source_fingerprint=branch_a.snapshot.source_fingerprint,
+            files=branch_a.files,
+            modules=branch_a.modules,
+            symbols=branch_a.symbols,
+            diagnostics=branch_a.diagnostics,
+            graph_nodes=branch_a.graph_nodes,
+            relationships=branch_a.relationships,
+            cycles=branch_a.cycles,
+            metrics=branch_a.metrics,
+            findings=branch_a.findings,
+            truncated=branch_a.snapshot.truncated,
+        )
+
+    clean = replace(
+        branch_a.repository,
+        branch="branch-a",
+        dirty=False,
+        staged=False,
+        untracked=False,
+    )
+    identities = {
+        identifier(clean),
+        identifier(replace(clean, dirty=True)),
+        identifier(replace(clean, dirty=True, staged=True)),
+        identifier(replace(clean, dirty=True, untracked=True)),
+    }
+    assert len(identities) == 4
+    assert identifier(clean) == identifier(clean)
+
+
+def test_schema_v5_migration_marks_historical_observations_unknown(tmp_path: Path) -> None:
+    data = tmp_path / "data"
+    data.mkdir()
+    database = data / "repository-review.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute("CREATE TABLE schema_version (version INTEGER NOT NULL)")
+        connection.execute("INSERT INTO schema_version (version) VALUES (5)")
+        for schema in (
+            snapshot_store_module._SCHEMA_V1,
+            snapshot_store_module._SCHEMA_V2,
+            snapshot_store_module._SCHEMA_V3,
+            snapshot_store_module._SCHEMA_V4,
+            snapshot_store_module._SCHEMA_V5,
+        ):
+            connection.executescript(schema)
+        connection.execute(
+            """
+            INSERT INTO repositories (
+                repository_id, display_name, canonical_path, git_root, branch,
+                git_sha, dirty, staged, untracked, configuration_digest,
+                source_roots_json, test_roots_json, latest_analysis_generation
+            ) VALUES (
+                'historical-repository', 'historical', ?, NULL, 'current-branch',
+                'current-sha', 1, 1, 1, 'config', '[]', '[]', 0
+            )
+            """,
+            (str(tmp_path / "historical"),),
+        )
+        connection.executemany(
+            """
+            INSERT INTO snapshots (
+                snapshot_id, repository_id, analyzer_version, schema_version,
+                rule_set_version, state, source_fingerprint, file_count,
+                included_file_count, module_count, symbol_count, started_at,
+                completed_at, duration_ms, truncated, parse_gap_count,
+                observed_branch, observed_git_sha, observed_dirty,
+                observed_staged, observed_untracked
+            ) VALUES (
+                ?, 'historical-repository', '3', '3', '4', 'completed',
+                ?, 0, 0, 0, 0, ?, ?, 0, 0, 0, ?, ?, 1, 1, 1
+            )
+            """,
+            (
+                (
+                    "historical-snapshot-a",
+                    "source-a",
+                    "2026-07-01T00:00:00Z",
+                    "2026-07-01T00:00:00Z",
+                    "incorrect-a",
+                    "incorrect-sha-a",
+                ),
+                (
+                    "historical-snapshot-b",
+                    "source-b",
+                    "2026-07-02T00:00:00Z",
+                    "2026-07-02T00:00:00Z",
+                    "incorrect-b",
+                    "incorrect-sha-b",
+                ),
+            ),
+        )
+
+    store = SnapshotStore(data)
+    service = RepositoryReviewService(store=store)
+    choices = service.comparison_snapshots("historical-repository")["snapshots"]
+    assert len(choices) == 2
+    assert all(item["observed_state_known"] is False for item in choices)
+    assert all(item["branch"] is None and item["git_sha"] is None for item in choices)
+    assert all(
+        item["dirty"] is None and item["staged"] is None and item["untracked"] is None for item in choices
+    )
+    with sqlite3.connect(database) as connection:
+        rows = connection.execute(
+            "SELECT observed_state_known FROM snapshots ORDER BY snapshot_id"
+        ).fetchall()
+        version = connection.execute("SELECT version FROM schema_version").fetchone()[0]
+    assert rows == [(0,), (0,)]
+    assert version == DATABASE_SCHEMA_VERSION == 6
+
+
+@pytest.mark.parametrize(
+    ("baseline_changes", "target_changes", "expected"),
+    (
+        ({}, {}, {"added", "removed"}),
+        ({"truncated": True}, {}, {"not-observed-in-baseline", "removed"}),
+        ({"parse_gap_count": 1}, {}, {"not-observed-in-baseline", "removed"}),
+        ({}, {"truncated": True}, {"added", "not-observed-in-target"}),
+        ({}, {"parse_gap_count": 1}, {"added", "not-observed-in-target"}),
+        (
+            {"truncated": True},
+            {"parse_gap_count": 1},
+            {"not-observed-in-baseline", "not-observed-in-target"},
+        ),
+        (
+            {},
+            {"analyzer_version": "4", "rule_set_version": "5"},
+            {"not-observed-in-baseline", "not-observed-in-target"},
+        ),
+    ),
+)
+def test_every_comparison_section_models_uncertainty_on_both_sides(
+    tmp_path: Path,
+    baseline_changes: dict[str, object],
+    target_changes: dict[str, object],
+    expected: set[str],
+) -> None:
+    service, _, baseline_id, _ = _snapshot_pair(tmp_path)
+    evidence = service.store.comparison_snapshot(baseline_id)
+    nodes = (
+        _node("node-a", "pkg.a"),
+        _node("node-b", "pkg.b"),
+        _node("node-c", "pkg.c"),
+        _node("node-d", "pkg.d"),
+    )
+    baseline = replace(
+        evidence,
+        snapshot=replace(evidence.snapshot, **baseline_changes),
+        files=(replace(evidence.files[0], file_id="file-a", relative_path="pkg/a.py"),),
+        symbols=(
+            replace(
+                evidence.symbols[0],
+                symbol_id="symbol-a",
+                qualified_name="pkg.a.A",
+                display_name="A",
+            ),
+        ),
+        graph_nodes=nodes,
+        relationships=(_relationship("relationship-a", "node-a", "node-b"),),
+        cycles=(CycleGroupRecord("cycle-a", "imports", ("node-a", "node-b"), ()),),
+        metrics=(_metric("metric-a", "node-a", "fan-out", 1),),
+        findings=(_finding(evidence.findings[0], "finding-a", "rule-a", "1", ("pkg.a",)),),
+    )
+    target = replace(
+        evidence,
+        snapshot=replace(
+            evidence.snapshot,
+            snapshot_id="uncertainty-target",
+            **target_changes,
+        ),
+        files=(replace(evidence.files[0], file_id="file-d", relative_path="pkg/d.py"),),
+        symbols=(
+            replace(
+                evidence.symbols[0],
+                symbol_id="symbol-d",
+                qualified_name="pkg.d.D",
+                display_name="D",
+            ),
+        ),
+        graph_nodes=nodes,
+        relationships=(_relationship("relationship-d", "node-c", "node-d"),),
+        cycles=(CycleGroupRecord("cycle-d", "imports", ("node-c", "node-d"), ()),),
+        metrics=(_metric("metric-d", "node-d", "fan-out", 1),),
+        findings=(_finding(evidence.findings[0], "finding-d", "rule-d", "1", ("pkg.d",)),),
+    )
+
+    result = compare_snapshots(baseline, target)
+    for section in ("files", "symbols", "relationships", "cycles", "metrics", "findings"):
+        assert {item.change_type for item in result.section(section)} == expected, section
+    if "not-observed-in-baseline" in expected:
+        target_occurrence = next(
+            item for item in result.findings if item.change_type == "not-observed-in-baseline"
+        )
+        assert target_occurrence.occurrence_state == "not-observed-in-baseline"
+    if "not-observed-in-target" in expected:
+        baseline_occurrence = next(
+            item for item in result.findings if item.change_type == "not-observed-in-target"
+        )
+        assert baseline_occurrence.occurrence_state == "not-observed-in-target"
+
+
+def test_handoff_selection_validation_and_exact_output_integrity(tmp_path: Path) -> None:
+    service, _, baseline_id, target_id = _snapshot_pair(tmp_path)
+    app = create_workspace_app(service=service)
+    summary = service.comparison_summary(baseline_id, target_id)
+    comparison_id = str(summary["identity"]["comparison_id"])
+    file_delta = service.comparison_items(
+        baseline_id,
+        target_id,
+        section="files",
+        page_size=100,
+    )["items"][0]
+    symbol_delta = service.comparison_items(
+        baseline_id,
+        target_id,
+        section="symbols",
+        page_size=100,
+    )["items"][0]
+    cycle_delta = service.comparison_items(
+        baseline_id,
+        target_id,
+        section="cycles",
+        page_size=100,
+    )["items"][0]
+    cycle_id = cycle_delta["target_cycle_id"] or cycle_delta["baseline_cycle_id"]
+    finding_id = service.store.comparison_snapshot(target_id).findings[0].finding_id
+    stale_delta = service.comparison_items(
+        target_id,
+        baseline_id,
+        section="files",
+        page_size=100,
+    )["items"][0]["delta_id"]
+    other_repository = tmp_path / "selection-other"
+    shutil.copytree(FIXTURES / "findings", other_repository)
+    other_snapshot = service.analyze(other_repository)
+    other_finding_id = other_snapshot.findings[0].finding_id
+    request = {
+        "target_snapshot_id": target_id,
+        "baseline_snapshot_id": baseline_id,
+        "comparison_id": comparison_id,
+        "enabled_sections": ["comparison", "files", "symbols", "cycles", "findings"],
+        "selected_delta_ids": [
+            file_delta["delta_id"],
+            file_delta["delta_id"],
+            symbol_delta["delta_id"],
+        ],
+        "selected_finding_ids": [finding_id, finding_id],
+        "selected_cycle_ids": [cycle_id, cycle_id],
+        "include_current_review_status": False,
+        "explicit_review_note_finding_ids": [],
+        "task_objective": "Validate exact evidence.",
+    }
+    invalid_requests = (
+        {**request, "selected_delta_ids": ["unknown-delta"]},
+        {**request, "selected_delta_ids": [stale_delta]},
+        {**request, "selected_cycle_ids": ["unknown-cycle"]},
+        {
+            **request,
+            "enabled_sections": ["comparison", "symbols", "cycles", "findings"],
+        },
+        {
+            **request,
+            "explicit_review_note_finding_ids": ["not-selected"],
+        },
+        {**request, "comparison_id": "comparison-stale"},
+        {
+            **request,
+            "baseline_snapshot_id": None,
+            "comparison_id": None,
+        },
+        {**request, "selected_finding_ids": ["unknown-finding"]},
+        {**request, "selected_finding_ids": [other_finding_id]},
+    )
+
+    with TestClient(app) as client:
+        for invalid in invalid_requests:
+            response_item = client.post("/api/handoffs/preview", json=invalid)
+            assert response_item.status_code == 400
+            assert response_item.json() == {"detail": "Handoff selection is invalid."}
+
+        preview = client.post("/api/handoffs/preview", json=request)
+        assert preview.status_code == 200
+        saved = client.post("/api/handoffs", json=request)
+        assert saved.status_code == 201
+        saved_payload = saved.json()
+        assert saved_payload["selection"]["selected_delta_ids"] == sorted(
+            {file_delta["delta_id"], symbol_delta["delta_id"]}
+        )
+        assert saved_payload["selection"]["selected_cycle_ids"] == [cycle_id]
+        assert saved_payload["selection"]["selected_finding_ids"] == [finding_id]
+        handoff_id = saved_payload["handoff_id"]
+        record = service.store.get_handoff(handoff_id)
+        assert record is not None
+        assert record.rendered_digest == rendered_output_digest(
+            record.format_version,
+            record.rendered_markdown,
+            record.rendered_json,
+        )
+        assert record.rendered_digest != rendered_output_digest(
+            record.format_version,
+            record.rendered_markdown + "x",
+            record.rendered_json,
+        )
+        assert record.rendered_digest != rendered_output_digest(
+            record.format_version,
+            record.rendered_markdown,
+            record.rendered_json + " ",
+        )
+        markdown = client.get(f"/api/handoffs/{handoff_id}/markdown")
+        json_download = client.get(f"/api/handoffs/{handoff_id}/json")
+        assert markdown.content == record.rendered_markdown.encode("utf-8")
+        assert json_download.content == record.rendered_json.encode("utf-8")
+        reopened = client.get(f"/api/handoffs/{handoff_id}").json()
+        assert reopened["markdown_character_count"] == len(record.rendered_markdown)
+        assert reopened["json_byte_count"] == len(record.rendered_json.encode("utf-8"))
+        assert reopened["markdown"] == record.rendered_markdown
+        assert reopened["normalized_json"] == record.rendered_json
+
+        with sqlite3.connect(service.store.database_path) as connection:
+            connection.execute(
+                "UPDATE saved_handoffs SET rendered_markdown = rendered_markdown || 'x' WHERE handoff_id = ?",
+                (handoff_id,),
+            )
+        assert client.get(f"/api/handoffs/{handoff_id}").status_code == 409
+        assert client.get(f"/api/handoffs/{handoff_id}/markdown").status_code == 409
+        assert client.get(f"/api/handoffs/{handoff_id}/json").status_code == 409
+
+
+def test_forced_markdown_truncation_is_part_of_exact_digest(tmp_path: Path) -> None:
+    service, _, baseline_id, target_id = _snapshot_pair(tmp_path)
+    baseline = service.store.comparison_snapshot(baseline_id)
+    target = service.store.comparison_snapshot(target_id)
+    comparison = compare_snapshots(baseline, target)
+    selection = HandoffSelection(
+        target_snapshot_id=target_id,
+        baseline_snapshot_id=baseline_id,
+        comparison_id=comparison.summary.identity.comparison_id,
+        enabled_sections=("comparison", "files", "task-objective"),
+        selected_delta_ids=tuple(item.delta_id for item in comparison.files),
+        selected_finding_ids=(),
+        selected_cycle_ids=(),
+        include_current_review_status=False,
+        explicit_review_note_finding_ids=(),
+        task_objective="Force exact Markdown truncation.",
+        budget_policy=HandoffBudgetPolicy(maximum_markdown_characters=180),
+    )
+    first = render_handoff(
+        selection=selection,
+        repository=target.repository,
+        target=target,
+        baseline=baseline,
+        comparison=comparison,
+        current_findings=(),
+    )
+    second = render_handoff(
+        selection=selection,
+        repository=target.repository,
+        target=target,
+        baseline=baseline,
+        comparison=comparison,
+        current_findings=(),
+    )
+    assert first == second
+    assert first.truncated is True
+    assert len(first.markdown) == 180
+    assert first.rendered_digest == rendered_output_digest(
+        first.handoff_format_version,
+        first.markdown,
+        first.normalized_json,
+    )
+
+
 def _node(node_id: str, qualified_name: str) -> GraphNodeRecord:
     return GraphNodeRecord(
         node_id=node_id,
@@ -743,3 +1153,14 @@ def _snapshot_pair(
     target = service.analyze(repository)
     assert baseline.snapshot.snapshot_id != target.snapshot.snapshot_id
     return service, repository, baseline.snapshot.snapshot_id, target.snapshot.snapshot_id
+
+
+def _git(repository: Path, *arguments: str) -> str:
+    completed = subprocess.run(
+        ["git", *arguments],
+        cwd=repository,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()

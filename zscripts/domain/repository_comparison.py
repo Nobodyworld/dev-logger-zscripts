@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 
-COMPARISON_FORMAT_VERSION = "1"
-HANDOFF_FORMAT_VERSION = "1"
+COMPARISON_FORMAT_VERSION = "2"
+HANDOFF_FORMAT_VERSION = "2"
 
 Scalar = str | int | float | bool | None
 FieldPairs = tuple[tuple[str, Scalar], ...]
@@ -178,6 +179,22 @@ class HandoffBudgetPolicy:
 DEFAULT_HANDOFF_BUDGET = HandoffBudgetPolicy()
 
 
+def rendered_output_digest(
+    format_version: str,
+    markdown: str,
+    normalized_json: str,
+) -> str:
+    """Digest the exact final rendered outputs and their format contract."""
+
+    digest = hashlib.sha256()
+    digest.update(format_version.encode("utf-8"))
+    digest.update(b"\0")
+    digest.update(markdown.encode("utf-8"))
+    digest.update(b"\0")
+    digest.update(normalized_json.encode("utf-8"))
+    return digest.hexdigest()
+
+
 @dataclass(frozen=True, slots=True)
 class HandoffSelection:
     """User-selected bounded evidence for one pure handoff render."""
@@ -249,4 +266,5 @@ __all__ = [
     "RelationshipDelta",
     "SavedHandoffRecord",
     "SymbolDelta",
+    "rendered_output_digest",
 ]

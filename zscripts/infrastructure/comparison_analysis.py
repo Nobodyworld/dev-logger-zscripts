@@ -33,6 +33,13 @@ from zscripts.domain.repository_review import (
 from zscripts.infrastructure.snapshot_store import ComparisonSnapshotEvidence
 
 COMPARISON_SECTIONS = ("files", "symbols", "relationships", "cycles", "metrics", "findings")
+COMPARISON_CHANGE_TYPES = (
+    "added",
+    "removed",
+    "not-observed-in-baseline",
+    "not-observed-in-target",
+    "changed",
+)
 _SECTION_MINIMUM_SCHEMA = {
     "files": 1,
     "symbols": 1,
@@ -85,37 +92,60 @@ def compare_snapshots(
         comparison_format_version=COMPARISON_FORMAT_VERSION,
     )
     compatibility = _compatibility(baseline, target)
-    status = {item.section: item.status for item in compatibility.sections}
-    target_partial = target.snapshot.truncated or target.snapshot.parse_gap_count > 0
+    section_compatibility = {item.section: item for item in compatibility.sections}
 
     files = (
-        _file_deltas(baseline.files, target.files, target_partial=target_partial)
-        if status["files"] != "unavailable"
+        _file_deltas(
+            baseline.files,
+            target.files,
+            **_absence_uncertainty(section_compatibility["files"]),
+        )
+        if section_compatibility["files"].status != "unavailable"
         else ()
     )
     symbols = (
-        _symbol_deltas(baseline.symbols, target.symbols, target_partial=target_partial)
-        if status["symbols"] != "unavailable"
+        _symbol_deltas(
+            baseline.symbols,
+            target.symbols,
+            **_absence_uncertainty(section_compatibility["symbols"]),
+        )
+        if section_compatibility["symbols"].status != "unavailable"
         else ()
     )
     relationships = (
-        _relationship_deltas(baseline, target, target_partial=target_partial)
-        if status["relationships"] != "unavailable"
+        _relationship_deltas(
+            baseline,
+            target,
+            **_absence_uncertainty(section_compatibility["relationships"]),
+        )
+        if section_compatibility["relationships"].status != "unavailable"
         else ()
     )
     cycles = (
-        _cycle_deltas(baseline, target, target_partial=target_partial)
-        if status["cycles"] != "unavailable"
+        _cycle_deltas(
+            baseline,
+            target,
+            **_absence_uncertainty(section_compatibility["cycles"]),
+        )
+        if section_compatibility["cycles"].status != "unavailable"
         else ()
     )
     metrics = (
-        _metric_deltas(baseline, target, target_partial=target_partial)
-        if status["metrics"] != "unavailable"
+        _metric_deltas(
+            baseline,
+            target,
+            **_absence_uncertainty(section_compatibility["metrics"]),
+        )
+        if section_compatibility["metrics"].status != "unavailable"
         else ()
     )
     findings = (
-        _finding_deltas(baseline.findings, target.findings, target_partial=target_partial)
-        if status["findings"] != "unavailable"
+        _finding_deltas(
+            baseline.findings,
+            target.findings,
+            **_absence_uncertainty(section_compatibility["findings"]),
+        )
+        if section_compatibility["findings"].status != "unavailable"
         else ()
     )
     section_items: dict[str, tuple[ComparisonDelta, ...]] = {
@@ -129,7 +159,7 @@ def compare_snapshots(
     counts: list[tuple[str, int]] = []
     for section in COMPARISON_SECTIONS:
         items = section_items[section]
-        for change_type in ("added", "removed", "not-observed", "changed"):
+        for change_type in COMPARISON_CHANGE_TYPES:
             counts.append(
                 (
                     f"{section}_{change_type.replace('-', '_')}",
@@ -241,7 +271,8 @@ def _file_deltas(
     baseline_items: tuple[FileRecord, ...],
     target_items: tuple[FileRecord, ...],
     *,
-    target_partial: bool,
+    baseline_uncertain: bool,
+    target_uncertain: bool,
 ) -> tuple[FileDelta, ...]:
     baseline = {item.relative_path: item for item in baseline_items}
     target = {item.relative_path: item for item in target_items}
@@ -251,7 +282,12 @@ def _file_deltas(
         after = target.get(key)
         before_fields = _file_fields(before) if before is not None else None
         after_fields = _file_fields(after) if after is not None else None
-        change_type = _change_type(before_fields, after_fields, target_partial=target_partial)
+        change_type = _change_type(
+            before_fields,
+            after_fields,
+            baseline_uncertain=baseline_uncertain,
+            target_uncertain=target_uncertain,
+        )
         if change_type == "unchanged":
             continue
         result.append(
@@ -272,7 +308,8 @@ def _symbol_deltas(
     baseline_items: tuple[SymbolRecord, ...],
     target_items: tuple[SymbolRecord, ...],
     *,
-    target_partial: bool,
+    baseline_uncertain: bool,
+    target_uncertain: bool,
 ) -> tuple[SymbolDelta, ...]:
     baseline = {_symbol_key(item): item for item in baseline_items}
     target = {_symbol_key(item): item for item in target_items}
@@ -282,7 +319,12 @@ def _symbol_deltas(
         after = target.get(key)
         before_fields = _symbol_fields(before) if before is not None else None
         after_fields = _symbol_fields(after) if after is not None else None
-        change_type = _change_type(before_fields, after_fields, target_partial=target_partial)
+        change_type = _change_type(
+            before_fields,
+            after_fields,
+            baseline_uncertain=baseline_uncertain,
+            target_uncertain=target_uncertain,
+        )
         if change_type == "unchanged":
             continue
         representative = after or before
@@ -306,7 +348,8 @@ def _relationship_deltas(
     baseline: ComparisonSnapshotEvidence,
     target: ComparisonSnapshotEvidence,
     *,
-    target_partial: bool,
+    baseline_uncertain: bool,
+    target_uncertain: bool,
 ) -> tuple[RelationshipDelta, ...]:
     baseline_nodes = {item.node_id: item for item in baseline.graph_nodes}
     target_nodes = {item.node_id: item for item in target.graph_nodes}
@@ -322,7 +365,12 @@ def _relationship_deltas(
             after_item = after[index] if index < len(after) else None
             before_fields = _relationship_fields(before_item) if before_item is not None else None
             after_fields = _relationship_fields(after_item) if after_item is not None else None
-            change_type = _change_type(before_fields, after_fields, target_partial=target_partial)
+            change_type = _change_type(
+                before_fields,
+                after_fields,
+                baseline_uncertain=baseline_uncertain,
+                target_uncertain=target_uncertain,
+            )
             if change_type == "unchanged":
                 continue
             logical_key = f"{base_key}|occurrence:{index + 1}"
@@ -357,7 +405,8 @@ def _cycle_deltas(
     baseline: ComparisonSnapshotEvidence,
     target: ComparisonSnapshotEvidence,
     *,
-    target_partial: bool,
+    baseline_uncertain: bool,
+    target_uncertain: bool,
 ) -> tuple[CycleDelta, ...]:
     before_nodes = {item.node_id: item for item in baseline.graph_nodes}
     after_nodes = {item.node_id: item for item in target.graph_nodes}
@@ -373,9 +422,9 @@ def _cycle_deltas(
         relationship_type, member_text = key.split("|", 1)
         members = tuple(member_text.split("\x1f")) if member_text else ()
         if key not in before:
-            change_type = "added"
+            change_type = "not-observed-in-baseline" if baseline_uncertain else "added"
         elif key not in after:
-            change_type = "not-observed" if target_partial else "removed"
+            change_type = "not-observed-in-target" if target_uncertain else "removed"
         else:
             continue
         result.append(
@@ -397,7 +446,8 @@ def _metric_deltas(
     baseline: ComparisonSnapshotEvidence,
     target: ComparisonSnapshotEvidence,
     *,
-    target_partial: bool,
+    baseline_uncertain: bool,
+    target_uncertain: bool,
 ) -> tuple[MetricDelta, ...]:
     before_nodes = {item.node_id: item for item in baseline.graph_nodes}
     after_nodes = {item.node_id: item for item in target.graph_nodes}
@@ -410,9 +460,9 @@ def _metric_deltas(
         if old is not None and new is not None and old.numeric_value == new.numeric_value:
             continue
         if old is None:
-            change_type = "added"
+            change_type = "not-observed-in-baseline" if baseline_uncertain else "added"
         elif new is None:
-            change_type = "not-observed" if target_partial else "removed"
+            change_type = "not-observed-in-target" if target_uncertain else "removed"
         else:
             change_type = "changed"
         baseline_value = old.numeric_value if old is not None else None
@@ -464,7 +514,8 @@ def _finding_deltas(
     baseline_items: tuple[FindingEvidenceRecord, ...],
     target_items: tuple[FindingEvidenceRecord, ...],
     *,
-    target_partial: bool,
+    baseline_uncertain: bool,
+    target_uncertain: bool,
 ) -> tuple[FindingOccurrenceDelta, ...]:
     baseline = {_finding_key(item): item for item in baseline_items}
     target = {_finding_key(item): item for item in target_items}
@@ -473,11 +524,19 @@ def _finding_deltas(
         old = baseline.get(key)
         new = target.get(key)
         if old is None:
-            change_type = "added"
-            occurrence = "new-in-target"
+            if baseline_uncertain:
+                change_type = "not-observed-in-baseline"
+                occurrence = "not-observed-in-baseline"
+            else:
+                change_type = "added"
+                occurrence = "new-in-target"
         elif new is None:
-            change_type = "not-observed" if target_partial else "removed"
-            occurrence = "not-observed-in-partial-target" if target_partial else "absent-from-target"
+            if target_uncertain:
+                change_type = "not-observed-in-target"
+                occurrence = "not-observed-in-target"
+            else:
+                change_type = "removed"
+                occurrence = "absent-from-target"
         elif old.rule_version != new.rule_version:
             change_type = "changed"
             occurrence = "rule-version-changed"
@@ -620,13 +679,29 @@ def _change_type(
     baseline: object | None,
     target: object | None,
     *,
-    target_partial: bool,
+    baseline_uncertain: bool,
+    target_uncertain: bool,
 ) -> str:
     if baseline is None:
-        return "added"
+        return "not-observed-in-baseline" if baseline_uncertain else "added"
     if target is None:
-        return "not-observed" if target_partial else "removed"
+        return "not-observed-in-target" if target_uncertain else "removed"
     return "unchanged" if baseline == target else "changed"
+
+
+def _absence_uncertainty(
+    compatibility: ComparisonSectionCompatibility,
+) -> dict[str, bool]:
+    reasons = set(compatibility.reason_codes)
+    version_mismatch = "version-mismatch" in reasons
+    return {
+        "baseline_uncertain": version_mismatch
+        or "baseline-truncated" in reasons
+        or "baseline-parse-gaps" in reasons,
+        "target_uncertain": version_mismatch
+        or "target-truncated" in reasons
+        or "target-parse-gaps" in reasons,
+    }
 
 
 def _delta_id(
@@ -658,6 +733,7 @@ def _numeric_version(value: str) -> int:
 
 __all__ = [
     "COMPARISON_SECTIONS",
+    "COMPARISON_CHANGE_TYPES",
     "ComparisonResult",
     "compare_snapshots",
     "comparison_delta_payload",

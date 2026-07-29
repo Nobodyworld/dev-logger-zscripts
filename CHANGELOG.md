@@ -39,6 +39,13 @@
 
 ### Fixed
 
+- Repository comparison now preserves immutable branch/worktree observations
+  in evidence-schema-v4 snapshot identity, migrates older observations as
+  unknown, models partial absence on both comparison sides, rejects stale
+  handoff selections, digests exact format-v2 rendered bytes, verifies saved
+  output integrity, and preserves validated saved previews across pair
+  rehydration. SQLite schema advances to 6; analyzer/rule-set remain 3/4.
+
 - Finding lifecycle reconciliation now skips absence-based resolution for
   truncated scans and parse gaps, orders overlapping analyses by
   repository-local generation, applies current-repository lifecycle semantics

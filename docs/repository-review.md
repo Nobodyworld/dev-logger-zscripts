@@ -203,7 +203,7 @@ per-view exports remain later roadmap phases.
 
 ## Determinism and persistence
 
-Analyzer version `3`, evidence schema version `3`, and rule-set version `4`
+Analyzer version `3`, evidence schema version `4`, and rule-set version `4`
 produce content-based repository, file, module, symbol, diagnostic, graph-node,
 relationship, cycle, metric, finding, and snapshot identifiers. Analyzer
 version 3 requires a proven
@@ -229,14 +229,16 @@ evidence rows.
 Database schema v3 adds immutable metric/finding occurrences and
 repository-scoped finding lifecycle, review, and append-only event records.
 Database schema v4 adds repository-local analysis generations and reconciliation
-status to mutable storage. Database schema v5 records snapshot-observed Git/
-worktree state and immutable local saved handoffs without changing canonical
-snapshot identity. Migration from v1–v4 is versioned, transactional,
-idempotent, and does not reset existing local data. Older snapshots retain
-their identity; unsupported finding routes return explicit empty data instead
-of reinterpreting old evidence. Analyzer version `3`, evidence schema version
-`3`, and rule-set version `4` are unchanged because generation and
-reconciliation authority are excluded from canonical evidence.
+status to mutable storage. Database schema v5 introduced snapshot-observed Git/
+worktree columns and immutable local saved handoffs. Database schema v6 makes
+branch, Git SHA, dirty, staged, and untracked state part of
+evidence-schema-v4 snapshot identity. New observations are marked known.
+Migrated v1–v5 snapshots remain selectable but report their historical
+observation as `unknown`; migration never copies mutable current repository
+state into historical snapshots. Migration is versioned, transactional,
+idempotent, and does not reset existing local data. Analyzer version `3` and
+rule-set version `4` remain unchanged because static analysis and finding rules
+did not change.
 
 Finding IDs hash the repository ID, rule ID/version, subject type, and sorted
 stable subject keys. They deliberately exclude snapshot IDs, metric values,
@@ -252,8 +254,15 @@ still persist immutable snapshots but report
 is a human review decision and is distinct from automatic `resolved` evidence state.
 Canonical snapshot evidence includes metrics and finding occurrences but never
 review state, notes, handoff selections, objectives, or timestamps. Comparison
-format `1` and handoff format `1` are separately versioned; analyzer/evidence/
-rule-set versions remain `3`/`3`/`4`.
+format `2` distinguishes `not-observed-in-baseline` from
+`not-observed-in-target` for truncated, parse-gap, or version-incompatible
+absence. Complete evidence still yields `added` and `removed`, and unavailable
+sections yield no items. Handoff format `2` validates every selected delta,
+cycle, finding, and explicit note against the exact snapshot pair. Its digest
+covers the format version, exact final Markdown bytes, and exact normalized
+JSON bytes after all truncation and warning decisions. Saved output is verified
+before persistence and again before reopen or download. Analyzer/evidence/
+rule-set versions are `3`/`4`/`4`.
 
 The Relationships workspace discovers focus nodes through a bounded server-side
 query rather than only the summary sample. Search is case-insensitive over

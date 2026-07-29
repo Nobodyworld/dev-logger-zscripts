@@ -46,9 +46,9 @@ flowchart LR
   `relationship_analysis`, and `finding_analysis` treat the selected repository as untrusted input,
   never import it, and resolve only deterministic static evidence.
 - `zscripts.infrastructure.snapshot_store` persists completed evidence
-  atomically outside the repository. Database schema v5 migrates v1–v4 data,
-  records snapshot-observed Git state, and stores local immutable handoffs
-  without reinterpreting snapshot identities.
+  atomically outside the repository. Database schema v6 records known immutable
+  observation state in evidence-schema-v4 identities, preserves migrated v1–v5
+  observations as unknown, and stores integrity-checked local handoffs.
 - `zscripts.application.repository_review` is the single orchestration/query
   surface used by CLI and API.
 - `zscripts.interfaces.workspace_api` is a same-origin, localhost-only transport.
@@ -73,10 +73,12 @@ their immutable snapshots.
 
 `comparison_analysis` transiently joins two exact same-repository snapshots by
 language-neutral logical keys. It does not persist duplicate comparison
-results or regenerate old evidence. `handoff_rendering` is a pure deterministic
-renderer over an explicit selection and versioned budget; only the final local
-record is persisted. Mutable finding lifecycle/review data is joined separately
-and never presented as historical snapshot state.
+results or regenerate old evidence. Comparison format 2 models partial absence
+independently on the baseline and target sides. `handoff_rendering` is a pure
+deterministic renderer over an exact, validated selection and versioned budget;
+format 2 hashes the final rendered Markdown and normalized JSON bytes, and only
+those verified strings are persisted. Mutable finding lifecycle/review data is
+joined separately and never presented as historical snapshot state.
 
 Generated frontend assets are copied into package data during the quality/build
 flow. The existing zipapp remains a lightweight CLI artifact; the workspace is

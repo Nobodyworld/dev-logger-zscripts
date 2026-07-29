@@ -124,11 +124,18 @@ tokens are allowlisted; searches are at most 200 characters and pages at most
 100 records. Both snapshots must exist in the same repository:
 cross-repository requests return `400`, missing snapshots return `404`, and
 validation errors remain generic. Responses carry per-section compatibility/
-reason codes and use repository-relative evidence only.
+reason codes and use repository-relative evidence only. Partial absence is
+side-specific: `not-observed-in-baseline` and `not-observed-in-target` never
+masquerade as confirmed additions or removals. Migrated snapshots expose
+`observed_state_known: false` and null observation fields.
 
 Handoff request arrays and the objective are bounded by typed models. Preview
 does not create a comparison or saved record. Saved records remain local and
 immutable. Markdown downloads use `text/markdown`; JSON downloads use
 `application/json`; filenames are server-selected and cannot contain request
-paths or header control characters. Notes are absent unless their finding IDs
-are included in the explicit note-selection field.
+paths or header control characters. Every selected ID is validated against the
+exact comparison and repository; unknown, stale, disabled-section, mismatched,
+or cross-repository selections return `400`. Notes are absent unless their
+finding IDs are selected and included in the explicit note-selection field.
+Format-v2 digests cover the exact final Markdown and normalized JSON strings;
+corrupted saved output returns a controlled integrity error instead of content.

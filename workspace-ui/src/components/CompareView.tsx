@@ -222,7 +222,8 @@ export function CompareView({ repositoryId, targetSnapshotId }: CompareViewProps
                         <option value="">All changes</option>
                         <option value="added">Added</option>
                         <option value="removed">Removed</option>
-                        <option value="not-observed">Not observed</option>
+                        <option value="not-observed-in-baseline">Not observed in baseline</option>
+                        <option value="not-observed-in-target">Not observed in target</option>
                         <option value="changed">Changed</option>
                     </select>
                 </label>
@@ -336,7 +337,11 @@ function SnapshotSelect({
                 {snapshots.map((snapshot) => (
                     <option key={snapshot.snapshot_id} value={snapshot.snapshot_id}>
                         {snapshot.completed_at ?? "Incomplete time"} ·{" "}
-                        {snapshot.git_sha?.slice(0, 8) ?? "no Git SHA"}
+                        {snapshot.observed_state_known
+                            ? `${snapshot.branch ?? "detached"} · ${
+                                  snapshot.git_sha?.slice(0, 8) ?? "no Git SHA"
+                              }`
+                            : "observation unknown"}
                     </option>
                 ))}
             </select>
@@ -352,6 +357,23 @@ function SnapshotFacts({
     snapshot: ComparisonSnapshot | undefined;
 }) {
     if (!snapshot) return <div className="snapshot-facts">{label}: unavailable</div>;
+    if (!snapshot.observed_state_known) {
+        return (
+            <div className="snapshot-facts">
+                <strong>{label}</strong>
+                <span>Repository observation: unknown</span>
+                <span>{snapshot.completed_at ?? "scan completion unavailable"}</span>
+                <span>
+                    analyzer {snapshot.analyzer_version} · schema {snapshot.schema_version} · rules{" "}
+                    {snapshot.rule_set_version}
+                </span>
+                <span>
+                    {snapshot.truncated ? "truncated" : "complete"} · {snapshot.parse_gap_count}{" "}
+                    parse gaps
+                </span>
+            </div>
+        );
+    }
     return (
         <div className="snapshot-facts">
             <strong>{label}</strong>

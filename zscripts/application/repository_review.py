@@ -214,9 +214,12 @@ class RepositoryReviewService:
             if cancellation():
                 raise AnalysisCancelled("Repository analysis was cancelled.")
             report("storage", len(analysis.files), len(analysis.files), "")
+            diagnostics_by_id = {
+                item.diagnostic_id: item for item in (*discovery.diagnostics, *analysis.diagnostics)
+            }
             diagnostics = tuple(
                 sorted(
-                    (*discovery.diagnostics, *analysis.diagnostics),
+                    diagnostics_by_id.values(),
                     key=lambda item: item.diagnostic_id,
                 )
             )

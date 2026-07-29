@@ -39,5 +39,6 @@ Zscripts is a structured log collection, normalization, redaction, diagnostics, 
 - [Legacy Helper Consumer and Ownership Review](operations/LEGACY_HELPER_CONSUMER_REVIEW.md)
 - [Legacy Helper Public-Beta Deprecation Notice](operations/LEGACY_HELPER_DEPRECATION_NOTICE.md)
 - [Repository Review Workspace Roadmap](product/REPOSITORY_INTELLIGENCE_ROADMAP.md)
+- [Repository Review Dogfood Report](product/REPOSITORY_REVIEW_DOGFOOD_REPORT.md)
 - [Future Roadmap](future_roadmap.md)
 - [Final Refinement Report](final_report.md)

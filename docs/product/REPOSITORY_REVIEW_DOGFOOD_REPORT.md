@@ -25,10 +25,29 @@ architecture redesign.
 
 ## Evaluated Build
 
-The evaluation used the prepared dogfood branch derived from the exact
-push-tested main build. The exact commit identifier is intentionally omitted
-from this committed report under the sanitization policy; it remains in the
-local and hosted validation records.
+The public Zscripts commit is reproducibility evidence and is recorded
+explicitly. Measurements in this report were collected against exact build
+`678356bf4e23730886abaffd84186d0c5d3627f7`. Private or anonymized evaluated
+repository SHAs remain excluded. The correction commit that adds this
+provenance and the finding-sample audit changes report/audit material, not the
+measured product behavior; it must not be interpreted as the measured build
+without a complete evaluation rerun.
+
+| Build or contract | Evaluated value |
+| --- | --- |
+| Pre-work main SHA | `03fe7f7dad3b0f36c5bc6ea000541cc58e8e6d08` |
+| Exact measured dogfood build SHA | `678356bf4e23730886abaffd84186d0c5d3627f7` |
+| Analyzer version | `3` |
+| Evidence schema version | `4` |
+| Rule-set version | `4` |
+| SQLite schema version | `6` |
+| Comparison format version | `2` |
+| Handoff format version | `2` |
+| Evaluation-harness output format | `1` |
+| Hosted run | `30485231630` |
+| Quality job | `90689123447` |
+| Artifact | `8737415845` |
+| Artifact digest | `sha256:a1173f96e1fdd158b02438baeafa3e4d02651a2df4413a753d622bcfbe1283ba` |
 
 | Environment fact | Evaluated value |
 | --- | --- |
@@ -105,9 +124,10 @@ The committed evidence contains:
 - public fixture descriptions.
 
 It contains no absolute path, username, organization name, private repository
-name, source excerpt, Git SHA, secret, screenshot, or raw generated report.
-Machine-readable raw output and browser screenshots remained in an ignored
-temporary directory outside Git history.
+name, source excerpt, private or anonymized repository SHA, secret, screenshot,
+or raw generated report. The exact public Zscripts SHA above is intentionally
+included as reproducibility evidence. Machine-readable raw output and browser
+screenshots remained in an ignored temporary directory outside Git history.
 
 The evaluator independently rejects output or SQLite locations inside any
 analyzed repository. It emits neither source text nor absolute subject paths,
@@ -258,8 +278,22 @@ not pretend to answer them.
 
 Counts are per subject observation and intentionally not deduplicated across a
 fixture embedded in Zscripts and the same fixture evaluated standalone. The
-bounded manual sample used public Zscripts evidence, at most five items per
-family. Categories sum to the reviewed sample; they are directional product
+bounded manual sample used the `zscripts-public` snapshot
+`d283a1622b361e0ff44844550525b05da2e04683524dd3bb8d017e2b116e14d6`
+from exact build `678356bf4e23730886abaffd84186d0c5d3627f7`, under the scan
+limits recorded in the evaluation output.
+
+Selection is deterministic: sort all stored findings by `(family, finding_id)`,
+then select the first five per family, or every finding when fewer than five
+exist. The sanitized
+[finding-sample manifest](REPOSITORY_REVIEW_DOGFOOD_FINDING_SAMPLE.json)
+records all 50 selected entries using stable public logical finding keys and
+their selection rank from the finding-ID ordering, plus rule and subject types,
+manual classifications, and bounded generalized rationale codes. The SHA
+fields use fixed-size components that concatenate to the exact public
+identifiers, avoiding false secret-scanner positives without an allowlist. The
+manifest contains neither paths nor source excerpts. Categories below sum
+exactly to that manifest. The judgments are directional manual product
 evidence, not statistical estimates.
 
 | Family | Observed | Reviewed | Useful/actionable | Valid, low priority | Intentional design | False positive | Unsupported/ambiguous | Assessment |
@@ -271,7 +305,7 @@ evidence, not statistical estimates.
 | Complexity | 13 | 5 | 4 | 1 | 0 | 0 | 0 | Useful review starting point |
 | Nesting | 7 | 5 | 3 | 1 | 1 | 0 | 0 | Useful but should not dominate |
 | Parameters | 14 | 5 | 1 | 3 | 1 | 0 | 0 | Mostly context-dependent |
-| Coupling | 29 | 5 | 4 | 1 | 0 | 0 | Useful with Relationships evidence |
+| Coupling | 29 | 5 | 4 | 1 | 0 | 0 | 0 | Useful with Relationships evidence |
 | Inheritance depth | 2 | 1 | 0 | 0 | 1 | 0 | 0 | Evaluated item was an intentional fixture |
 | Documentation | 2,351 | 5 | 0 | 2 | 3 | 0 | 0 | Too noisy for the default queue |
 | Test-evidence candidate | 4 | 4 | 0 | 0 | 0 | 0 | 4 | Candidate language is necessary |
@@ -371,9 +405,17 @@ repeated truncated scans reproducibly without it.
 
 ### Proposed follow-up work
 
-The following proposals should be reviewed before GitHub issues are created.
+The proposals were reviewed and are now tracked under the focused-polish
+umbrella #81. The approved sequence is:
 
-#### 1. Enforce the exact final Handoff JSON byte budget
+1. [#100](https://github.com/Nobodyworld/dev-logger-zscripts/issues/100);
+2. [#101](https://github.com/Nobodyworld/dev-logger-zscripts/issues/101) and
+   [#102](https://github.com/Nobodyworld/dev-logger-zscripts/issues/102) in
+   parallel;
+3. [#103](https://github.com/Nobodyworld/dev-logger-zscripts/issues/103); and
+4. [#104](https://github.com/Nobodyworld/dev-logger-zscripts/issues/104).
+
+#### 1. [#100 — Enforce the exact final Handoff JSON byte budget](https://github.com/Nobodyworld/dev-logger-zscripts/issues/100)
 
 - **Priority:** P1
 - **View:** Handoff
@@ -385,7 +427,7 @@ The following proposals should be reviewed before GitHub issues are created.
   cannot fit; digest, saved record, and download bytes cover that exact output.
 - **Sequence:** first.
 
-#### 2. Add a default high-signal Findings queue
+#### 2. [#101 — Add a high-signal default Findings queue](https://github.com/Nobodyworld/dev-logger-zscripts/issues/101)
 
 - **Priority:** P1
 - **View:** Findings
@@ -397,7 +439,7 @@ The following proposals should be reviewed before GitHub issues are created.
   one action away with preserved counts; no rule or lifecycle semantics change.
 - **Sequence:** second.
 
-#### 3. Make partial evidence a persistent page-level state
+#### 3. [#102 — Show persistent partial-evidence status across repository views](https://github.com/Nobodyworld/dev-logger-zscripts/issues/102)
 
 - **Priority:** P1
 - **Views:** Overview, Symbols, Relationships, Compare, Handoff
@@ -408,7 +450,7 @@ The following proposals should be reviewed before GitHub issues are created.
   not the only signal.
 - **Sequence:** second, parallel with Findings triage.
 
-#### 4. Make same-minute snapshots distinguishable
+#### 4. [#103 — Make repository snapshots distinguishable in selectors](https://github.com/Nobodyworld/dev-logger-zscripts/issues/103)
 
 - **Priority:** P1
 - **Views:** Overview, Compare, Handoff
@@ -419,7 +461,7 @@ The following proposals should be reviewed before GitHub issues are created.
   accessible names contain the same distinction.
 - **Sequence:** third.
 
-#### 5. Confirm a resolved Git root before scanning a nested path
+#### 5. [#104 — Confirm the resolved Git root before scanning a nested path](https://github.com/Nobodyworld/dev-logger-zscripts/issues/104)
 
 - **Priority:** P2
 - **View:** Repository entry
@@ -463,36 +505,38 @@ Polish should reinforce that sequence.
 
 ## Recommendation for #81
 
-Proceed now, narrowly. Prioritize exact Handoff budgets, a high-signal Findings
-default, persistent partial-state warnings, distinguishable snapshot labels,
-and resolved-root confirmation. Preserve the existing architecture and
-information design.
+Use #81 as the focused-polish umbrella for #100–#104, in the approved sequence
+above. Preserve the existing architecture and information design. Rerun the
+dogfood harness after those issues close before reconsidering deferred product
+expansion.
 
 ## Recommendation for #94
 
-Defer. Advanced heuristics and architecture classification would add more
-candidate volume before the product has solved evidence ranking. Revisit only
-after #81 proves users can reliably separate high-signal facts from
-conservative candidates.
+Defer at medium priority. Advanced heuristics and architecture classification
+would add more candidate volume before the product has solved evidence
+ranking. Reconsider after #100–#104 close and the dogfood harness confirms that
+users can reliably separate high-signal facts from conservative candidates.
 
 ## Recommendation for #96
 
 Defer generic exports. Markdown and normalized JSON were deterministic,
 bounded, saved, reopened, copied, and downloaded. Add a format only when a
-specific downstream consumer cannot use those contracts.
+specific downstream consumer cannot use those contracts. Reconsider after
+#100–#104 close and the dogfood harness is rerun.
 
 ## Recommendation for Desktop Packaging
 
 Defer. The packaged localhost workspace passed layout, keyboard, CSP,
 no-outbound, and console checks. Desktop packaging would not address the
-identified product bottlenecks.
+identified product bottlenecks. Reconsider after #100–#104 close and the
+dogfood harness is rerun.
 
 ## Recommendation for #98 Next Language
 
 Defer until after focused Python polish. The evaluator and report structure
 should become the acceptance template for any future language, including
 determinism, partial evidence, unresolved ratios, finding noise, and bounded
-rendered QA.
+rendered QA. Reconsider after #100–#104 close and the dogfood harness is rerun.
 
 ## Exit Decision
 

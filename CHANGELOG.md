@@ -4,6 +4,9 @@
 
 ### Added
 
+- A sanitized, reproducible Repository Review dogfood harness and evidence-backed
+  product report covering the complete Scan, Explore, Review, Compare, and
+  Handoff workflow with explicit recommendations for focused polish.
 - Deterministic same-repository snapshot comparison across files, symbols,
   relationships, cycles, metrics, and finding occurrences, with explicit
   compatibility/partial evidence and a bounded Compare workspace.
@@ -39,6 +42,9 @@
 
 ### Fixed
 
+- Repository Review now deduplicates identical content-derived diagnostics
+  before snapshot persistence, allowing repeated file-count-limited scans to
+  reuse deterministic evidence without a SQLite key collision.
 - Repository comparison now preserves immutable branch/worktree observations
   in evidence-schema-v4 snapshot identity, migrates older observations as
   unknown, models partial absence on both comparison sides, rejects stale

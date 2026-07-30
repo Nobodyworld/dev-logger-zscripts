@@ -138,4 +138,10 @@ exact comparison and repository; unknown, stale, disabled-section, mismatched,
 or cross-repository selections return `400`. Notes are absent unless their
 finding IDs are selected and included in the explicit note-selection field.
 Format-v2 digests cover the exact final Markdown and normalized JSON strings;
-corrupted saved output returns a controlled integrity error instead of content.
+the default JSON limit is an exact 500,000-byte UTF-8 limit. Optional selected
+evidence may be omitted deterministically, and a required metadata envelope
+that cannot fit returns `400` with
+`The Handoff JSON budget is too small for required metadata.` Preview and save
+apply the same contract. Corrupted or over-budget saved output returns a
+controlled integrity error instead of content, and downloads return the exact
+digested Markdown or JSON bytes.

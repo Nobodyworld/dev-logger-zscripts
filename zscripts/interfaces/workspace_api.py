@@ -27,6 +27,10 @@ from zscripts.domain.repository_comparison import (
     HandoffSelection,
 )
 from zscripts.domain.repository_review import AnalysisState
+from zscripts.infrastructure.handoff_rendering import (
+    HANDOFF_BUDGET_ERROR_MESSAGE,
+    HandoffBudgetError,
+)
 from zscripts.infrastructure.snapshot_store import (
     ReviewConflictError,
     SavedHandoffIntegrityError,
@@ -1041,6 +1045,8 @@ def create_workspace_app(
             return review_service.preview_handoff(_handoff_selection(request))
         except SnapshotNotFoundError as exc:
             raise HTTPException(status_code=404, detail="Snapshot was not found.") from exc
+        except HandoffBudgetError as exc:
+            raise HTTPException(status_code=400, detail=HANDOFF_BUDGET_ERROR_MESSAGE) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="Handoff selection is invalid.") from exc
 
@@ -1050,6 +1056,8 @@ def create_workspace_app(
             return review_service.save_handoff(_handoff_selection(request))
         except SnapshotNotFoundError as exc:
             raise HTTPException(status_code=404, detail="Snapshot was not found.") from exc
+        except HandoffBudgetError as exc:
+            raise HTTPException(status_code=400, detail=HANDOFF_BUDGET_ERROR_MESSAGE) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="Handoff selection is invalid.") from exc
 

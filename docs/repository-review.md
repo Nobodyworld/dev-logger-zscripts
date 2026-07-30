@@ -121,13 +121,17 @@ review status are labeled separately from immutable snapshot occurrence.
 
 The Handoff view renders selected comparison deltas, findings, analysis gaps,
 and a plain-text objective as deterministic Markdown and normalized JSON.
-Version-1 budgets allow 8 sections, 50 items per section, 50 findings, 20
+Format-2 budgets allow 8 sections, 50 items per section, 50 findings, 20
 explicit notes of at most 1,000 characters, a 4,000-character objective,
-100,000 Markdown characters, and 500,000 JSON bytes. Deterministic truncation
-always reports omitted counts. Review notes are excluded unless the user
-separately enables the exact finding. Copy uses the clipboard only after an
-explicit click; downloads are same-origin Markdown or JSON blobs with fixed
-media types. Saved handoffs are immutable local records and can be reopened.
+100,000 Markdown characters, and exactly 500,000 UTF-8 JSON bytes.
+Optional selected evidence is omitted deterministically when needed, with
+warnings and omitted counts included in the final byte calculation. If the
+required metadata envelope cannot fit, preview and save return the bounded
+error `The Handoff JSON budget is too small for required metadata.` Review
+notes are excluded unless the user separately enables the exact finding. Copy
+uses the clipboard only after an explicit click; downloads are same-origin
+Markdown or JSON blobs with fixed media types. Saved handoffs are immutable
+local records, preserve the exact digested strings, and can be reopened.
 
 Finding families cover dependency and inheritance cycles, exact duplicate-name
 candidates, size, complexity, nesting, parameter count, coupling, inheritance

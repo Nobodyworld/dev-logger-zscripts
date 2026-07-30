@@ -218,6 +218,62 @@ describe("HandoffView", () => {
         expect(screen.getByText("# Repository Handoff", { exact: false })).toBeTruthy();
     });
 
+    it("announces a bounded preview error, clears stale output, preserves saved records, and retries", async () => {
+        const safeMessage = "The Handoff JSON budget is too small for required metadata.";
+        const savedRecord = savedHandoff(defaultSelection());
+        let previewCount = 0;
+        const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+        vi.stubGlobal(
+            "fetch",
+            handoffFetch((input) => {
+                const url = String(input);
+                if (url.startsWith("/api/handoffs?")) {
+                    return Promise.resolve(response({ items: [savedRecord] }));
+                }
+                if (!url.endsWith("/api/handoffs/preview")) return null;
+                previewCount += 1;
+                if (previewCount === 2) {
+                    return Promise.resolve(response({ detail: safeMessage }, 400));
+                }
+                return Promise.resolve(
+                    response({
+                        ...preview,
+                        markdown:
+                            previewCount === 1
+                                ? "# Repository Handoff\n\nStale preview"
+                                : "# Repository Handoff\n\nRetry succeeded",
+                    }),
+                );
+            }),
+        );
+        const user = userEvent.setup();
+        render(
+            <HandoffView
+                repositoryId={repository.repository_id}
+                targetSnapshotId={snapshot.snapshot_id}
+            />,
+        );
+
+        const previewButton = await screen.findByRole("button", { name: "Preview handoff" });
+        expect(screen.getByRole("button", { name: /Review this change/ })).toBeTruthy();
+        await user.click(previewButton);
+        expect(await screen.findByText("Stale preview", { exact: false })).toBeTruthy();
+
+        previewButton.focus();
+        await user.keyboard("{Enter}");
+        const alert = await screen.findByRole("alert");
+        expect(alert.textContent).toBe(safeMessage);
+        expect(screen.queryByText("Stale preview", { exact: false })).toBeNull();
+        expect(screen.queryByRole("button", { name: "Copy Markdown" })).toBeNull();
+        expect(screen.getByRole("button", { name: /Review this change/ })).toBeTruthy();
+
+        await user.type(screen.getByLabelText(/Task objective/), " retry");
+        await user.click(previewButton);
+        expect(await screen.findByText("Retry succeeded", { exact: false })).toBeTruthy();
+        expect(screen.queryByRole("alert")).toBeNull();
+        expect(consoleError).not.toHaveBeenCalled();
+    });
+
     it("ignores a stale preview after a newer objective succeeds", async () => {
         let resolveFirst!: (value: Response) => void;
         const firstPreview = new Promise<Response>((resolve) => {

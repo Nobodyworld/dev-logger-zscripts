@@ -33,6 +33,12 @@ HANDOFF_SECTIONS = (
     "task-objective",
 )
 
+HANDOFF_BUDGET_ERROR_MESSAGE = "The Handoff JSON budget is too small for required metadata."
+
+
+class HandoffBudgetError(ValueError):
+    """Raised when required Handoff metadata cannot fit the JSON byte budget."""
+
 
 def render_handoff(
     *,
@@ -178,27 +184,34 @@ def render_handoff(
         "truncated": truncated,
         "omitted_counts": dict(sorted(omitted.items())),
     }
-    normalized_json = _pretty_json(payload)
-    if len(normalized_json.encode("utf-8")) > budget.maximum_json_bytes:
-        omitted["json-budget-items"] = sum(len(items) for items in changes.values()) + len(finding_payloads)
-        warnings.append("Selected evidence exceeded the JSON byte budget and was omitted.")
-        truncated = True
-        payload["selected_changes"] = {}
-        payload["findings"] = []
-        payload["analysis_gaps"] = warnings
-        payload["truncated"] = True
-        payload["omitted_counts"] = dict(sorted(omitted.items()))
-        normalized_json = _pretty_json(payload)
     markdown = _render_markdown(payload)
     if len(markdown) > budget.maximum_markdown_characters:
         warnings.append("Markdown output reached the character budget.")
         omitted["markdown-characters"] = 1
-        truncated = True
         payload["analysis_gaps"] = warnings
         payload["truncated"] = True
         payload["omitted_counts"] = dict(sorted(omitted.items()))
-        normalized_json = _pretty_json(payload)
+    normalized_json = _json_within_budget(
+        payload=payload,
+        warnings=warnings,
+        omitted=omitted,
+        maximum_json_bytes=budget.maximum_json_bytes,
+    )
+    markdown = _render_markdown(payload)
+    if len(markdown) > budget.maximum_markdown_characters and "markdown-characters" not in omitted:
+        warnings.append("Markdown output reached the character budget.")
+        omitted["markdown-characters"] = 1
+        payload["analysis_gaps"] = warnings
+        payload["truncated"] = True
+        payload["omitted_counts"] = dict(sorted(omitted.items()))
+        normalized_json = _json_within_budget(
+            payload=payload,
+            warnings=warnings,
+            omitted=omitted,
+            maximum_json_bytes=budget.maximum_json_bytes,
+        )
         markdown = _render_markdown(payload)
+    if len(markdown) > budget.maximum_markdown_characters:
         trailer = "\n\n> TRUNCATED: Markdown character budget reached.\n"
         if budget.maximum_markdown_characters <= len(trailer):
             markdown = trailer[: budget.maximum_markdown_characters]
@@ -214,7 +227,7 @@ def render_handoff(
         markdown=markdown,
         normalized_json=normalized_json,
         rendered_digest=digest,
-        truncated=truncated,
+        truncated=bool(payload["truncated"]),
         omitted_counts=tuple(sorted(omitted.items())),
         warnings=tuple(warnings),
         markdown_character_count=len(markdown),
@@ -371,6 +384,35 @@ def _pretty_json(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
 
 
+def _json_within_budget(
+    *,
+    payload: dict[str, Any],
+    warnings: list[str],
+    omitted: dict[str, int],
+    maximum_json_bytes: int,
+) -> str:
+    normalized_json = _pretty_json(payload)
+    if len(normalized_json.encode("utf-8")) <= maximum_json_bytes:
+        return normalized_json
+
+    optional_item_count = sum(len(items) for items in payload["selected_changes"].values()) + len(
+        payload["findings"]
+    )
+    if optional_item_count:
+        omitted["json-budget-items"] = optional_item_count
+        warnings.append("Selected evidence exceeded the JSON byte budget and was omitted.")
+        payload["selected_changes"] = {}
+        payload["findings"] = []
+        payload["analysis_gaps"] = warnings
+        payload["truncated"] = True
+        payload["omitted_counts"] = dict(sorted(omitted.items()))
+        normalized_json = _pretty_json(payload)
+
+    if len(normalized_json.encode("utf-8")) > maximum_json_bytes:
+        raise HandoffBudgetError(HANDOFF_BUDGET_ERROR_MESSAGE)
+    return normalized_json
+
+
 def _md(value: object) -> str:
     text = str(value)
     for token in ("\\", "`", "*", "_", "{", "}", "[", "]", "<", ">", "#", "|"):
@@ -378,4 +420,10 @@ def _md(value: object) -> str:
     return text.replace("\r", " ").replace("\n", " ")
 
 
-__all__ = ["HANDOFF_SECTIONS", "render_handoff", "selection_json"]
+__all__ = [
+    "HANDOFF_BUDGET_ERROR_MESSAGE",
+    "HANDOFF_SECTIONS",
+    "HandoffBudgetError",
+    "render_handoff",
+    "selection_json",
+]

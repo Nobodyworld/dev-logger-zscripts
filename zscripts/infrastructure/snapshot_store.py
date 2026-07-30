@@ -2237,6 +2237,20 @@ def _saved_handoff_from_row(row: sqlite3.Row) -> SavedHandoffRecord:
 def _validate_saved_handoff_integrity(record: SavedHandoffRecord) -> None:
     if record.format_version != HANDOFF_FORMAT_VERSION:
         raise SavedHandoffIntegrityError("Saved handoff format is unsupported.")
+    try:
+        selection_payload = json.loads(record.selection_json)
+        maximum_json_bytes = selection_payload["budget_policy"]["maximum_json_bytes"]
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise SavedHandoffIntegrityError("Saved handoff selection is invalid.") from exc
+    if (
+        isinstance(maximum_json_bytes, bool)
+        or not isinstance(maximum_json_bytes, int)
+        or maximum_json_bytes < 1
+        or maximum_json_bytes > 500_000
+    ):
+        raise SavedHandoffIntegrityError("Saved handoff selection is invalid.")
+    if len(record.rendered_json.encode("utf-8")) > maximum_json_bytes:
+        raise SavedHandoffIntegrityError("Saved handoff JSON exceeds its rendered budget.")
     expected = rendered_output_digest(
         record.format_version,
         record.rendered_markdown,

@@ -154,10 +154,13 @@ zscripts experimental analyze PATH \
   are allowlisted and search text is limited to 200 characters.
 - Handoff format `2` fixes budgets at 8 sections, 50 items per section, 50
   findings, 20 explicitly selected notes, 1,000 characters per note, 4,000
-  objective characters, 100,000 Markdown characters, and 500,000 JSON bytes.
-  Its digest covers the exact final Markdown and normalized JSON after those
-  budgets are applied. These safety limits are visible but not
-  repository-configurable in this slice.
+  objective characters, 100,000 Markdown characters, and exactly 500,000
+  UTF-8 JSON bytes. Optional evidence is omitted deterministically before a
+  final exact byte check; a required metadata envelope that cannot fit fails
+  with a bounded error. Its digest covers the exact final Markdown and
+  normalized JSON after those budgets are applied. These safety limits are
+  visible but not repository-configurable in this slice. This validation
+  correction does not change Handoff format version `2`.
 
 See [Experimental Repository Review Workspace](repository-review.md) for default
 exclusions, storage, and privacy details.

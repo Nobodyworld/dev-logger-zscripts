@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Enforce the Handoff format-2 JSON limit against the exact final normalized
+  UTF-8 bytes after warnings, omitted counts, and truncation metadata. Optional
+  evidence is removed deterministically; an oversized required envelope fails
+  with a bounded error, and saved-output integrity retains the same format-2
+  digest contract.
+
 ### Added
 
 - A sanitized, reproducible Repository Review dogfood harness and evidence-backed

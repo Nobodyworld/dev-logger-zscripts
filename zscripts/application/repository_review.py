@@ -49,7 +49,9 @@ from zscripts.infrastructure.comparison_analysis import (
 )
 from zscripts.infrastructure.finding_analysis import FindingAnalyzer, finding_rules
 from zscripts.infrastructure.handoff_rendering import (
+    HANDOFF_BUDGET_ERROR_MESSAGE,
     HANDOFF_SECTIONS,
+    HandoffBudgetError,
     render_handoff,
     selection_json,
 )
@@ -480,6 +482,8 @@ class RepositoryReviewService:
 
     def save_handoff(self, selection: HandoffSelection) -> dict[str, object]:
         normalized, rendered = self._render_handoff_selection(selection)
+        if rendered.json_byte_count > normalized.budget_policy.maximum_json_bytes:
+            raise HandoffBudgetError(HANDOFF_BUDGET_ERROR_MESSAGE)
         expected_digest = rendered_output_digest(
             rendered.handoff_format_version,
             rendered.markdown,

@@ -26,12 +26,62 @@ from zscripts.domain.repository_review import (
     RelationshipRecord,
 )
 from zscripts.infrastructure import snapshot_store as snapshot_store_module
-from zscripts.infrastructure.comparison_analysis import compare_snapshots
-from zscripts.infrastructure.handoff_rendering import render_handoff
-from zscripts.infrastructure.snapshot_store import DATABASE_SCHEMA_VERSION, SnapshotStore
+from zscripts.infrastructure.comparison_analysis import ComparisonResult, compare_snapshots
+from zscripts.infrastructure.handoff_rendering import (
+    HANDOFF_BUDGET_ERROR_MESSAGE,
+    HANDOFF_SECTIONS,
+    HandoffBudgetError,
+    render_handoff,
+)
+from zscripts.infrastructure.snapshot_store import (
+    DATABASE_SCHEMA_VERSION,
+    ComparisonSnapshotEvidence,
+    SavedHandoffIntegrityError,
+    SnapshotStore,
+    StoredFindingRecord,
+)
+from zscripts.interfaces import workspace_api as workspace_api_module
 from zscripts.interfaces.workspace_api import create_workspace_app
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "repository_review"
+
+
+def _selected_handoff_budget_fixture(
+    tmp_path: Path,
+) -> tuple[
+    HandoffSelection,
+    ComparisonSnapshotEvidence,
+    ComparisonSnapshotEvidence,
+    ComparisonResult,
+    tuple[StoredFindingRecord, ...],
+]:
+    service, _, baseline_id, target_id = _snapshot_pair(tmp_path)
+    baseline = service.store.comparison_snapshot(baseline_id)
+    target = service.store.comparison_snapshot(target_id)
+    comparison = compare_snapshots(baseline, target)
+    selected_delta_ids = tuple(
+        item.delta_id
+        for section in ("files", "symbols", "relationships", "cycles", "metrics", "findings")
+        for item in comparison.section(section)
+    )
+    selected_finding_ids = tuple(item.finding_id for item in target.findings)
+    selection = HandoffSelection(
+        target_snapshot_id=target_id,
+        baseline_snapshot_id=baseline_id,
+        comparison_id=comparison.summary.identity.comparison_id,
+        enabled_sections=HANDOFF_SECTIONS,
+        selected_delta_ids=selected_delta_ids,
+        selected_finding_ids=selected_finding_ids,
+        selected_cycle_ids=(),
+        include_current_review_status=True,
+        explicit_review_note_finding_ids=(),
+        task_objective="Finalize JSON evidence before classifying Markdown.",
+    )
+    current_findings = service.store.current_findings(
+        target.snapshot.repository_id,
+        selected_finding_ids,
+    )
+    return selection, target, baseline, comparison, current_findings
 
 
 def test_comparison_is_stable_logical_and_partial_aware(tmp_path: Path) -> None:
@@ -168,6 +218,7 @@ def test_handoff_rendering_is_deterministic_bounded_and_notes_are_opt_in(
 
 def test_comparison_and_handoff_api_are_typed_bounded_and_download_safe(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     service, repository, baseline_id, target_id = _snapshot_pair(tmp_path)
     app = create_workspace_app(service=service)
@@ -312,6 +363,25 @@ def test_comparison_and_handoff_api_are_typed_bounded_and_download_safe(
                 "saved": saved.json(),
             }
         )
+        monkeypatch.setattr(
+            workspace_api_module,
+            "DEFAULT_HANDOFF_BUDGET",
+            HandoffBudgetPolicy(maximum_json_bytes=1),
+        )
+        budget_request = {
+            **request,
+            "task_objective": "Résumé Δ 日本語 private-note-marker",
+        }
+        budget_preview = client.post("/api/handoffs/preview", json=budget_request)
+        budget_save = client.post("/api/handoffs", json=budget_request)
+        expected_error = {"detail": HANDOFF_BUDGET_ERROR_MESSAGE}
+        assert budget_preview.status_code == 400
+        assert budget_preview.json() == expected_error
+        assert budget_save.status_code == 400
+        assert budget_save.json() == expected_error
+        assert str(repository.resolve()) not in budget_preview.text
+        assert "private-note-marker" not in budget_preview.text
+        assert len(client.get("/api/handoffs").json()["items"]) == 1
 
 
 def test_schema_v4_migrates_saved_handoffs_non_destructively(tmp_path: Path) -> None:
@@ -622,6 +692,365 @@ def test_handoff_budget_cycle_selection_and_failed_insert_are_safe(
         service.store.save_handoff(saved_record)
     assert service.store.get_snapshot(target_id).snapshot_id == snapshot_id_before
     assert len(service.list_handoffs(repository_id=target.snapshot.repository_id)["items"]) == 1
+
+
+def test_handoff_json_budget_is_exact_utf8_and_deterministic(tmp_path: Path) -> None:
+    service, _, baseline_id, target_id = _snapshot_pair(tmp_path)
+    baseline = service.store.comparison_snapshot(baseline_id)
+    target = service.store.comparison_snapshot(target_id)
+    comparison = compare_snapshots(baseline, target)
+    mandatory_selection = HandoffSelection(
+        target_snapshot_id=target_id,
+        baseline_snapshot_id=baseline_id,
+        comparison_id=comparison.summary.identity.comparison_id,
+        enabled_sections=("comparison", "task-objective"),
+        selected_delta_ids=(),
+        selected_finding_ids=(),
+        selected_cycle_ids=(),
+        include_current_review_status=False,
+        explicit_review_note_finding_ids=(),
+        task_objective="Résumé Δ 日本語 exact byte boundary",
+    )
+
+    def render(selection: HandoffSelection):
+        return render_handoff(
+            selection=selection,
+            repository=target.repository,
+            target=target,
+            baseline=baseline,
+            comparison=comparison,
+            current_findings=(),
+        )
+
+    mandatory = render(mandatory_selection)
+    exact_bytes = len(mandatory.normalized_json.encode("utf-8"))
+    assert exact_bytes > len(mandatory.normalized_json)
+    with pytest.raises(HandoffBudgetError, match=HANDOFF_BUDGET_ERROR_MESSAGE):
+        render(
+            replace(
+                mandatory_selection,
+                budget_policy=HandoffBudgetPolicy(maximum_json_bytes=exact_bytes - 1),
+            )
+        )
+    equal = render(
+        replace(
+            mandatory_selection,
+            budget_policy=HandoffBudgetPolicy(maximum_json_bytes=exact_bytes),
+        )
+    )
+    plus_one = render(
+        replace(
+            mandatory_selection,
+            budget_policy=HandoffBudgetPolicy(maximum_json_bytes=exact_bytes + 1),
+        )
+    )
+    assert equal == plus_one == mandatory
+    assert equal.json_byte_count == exact_bytes
+
+    selected_delta_ids = tuple(
+        item.delta_id
+        for section in ("files", "symbols", "relationships", "cycles", "metrics", "findings")
+        for item in comparison.section(section)
+    )
+    selected_finding_ids = tuple(item.finding_id for item in target.findings)
+    selected = HandoffSelection(
+        target_snapshot_id=target_id,
+        baseline_snapshot_id=baseline_id,
+        comparison_id=comparison.summary.identity.comparison_id,
+        enabled_sections=HANDOFF_SECTIONS,
+        selected_delta_ids=selected_delta_ids,
+        selected_finding_ids=selected_finding_ids,
+        selected_cycle_ids=(),
+        include_current_review_status=True,
+        explicit_review_note_finding_ids=(),
+        task_objective="Résumé Δ 日本語 exact byte budget",
+        budget_policy=HandoffBudgetPolicy(maximum_json_bytes=4_000),
+    )
+    current_findings = service.store.current_findings(
+        target.snapshot.repository_id,
+        selected_finding_ids,
+    )
+    with pytest.raises(HandoffBudgetError, match=HANDOFF_BUDGET_ERROR_MESSAGE):
+        render_handoff(
+            selection=selected,
+            repository=target.repository,
+            target=target,
+            baseline=baseline,
+            comparison=comparison,
+            current_findings=current_findings,
+        )
+
+    bounded_selection = replace(
+        selected,
+        budget_policy=HandoffBudgetPolicy(maximum_json_bytes=5_000),
+    )
+    first = render_handoff(
+        selection=bounded_selection,
+        repository=target.repository,
+        target=target,
+        baseline=baseline,
+        comparison=comparison,
+        current_findings=current_findings,
+    )
+    second = render_handoff(
+        selection=bounded_selection,
+        repository=target.repository,
+        target=target,
+        baseline=baseline,
+        comparison=comparison,
+        current_findings=current_findings,
+    )
+    payload = json.loads(first.normalized_json)
+    assert first == second
+    assert first.json_byte_count == len(first.normalized_json.encode("utf-8")) <= 5_000
+    assert first.truncated is True
+    assert dict(first.omitted_counts)["json-budget-items"] > 0
+    assert payload["selected_changes"] == {}
+    assert payload["findings"] == []
+    assert payload["omitted_counts"] == dict(first.omitted_counts)
+    assert payload["analysis_gaps"] == list(first.warnings)
+    assert first.rendered_digest == rendered_output_digest(
+        HANDOFF_FORMAT_VERSION,
+        first.markdown,
+        first.normalized_json,
+    )
+
+    default = render_handoff(
+        selection=replace(selected, budget_policy=HandoffBudgetPolicy()),
+        repository=target.repository,
+        target=target,
+        baseline=baseline,
+        comparison=comparison,
+        current_findings=current_findings,
+    )
+    larger = render_handoff(
+        selection=replace(
+            selected,
+            budget_policy=HandoffBudgetPolicy(maximum_json_bytes=500_001),
+        ),
+        repository=target.repository,
+        target=target,
+        baseline=baseline,
+        comparison=comparison,
+        current_findings=current_findings,
+    )
+    assert default == larger
+
+
+def test_json_omission_is_finalized_before_markdown_budget(tmp_path: Path) -> None:
+    selection, target, baseline, comparison, current_findings = _selected_handoff_budget_fixture(tmp_path)
+
+    full = render_handoff(
+        selection=selection,
+        repository=target.repository,
+        target=target,
+        baseline=baseline,
+        comparison=comparison,
+        current_findings=current_findings,
+    )
+    json_omitted = render_handoff(
+        selection=replace(
+            selection,
+            budget_policy=HandoffBudgetPolicy(maximum_json_bytes=5_000),
+        ),
+        repository=target.repository,
+        target=target,
+        baseline=baseline,
+        comparison=comparison,
+        current_findings=current_findings,
+    )
+    maximum_markdown_characters = (len(full.markdown) + len(json_omitted.markdown)) // 2
+    assert len(json_omitted.markdown) <= maximum_markdown_characters < len(full.markdown)
+
+    final = render_handoff(
+        selection=replace(
+            selection,
+            budget_policy=HandoffBudgetPolicy(
+                maximum_json_bytes=5_000,
+                maximum_markdown_characters=maximum_markdown_characters,
+            ),
+        ),
+        repository=target.repository,
+        target=target,
+        baseline=baseline,
+        comparison=comparison,
+        current_findings=current_findings,
+    )
+    payload = json.loads(final.normalized_json)
+
+    assert final.json_byte_count <= 5_000
+    assert len(final.markdown) <= maximum_markdown_characters
+    assert payload["selected_changes"] == {}
+    assert payload["findings"] == []
+    assert "json-budget-items" in dict(final.omitted_counts)
+    assert "markdown-characters" not in dict(final.omitted_counts)
+    assert "Markdown output reached the character budget." not in final.warnings
+    assert "> TRUNCATED: Markdown character budget reached." not in final.markdown
+    assert final.rendered_digest == rendered_output_digest(
+        final.handoff_format_version,
+        final.markdown,
+        final.normalized_json,
+    )
+
+
+def test_markdown_truncation_is_classified_after_json_omission(tmp_path: Path) -> None:
+    selection, target, baseline, comparison, current_findings = _selected_handoff_budget_fixture(tmp_path)
+    json_omitted = render_handoff(
+        selection=replace(
+            selection,
+            budget_policy=HandoffBudgetPolicy(maximum_json_bytes=5_000),
+        ),
+        repository=target.repository,
+        target=target,
+        baseline=baseline,
+        comparison=comparison,
+        current_findings=current_findings,
+    )
+    maximum_markdown_characters = len(json_omitted.markdown) - 100
+    assert maximum_markdown_characters > 100
+
+    final = render_handoff(
+        selection=replace(
+            selection,
+            budget_policy=HandoffBudgetPolicy(
+                maximum_json_bytes=5_000,
+                maximum_markdown_characters=maximum_markdown_characters,
+            ),
+        ),
+        repository=target.repository,
+        target=target,
+        baseline=baseline,
+        comparison=comparison,
+        current_findings=current_findings,
+    )
+    payload = json.loads(final.normalized_json)
+
+    assert final.json_byte_count <= 5_000
+    assert final.markdown_character_count == maximum_markdown_characters
+    assert final.markdown.endswith("> TRUNCATED: Markdown character budget reached.\n")
+    assert "markdown-characters" in dict(final.omitted_counts)
+    assert "Markdown output reached the character budget." in final.warnings
+    assert payload["analysis_gaps"] == list(final.warnings)
+    assert payload["omitted_counts"] == dict(final.omitted_counts)
+    assert final.rendered_digest == rendered_output_digest(
+        final.handoff_format_version,
+        final.markdown,
+        final.normalized_json,
+    )
+
+
+def test_markdown_warning_json_overflow_reconciles_without_false_claim(
+    tmp_path: Path,
+) -> None:
+    selection, target, baseline, comparison, current_findings = _selected_handoff_budget_fixture(tmp_path)
+
+    base = render_handoff(
+        selection=selection,
+        repository=target.repository,
+        target=target,
+        baseline=baseline,
+        comparison=comparison,
+        current_findings=current_findings,
+    )
+    maximum_markdown_characters = len(base.markdown) - 1
+    with_markdown_warning = render_handoff(
+        selection=replace(
+            selection,
+            budget_policy=HandoffBudgetPolicy(
+                maximum_markdown_characters=maximum_markdown_characters,
+            ),
+        ),
+        repository=target.repository,
+        target=target,
+        baseline=baseline,
+        comparison=comparison,
+        current_findings=current_findings,
+    )
+    maximum_json_bytes = with_markdown_warning.json_byte_count - 1
+    assert base.json_byte_count <= maximum_json_bytes
+    assert with_markdown_warning.json_byte_count > maximum_json_bytes
+
+    final = render_handoff(
+        selection=replace(
+            selection,
+            budget_policy=HandoffBudgetPolicy(
+                maximum_json_bytes=maximum_json_bytes,
+                maximum_markdown_characters=maximum_markdown_characters,
+            ),
+        ),
+        repository=target.repository,
+        target=target,
+        baseline=baseline,
+        comparison=comparison,
+        current_findings=current_findings,
+    )
+    payload = json.loads(final.normalized_json)
+
+    assert final.json_byte_count <= maximum_json_bytes
+    assert final.markdown_character_count <= maximum_markdown_characters
+    assert payload["selected_changes"] == {}
+    assert payload["findings"] == []
+    assert "json-budget-items" in dict(final.omitted_counts)
+    assert "Selected evidence was omitted to satisfy the JSON byte budget." in final.warnings
+    assert "markdown-characters" not in dict(final.omitted_counts)
+    assert "Markdown output reached the character budget." not in final.warnings
+    assert "> TRUNCATED: Markdown character budget reached." not in final.markdown
+    assert payload["analysis_gaps"] == list(final.warnings)
+    assert payload["omitted_counts"] == dict(final.omitted_counts)
+    assert final.rendered_digest == rendered_output_digest(
+        final.handoff_format_version,
+        final.markdown,
+        final.normalized_json,
+    )
+
+
+def test_handoff_budget_failure_is_not_persisted_and_saved_budget_is_verified(
+    tmp_path: Path,
+) -> None:
+    service, _, baseline_id, target_id = _snapshot_pair(tmp_path)
+    baseline = service.store.comparison_snapshot(baseline_id)
+    target = service.store.comparison_snapshot(target_id)
+    comparison = compare_snapshots(baseline, target)
+    selection = HandoffSelection(
+        target_snapshot_id=target_id,
+        baseline_snapshot_id=baseline_id,
+        comparison_id=comparison.summary.identity.comparison_id,
+        enabled_sections=("comparison", "task-objective"),
+        selected_delta_ids=(),
+        selected_finding_ids=(),
+        selected_cycle_ids=(),
+        include_current_review_status=False,
+        explicit_review_note_finding_ids=(),
+        task_objective="Mandatory envelope",
+        budget_policy=HandoffBudgetPolicy(maximum_json_bytes=1),
+    )
+    with pytest.raises(HandoffBudgetError, match=HANDOFF_BUDGET_ERROR_MESSAGE):
+        service.preview_handoff(selection)
+    with pytest.raises(HandoffBudgetError, match=HANDOFF_BUDGET_ERROR_MESSAGE):
+        service.save_handoff(selection)
+    assert service.list_handoffs(repository_id=target.snapshot.repository_id)["items"] == []
+
+    saved = service.save_handoff(replace(selection, budget_policy=HandoffBudgetPolicy()))
+    record = service.store.get_handoff(str(saved["handoff_id"]))
+    assert record is not None
+    selection_payload = json.loads(record.selection_json)
+    selection_payload["budget_policy"]["maximum_json_bytes"] = len(record.rendered_json.encode("utf-8")) - 1
+    over_budget_record = replace(
+        record,
+        handoff_id="handoff-over-budget-integrity-test",
+        selection_json=json.dumps(
+            selection_payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+    )
+    with pytest.raises(SavedHandoffIntegrityError, match="exceeds its rendered budget"):
+        service.store.save_handoff(over_budget_record)
+    assert service.store.get_handoff(over_budget_record.handoff_id) is None
+    reopened = service.get_handoff(record.handoff_id)
+    assert reopened["normalized_json"] == record.rendered_json
+    assert reopened["json_byte_count"] == len(record.rendered_json.encode("utf-8"))
 
 
 def test_comparison_performance_is_bounded_for_thousands_of_file_deltas(

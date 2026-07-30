@@ -34,6 +34,9 @@ HANDOFF_SECTIONS = (
 )
 
 HANDOFF_BUDGET_ERROR_MESSAGE = "The Handoff JSON budget is too small for required metadata."
+JSON_BUDGET_WARNING = "Selected evidence was omitted to satisfy the JSON byte budget."
+MARKDOWN_BUDGET_WARNING = "Markdown output reached the character budget."
+MARKDOWN_TRUNCATION_TRAILER = "\n\n> TRUNCATED: Markdown character budget reached.\n"
 
 
 class HandoffBudgetError(ValueError):
@@ -184,39 +187,13 @@ def render_handoff(
         "truncated": truncated,
         "omitted_counts": dict(sorted(omitted.items())),
     }
-    markdown = _render_markdown(payload)
-    if len(markdown) > budget.maximum_markdown_characters:
-        warnings.append("Markdown output reached the character budget.")
-        omitted["markdown-characters"] = 1
-        payload["analysis_gaps"] = warnings
-        payload["truncated"] = True
-        payload["omitted_counts"] = dict(sorted(omitted.items()))
-    normalized_json = _json_within_budget(
+    markdown, normalized_json = _finalize_budgeted_outputs(
         payload=payload,
         warnings=warnings,
         omitted=omitted,
+        maximum_markdown_characters=budget.maximum_markdown_characters,
         maximum_json_bytes=budget.maximum_json_bytes,
     )
-    markdown = _render_markdown(payload)
-    if len(markdown) > budget.maximum_markdown_characters and "markdown-characters" not in omitted:
-        warnings.append("Markdown output reached the character budget.")
-        omitted["markdown-characters"] = 1
-        payload["analysis_gaps"] = warnings
-        payload["truncated"] = True
-        payload["omitted_counts"] = dict(sorted(omitted.items()))
-        normalized_json = _json_within_budget(
-            payload=payload,
-            warnings=warnings,
-            omitted=omitted,
-            maximum_json_bytes=budget.maximum_json_bytes,
-        )
-        markdown = _render_markdown(payload)
-    if len(markdown) > budget.maximum_markdown_characters:
-        trailer = "\n\n> TRUNCATED: Markdown character budget reached.\n"
-        if budget.maximum_markdown_characters <= len(trailer):
-            markdown = trailer[: budget.maximum_markdown_characters]
-        else:
-            markdown = markdown[: budget.maximum_markdown_characters - len(trailer)] + trailer
     digest = rendered_output_digest(
         HANDOFF_FORMAT_VERSION,
         markdown,
@@ -384,33 +361,119 @@ def _pretty_json(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
 
 
-def _json_within_budget(
+def _finalize_budgeted_outputs(
+    *,
+    payload: dict[str, Any],
+    warnings: list[str],
+    omitted: dict[str, int],
+    maximum_markdown_characters: int,
+    maximum_json_bytes: int,
+) -> tuple[str, str]:
+    """Finalize JSON omission before truthfully classifying Markdown truncation."""
+
+    normalized_json, _ = _apply_json_budget_omission(
+        payload=payload,
+        warnings=warnings,
+        omitted=omitted,
+        maximum_json_bytes=maximum_json_bytes,
+    )
+    _require_json_budget(normalized_json, maximum_json_bytes)
+
+    markdown = _render_markdown(payload)
+    if len(markdown) <= maximum_markdown_characters:
+        return markdown, normalized_json
+
+    _add_markdown_budget_metadata(payload, warnings, omitted)
+    normalized_json, _ = _apply_json_budget_omission(
+        payload=payload,
+        warnings=warnings,
+        omitted=omitted,
+        maximum_json_bytes=maximum_json_bytes,
+    )
+    markdown = _render_markdown(payload)
+
+    if len(markdown) <= maximum_markdown_characters:
+        _remove_markdown_budget_metadata(payload, warnings, omitted)
+        normalized_json = _pretty_json(payload)
+        _require_json_budget(normalized_json, maximum_json_bytes)
+        return _render_markdown(payload), normalized_json
+
+    _require_json_budget(normalized_json, maximum_json_bytes)
+    return _truncate_markdown(markdown, maximum_markdown_characters), normalized_json
+
+
+def _apply_json_budget_omission(
     *,
     payload: dict[str, Any],
     warnings: list[str],
     omitted: dict[str, int],
     maximum_json_bytes: int,
-) -> str:
+) -> tuple[str, bool]:
+    """Omit optional evidence at most once without classifying mandatory overflow."""
+
     normalized_json = _pretty_json(payload)
     if len(normalized_json.encode("utf-8")) <= maximum_json_bytes:
-        return normalized_json
+        return normalized_json, False
 
     optional_item_count = sum(len(items) for items in payload["selected_changes"].values()) + len(
         payload["findings"]
     )
     if optional_item_count:
-        omitted["json-budget-items"] = optional_item_count
-        warnings.append("Selected evidence exceeded the JSON byte budget and was omitted.")
+        omitted["json-budget-items"] = omitted.get("json-budget-items", 0) + optional_item_count
+        if JSON_BUDGET_WARNING not in warnings:
+            warnings.append(JSON_BUDGET_WARNING)
         payload["selected_changes"] = {}
         payload["findings"] = []
-        payload["analysis_gaps"] = warnings
-        payload["truncated"] = True
-        payload["omitted_counts"] = dict(sorted(omitted.items()))
+        _synchronize_budget_metadata(payload, warnings, omitted)
         normalized_json = _pretty_json(payload)
+        return normalized_json, True
+    return normalized_json, False
 
+
+def _require_json_budget(normalized_json: str, maximum_json_bytes: int) -> None:
     if len(normalized_json.encode("utf-8")) > maximum_json_bytes:
         raise HandoffBudgetError(HANDOFF_BUDGET_ERROR_MESSAGE)
-    return normalized_json
+
+
+def _add_markdown_budget_metadata(
+    payload: dict[str, Any],
+    warnings: list[str],
+    omitted: dict[str, int],
+) -> None:
+    if MARKDOWN_BUDGET_WARNING not in warnings:
+        warnings.append(MARKDOWN_BUDGET_WARNING)
+    omitted["markdown-characters"] = 1
+    _synchronize_budget_metadata(payload, warnings, omitted)
+
+
+def _remove_markdown_budget_metadata(
+    payload: dict[str, Any],
+    warnings: list[str],
+    omitted: dict[str, int],
+) -> None:
+    if MARKDOWN_BUDGET_WARNING in warnings:
+        warnings.remove(MARKDOWN_BUDGET_WARNING)
+    omitted.pop("markdown-characters", None)
+    _synchronize_budget_metadata(payload, warnings, omitted)
+
+
+def _synchronize_budget_metadata(
+    payload: dict[str, Any],
+    warnings: list[str],
+    omitted: dict[str, int],
+) -> None:
+    payload["analysis_gaps"] = warnings
+    payload["truncated"] = bool(omitted)
+    payload["omitted_counts"] = dict(sorted(omitted.items()))
+
+
+def _truncate_markdown(markdown: str, maximum_markdown_characters: int) -> str:
+    if maximum_markdown_characters <= len(MARKDOWN_TRUNCATION_TRAILER):
+        return MARKDOWN_TRUNCATION_TRAILER[:maximum_markdown_characters]
+    return (
+        markdown[: maximum_markdown_characters - len(MARKDOWN_TRUNCATION_TRAILER)]
+        + MARKDOWN_TRUNCATION_TRAILER
+    )
 
 
 def _md(value: object) -> str:

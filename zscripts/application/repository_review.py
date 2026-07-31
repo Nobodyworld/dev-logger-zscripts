@@ -66,6 +66,8 @@ from zscripts.infrastructure.repository_discovery import (
     RepositoryDiscovery,
 )
 from zscripts.infrastructure.snapshot_store import (
+    FINDING_FAMILIES,
+    FINDING_QUEUE_PRESETS,
     AnalysisStatusRecord,
     SnapshotStore,
     SymbolPage,
@@ -587,6 +589,7 @@ class RepositoryReviewService:
                 "accepted": 0,
                 "dismissed": 0,
                 "severity": {"high": 0, "medium": 0, "low": 0},
+                "families": {family: 0 for family in sorted(FINDING_FAMILIES)},
                 "low_confidence": 0,
                 "reconciliation_complete": False,
                 "lifecycle_reconciled": False,
@@ -598,6 +601,7 @@ class RepositoryReviewService:
         self,
         snapshot_id: str,
         *,
+        preset: str = "all",
         family: str | None = None,
         severity: str | None = None,
         confidence: str | None = None,
@@ -609,10 +613,13 @@ class RepositoryReviewService:
         page: int = 1,
         page_size: int = 50,
     ) -> dict[str, object]:
+        if preset not in FINDING_QUEUE_PRESETS:
+            raise ValueError("Unsupported finding queue preset.")
         snapshot = self.store.get_snapshot(snapshot_id)
         if not _version_at_least(snapshot.schema_version, 3):
             return {
                 "supported": False,
+                "preset": preset,
                 "items": [],
                 "total": 0,
                 "page": page,
@@ -620,6 +627,7 @@ class RepositoryReviewService:
             }
         result = self.store.list_findings(
             snapshot_id,
+            preset=preset,
             family=family,
             severity=severity,
             confidence=confidence,
@@ -633,6 +641,7 @@ class RepositoryReviewService:
         )
         return {
             "supported": True,
+            "preset": result.preset,
             "items": [public_finding(item) for item in result.items],
             "total": result.total,
             "page": result.page,

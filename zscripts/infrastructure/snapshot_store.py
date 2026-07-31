@@ -69,6 +69,12 @@ FINDING_FAMILIES = frozenset(
         "orphan-candidate",
     }
 )
+FINDING_QUEUE_PRESET_VERSION = "1"
+FINDING_QUEUE_PRESETS = frozenset({"all", "high-signal-v1"})
+_HIGH_SIGNAL_CYCLE_FAMILIES = frozenset({"dependency-cycle", "inheritance-cycle"})
+_HIGH_SIGNAL_MEASURED_FAMILIES = frozenset(
+    {"oversized", "complexity", "nesting", "parameters", "coupling", "inheritance"}
+)
 REVIEW_STATUSES = frozenset({"new", "reviewed", "needs-action", "accepted", "dismissed"})
 REASON_CODES = frozenset(
     {
@@ -166,6 +172,7 @@ class FindingPage:
     total: int
     page: int
     page_size: int
+    preset: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -886,7 +893,7 @@ class SnapshotStore:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT f.evidence_state, r.review_status, o.severity, o.confidence
+                SELECT f.evidence_state, r.review_status, o.severity, o.confidence, o.family
                 FROM findings f
                 JOIN finding_reviews r USING (finding_id)
                 JOIN finding_occurrences o
@@ -907,6 +914,7 @@ class SnapshotStore:
                 (snapshot.repository_id,),
             ).fetchone()
         severity = {"high": 0, "medium": 0, "low": 0}
+        families = {family: 0 for family in sorted(FINDING_FAMILIES)}
         active = resolved = needs_action = accepted = dismissed = low_confidence = 0
         for row in rows:
             state = str(row["evidence_state"])
@@ -922,6 +930,7 @@ class SnapshotStore:
             else:
                 resolved += 1
             severity[str(row["severity"])] += 1
+            families[str(row["family"])] += 1
             if str(row["confidence"]) == "low":
                 low_confidence += 1
         return {
@@ -931,6 +940,7 @@ class SnapshotStore:
             "accepted": accepted,
             "dismissed": dismissed,
             "severity": severity,
+            "families": families,
             "low_confidence": low_confidence,
             "reconciliation_complete": (
                 reconciliation is not None
@@ -951,6 +961,7 @@ class SnapshotStore:
         self,
         snapshot_id: str,
         *,
+        preset: str = "all",
         family: str | None = None,
         severity: str | None = None,
         confidence: str | None = None,
@@ -962,6 +973,8 @@ class SnapshotStore:
         page: int = 1,
         page_size: int = 50,
     ) -> FindingPage:
+        if preset not in FINDING_QUEUE_PRESETS:
+            raise ValueError("Unsupported finding queue preset.")
         if family is not None and family not in FINDING_FAMILIES:
             raise ValueError("Unsupported finding family.")
         if severity is not None and severity not in {"high", "medium", "low"}:
@@ -984,6 +997,23 @@ class SnapshotStore:
             "o.snapshot_id = f.last_seen_snapshot_id",
         ]
         parameters: list[object] = [snapshot.repository_id]
+        if preset == "high-signal-v1":
+            cycle_placeholders = ", ".join("?" for _ in _HIGH_SIGNAL_CYCLE_FAMILIES)
+            measured_placeholders = ", ".join("?" for _ in _HIGH_SIGNAL_MEASURED_FAMILIES)
+            conditions.append(
+                f"""
+                (
+                    o.family IN ({cycle_placeholders})
+                    OR (
+                        o.family IN ({measured_placeholders})
+                        AND o.severity IN ('high', 'medium')
+                        AND o.confidence IN ('high', 'medium')
+                    )
+                )
+                """
+            )
+            parameters.extend(sorted(_HIGH_SIGNAL_CYCLE_FAMILIES))
+            parameters.extend(sorted(_HIGH_SIGNAL_MEASURED_FAMILIES))
         if family is not None:
             conditions.append("o.family = ?")
             parameters.append(family)
@@ -1029,6 +1059,7 @@ class SnapshotStore:
             total=total,
             page=page,
             page_size=page_size,
+            preset=preset,
         )
 
     def get_finding(
@@ -2691,6 +2722,9 @@ __all__ = [
     "AnalysisStatusRecord",
     "ComparisonSnapshotEvidence",
     "DATABASE_SCHEMA_VERSION",
+    "FINDING_FAMILIES",
+    "FINDING_QUEUE_PRESETS",
+    "FINDING_QUEUE_PRESET_VERSION",
     "FindingPage",
     "GraphNodePage",
     "ReviewConflictError",

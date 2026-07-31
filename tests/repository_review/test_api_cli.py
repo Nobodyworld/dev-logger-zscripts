@@ -300,7 +300,23 @@ def test_relationship_api_handles_old_snapshot_explicitly(tmp_path: Path) -> Non
     }
     assert cycles.json()["items"] == []
     assert finding_summary.json()["supported"] is False
+    assert set(finding_summary.json()["families"]) == {
+        "dependency-cycle",
+        "inheritance-cycle",
+        "duplicate-name-candidate",
+        "oversized",
+        "complexity",
+        "nesting",
+        "parameters",
+        "coupling",
+        "inheritance",
+        "documentation",
+        "test-evidence-candidate",
+        "orphan-candidate",
+    }
+    assert not any(finding_summary.json()["families"].values())
     assert findings.json()["supported"] is False
+    assert findings.json()["preset"] == "all"
     assert findings.json()["items"] == []
 
 
@@ -320,6 +336,25 @@ def test_findings_api_filters_reviews_conflicts_and_redacts_paths(tmp_path: Path
         assert summary.json()["reconciliation_complete"] is True
         assert summary.json()["lifecycle_reconciled"] is True
         assert summary.json()["reconciliation_skip_reason"] is None
+        assert summary.json()["families"] == {
+            family: sum(1 for item in evidence.findings if item.family == family)
+            for family in summary.json()["families"]
+        }
+
+        default_page = client.get(f"/api/snapshots/{snapshot_id}/findings")
+        assert default_page.status_code == 200
+        assert default_page.json()["preset"] == "all"
+        assert default_page.json()["total"] == len(evidence.findings)
+        focused_page = client.get(
+            f"/api/snapshots/{snapshot_id}/findings",
+            params={"preset": "high-signal-v1", "page_size": 100},
+        )
+        assert focused_page.status_code == 200
+        assert focused_page.json()["preset"] == "high-signal-v1"
+        assert {item["family"] for item in focused_page.json()["items"]} == {
+            "dependency-cycle",
+            "inheritance",
+        }
 
         page = client.get(
             f"/api/snapshots/{snapshot_id}/findings",
@@ -333,10 +368,22 @@ def test_findings_api_filters_reviews_conflicts_and_redacts_paths(tmp_path: Path
             },
         )
         assert page.status_code == 200
+        assert page.json()["preset"] == "all"
         assert page.json()["total"] == 1
         finding = page.json()["items"][0]
         assert finding["subject_keys"] == ["pkg.metrics.complex_target"]
         assert str(repository.resolve()) not in page.text
+        focused_low = client.get(
+            f"/api/snapshots/{snapshot_id}/findings",
+            params={
+                "preset": "high-signal-v1",
+                "family": "parameters",
+                "severity": "low",
+                "confidence": "high",
+            },
+        )
+        assert focused_low.status_code == 200
+        assert focused_low.json()["total"] == 0
 
         detail = client.get(
             f"/api/findings/{finding['finding_id']}",
@@ -381,6 +428,12 @@ def test_findings_api_filters_reviews_conflicts_and_redacts_paths(tmp_path: Path
         )
         assert invalid.status_code == 422
         assert invalid.json() == {"detail": "Request validation failed."}
+        invalid_preset = client.get(
+            f"/api/snapshots/{snapshot_id}/findings",
+            params={"preset": "private-ranker"},
+        )
+        assert invalid_preset.status_code == 422
+        assert invalid_preset.json() == {"detail": "Request validation failed."}
         invalid_note = client.patch(
             f"/api/findings/{finding['finding_id']}/review",
             json={

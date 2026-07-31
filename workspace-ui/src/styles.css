@@ -1098,6 +1098,144 @@ select {
     font-weight: 680;
 }
 
+.finding-preset-banner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 14px 24px;
+    align-items: start;
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-subtle);
+}
+
+.finding-preset-banner--focused {
+    border-left: 4px solid var(--teal);
+}
+
+.finding-preset-banner h3,
+.finding-preset-banner p {
+    margin: 0;
+}
+
+.finding-preset-banner h3 {
+    margin-top: 3px;
+    font-size: 16px;
+}
+
+.finding-preset-banner h3 ~ p {
+    max-width: 760px;
+    margin-top: 7px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.finding-preset-banner .finding-preset-name {
+    margin-top: 4px;
+    color: var(--ink);
+    font-weight: 650;
+}
+
+.finding-preset-controls {
+    display: flex;
+    gap: 6px;
+    padding: 3px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #ffffff;
+}
+
+.finding-preset-controls button,
+.finding-active-filters button,
+.finding-preset-banner .text-action {
+    min-height: 34px;
+    padding: 7px 11px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    color: var(--ink);
+    background: transparent;
+    font-size: 11px;
+    font-weight: 650;
+}
+
+.finding-preset-controls button[aria-pressed="true"] {
+    border-color: var(--border-strong);
+    background: var(--teal-soft);
+}
+
+.finding-preset-banner .text-action {
+    grid-column: 2;
+    justify-self: end;
+    border-color: var(--border);
+    background: #ffffff;
+}
+
+.finding-excluded-counts {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(110px, 1fr));
+    gap: 8px;
+    margin: 14px 0 0;
+}
+
+.finding-excluded-counts > div {
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+.finding-excluded-counts dt {
+    color: var(--muted);
+    font-size: 9px;
+    overflow-wrap: anywhere;
+}
+
+.finding-excluded-counts dd {
+    margin: 3px 0 0;
+    font-size: 14px;
+    font-weight: 680;
+}
+
+.finding-active-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.finding-active-filters > span {
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.finding-active-filters ul {
+    display: flex;
+    flex: 1 1 360px;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.finding-active-filters li {
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface-subtle);
+    font-size: 10px;
+    overflow-wrap: anywhere;
+}
+
+.finding-active-filters button {
+    border-color: var(--border);
+    background: #ffffff;
+}
+
 .finding-toolbar {
     display: grid;
     grid-template-columns: minmax(230px, 1.5fr) repeat(6, minmax(120px, 0.7fr));
@@ -2088,6 +2226,24 @@ select {
 
     .finding-toolbar {
         grid-template-columns: 1fr;
+    }
+
+    .finding-preset-banner {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .finding-preset-controls,
+    .finding-preset-banner .text-action {
+        grid-column: 1;
+        justify-self: stretch;
+    }
+
+    .finding-preset-controls button {
+        flex: 1;
+    }
+
+    .finding-excluded-counts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .findings-workspace {

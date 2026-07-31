@@ -12,6 +12,10 @@
 
 ### Added
 
+- A versioned server-side `high-signal-v1` Findings queue preset, used by the
+  clearly labeled default workspace while complete family/lifecycle counts and
+  one-action access to all findings remain available. Finding evidence,
+  identities, rules, lifecycle, and stored schema versions are unchanged.
 - A sanitized, reproducible Repository Review dogfood harness and evidence-backed
   product report covering the complete Scan, Explore, Review, Compare, and
   Handoff workflow with explicit recommendations for focused polish.

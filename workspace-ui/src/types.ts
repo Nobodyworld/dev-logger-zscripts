@@ -189,6 +189,20 @@ export interface CycleList {
 }
 
 export type ReviewStatus = "new" | "reviewed" | "needs-action" | "accepted" | "dismissed";
+export type FindingQueuePreset = "all" | "high-signal-v1";
+export type FindingFamily =
+    | "dependency-cycle"
+    | "inheritance-cycle"
+    | "duplicate-name-candidate"
+    | "oversized"
+    | "complexity"
+    | "nesting"
+    | "parameters"
+    | "coupling"
+    | "inheritance"
+    | "documentation"
+    | "test-evidence-candidate"
+    | "orphan-candidate";
 
 export interface Finding {
     finding_id: string;
@@ -229,6 +243,7 @@ export interface FindingSummary {
     accepted: number;
     dismissed: number;
     severity: Record<string, number>;
+    families: Record<FindingFamily, number>;
     low_confidence: number;
     reconciliation_complete: boolean;
     lifecycle_reconciled: boolean;
@@ -237,6 +252,7 @@ export interface FindingSummary {
 
 export interface FindingPage {
     supported: boolean;
+    preset: FindingQueuePreset;
     items: Finding[];
     total: number;
     page: number;

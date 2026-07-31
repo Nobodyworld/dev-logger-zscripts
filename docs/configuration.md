@@ -150,6 +150,10 @@ zscripts experimental analyze PATH \
   200 characters. Review notes contain at most 2,000 characters. Finding
   thresholds are versioned product defaults rather than repository
   configuration in this slice.
+- Finding queue preset version `1` allowlists `all` and `high-signal-v1`. The
+  API defaults to `all`; ordinary Findings workspace entry requests the focused
+  preset. The queue choice is not persisted or repository-configurable, and
+  complete per-family summary counts are never narrowed by it.
 - Comparison item pages contain at most 100 records; section/change/sort tokens
   are allowlisted and search text is limited to 200 characters.
 - Handoff format `2` fixes budgets at 8 sections, 50 items per section, 50

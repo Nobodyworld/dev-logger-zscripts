@@ -97,6 +97,18 @@ at most 2,000 characters are saved only after **Save review** is selected.
 Optimistic review versions prevent one workspace from silently overwriting a
 newer decision.
 
+Ordinary workspace entry explicitly requests the query-policy preset
+`high-signal-v1` (preset format `1`). It always includes dependency and
+inheritance cycles. It includes `oversized`, `complexity`, `nesting`,
+`parameters`, `coupling`, and `inheritance` only when both severity and
+confidence are `high` or `medium`. Documentation, orphan, test-evidence, and
+duplicate-name candidates remain counted in the complete lifecycle summary and
+are available through **Show all findings**. Selecting an explicit family,
+severity, or confidence also clears the focused preset. Existing Overview
+navigation presets use the complete `all` queue. This is a presentation/query
+policy only: no finding rule, threshold, identity, lifecycle, or review state
+changes, and no preference is persisted.
+
 The Findings workspace shows the repository's current lifecycle. Selecting an
 older supported snapshot establishes repository and evidence compatibility but
 does not rewind review decisions or active/resolved state. Summary, queue, and

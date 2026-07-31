@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import shutil
 import sqlite3
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -10,7 +12,12 @@ from zscripts.application.repository_review import RepositoryReviewService
 from zscripts.domain.repository_review import AnalysisState, ScanLimits
 from zscripts.infrastructure.finding_analysis import FindingAnalyzer
 from zscripts.infrastructure.repository_discovery import AnalysisCancelled
-from zscripts.infrastructure.snapshot_store import ReviewConflictError, SnapshotStore
+from zscripts.infrastructure.snapshot_store import (
+    FINDING_FAMILIES,
+    FINDING_QUEUE_PRESET_VERSION,
+    ReviewConflictError,
+    SnapshotStore,
+)
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "repository_review"
 
@@ -53,6 +60,187 @@ def test_exact_metrics_rules_and_stable_canonical_evidence(tmp_path: Path) -> No
         item.family == "test-evidence-candidate" and item.subject_keys == ("pkg.metrics.complex_target",)
         for item in first.findings
     )
+
+
+def test_high_signal_queue_is_server_bounded_without_changing_evidence(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "findings"
+    shutil.copytree(FIXTURES / "findings", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    snapshot_id = evidence.snapshot.snapshot_id
+    expected_ids = {
+        item.finding_id
+        for item in evidence.findings
+        if item.family in {"dependency-cycle", "inheritance-cycle"}
+        or (
+            item.family in {"oversized", "complexity", "nesting", "parameters", "coupling", "inheritance"}
+            and item.severity in {"high", "medium"}
+            and item.confidence in {"high", "medium"}
+        )
+    }
+    with sqlite3.connect(service.store.database_path) as connection:
+        before = {
+            table: connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            for table in ("findings", "finding_occurrences", "finding_reviews")
+        }
+
+    all_page = service.findings(snapshot_id, preset="all", page_size=100)
+    focused = service.findings(snapshot_id, preset="high-signal-v1", page_size=100)
+    focused_second_page = service.findings(
+        snapshot_id,
+        preset="high-signal-v1",
+        sort="family",
+        direction="asc",
+        page=2,
+        page_size=1,
+    )
+    focused_search = service.findings(
+        snapshot_id,
+        preset="high-signal-v1",
+        search="DEPENDENCY",
+        page_size=100,
+    )
+
+    assert FINDING_QUEUE_PRESET_VERSION == "1"
+    assert all_page["preset"] == "all"
+    assert all_page["total"] == len(evidence.findings)
+    assert focused["preset"] == "high-signal-v1"
+    assert focused["total"] == len(expected_ids)
+    assert {item["finding_id"] for item in focused["items"]} == expected_ids
+    assert {item["family"] for item in focused["items"]} == {
+        "dependency-cycle",
+        "inheritance",
+    }
+    assert focused_second_page["total"] == focused["total"]
+    assert len(focused_second_page["items"]) == 1
+    assert [item["family"] for item in focused_search["items"]] == ["dependency-cycle"]
+
+    summary = service.finding_summary(snapshot_id)
+    expected_families = Counter(item.family for item in evidence.findings)
+    assert summary["families"] == {family: expected_families[family] for family in sorted(FINDING_FAMILIES)}
+    assert summary["families"]["documentation"] > 0
+    assert summary["families"]["orphan-candidate"] > 0
+    assert summary["families"]["duplicate-name-candidate"] > 0
+    assert summary["families"]["test-evidence-candidate"] == 0
+    with pytest.raises(ValueError, match="queue preset"):
+        service.findings(snapshot_id, preset="not-a-preset")
+    with sqlite3.connect(service.store.database_path) as connection:
+        after = {
+            table: connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            for table in ("findings", "finding_occurrences", "finding_reviews")
+        }
+    assert after == before
+
+
+def test_high_signal_queue_exact_family_severity_confidence_matrix(tmp_path: Path) -> None:
+    repository = tmp_path / "ordinary"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    snapshot_id = evidence.snapshot.snapshot_id
+    levels = ("high", "medium", "low")
+    records = [
+        (
+            f"preset-matrix-{family}-{severity}-{confidence}",
+            family,
+            severity,
+            confidence,
+        )
+        for family in sorted(FINDING_FAMILIES)
+        for severity in levels
+        for confidence in levels
+    ]
+    timestamp = "2026-07-31T00:00:00.000Z"
+    with service.store._transaction() as connection:
+        connection.executemany(
+            """
+            INSERT INTO findings (
+                finding_id, repository_id, first_seen_snapshot_id,
+                last_seen_snapshot_id, evidence_state, resolved_snapshot_id
+            ) VALUES (?, ?, ?, ?, 'active', NULL)
+            """,
+            [
+                (finding_id, evidence.repository.repository_id, snapshot_id, snapshot_id)
+                for finding_id, _family, _severity, _confidence in records
+            ],
+        )
+        connection.executemany(
+            """
+            INSERT INTO finding_reviews (
+                finding_id, review_status, note, reason_code, version,
+                decided_at, updated_at
+            ) VALUES (?, 'new', '', NULL, 0, ?, ?)
+            """,
+            [(finding_id, timestamp, timestamp) for finding_id, *_rest in records],
+        )
+        connection.executemany(
+            """
+            INSERT INTO finding_occurrences (
+                snapshot_id, finding_id, rule_id, rule_version, family, title,
+                explanation, suggested_action, severity, confidence, subject_type,
+                subject_keys_json, affected_node_ids_json, relative_path, line,
+                metric_evidence_json, threshold_evidence_json
+            ) VALUES (?, ?, 'preset-matrix', '1', ?, ?, '', '', ?, ?, 'module', ?, '[]',
+                      NULL, NULL, '[]', '[]')
+            """,
+            [
+                (
+                    snapshot_id,
+                    finding_id,
+                    family,
+                    f"preset-matrix {family} {severity} {confidence}",
+                    severity,
+                    confidence,
+                    json.dumps([finding_id]),
+                )
+                for finding_id, family, severity, confidence in records
+            ],
+        )
+
+    expected_focused = {
+        finding_id
+        for finding_id, family, severity, confidence in records
+        if family in {"dependency-cycle", "inheritance-cycle"}
+        or (
+            family in {"oversized", "complexity", "nesting", "parameters", "coupling", "inheritance"}
+            and severity in {"high", "medium"}
+            and confidence in {"high", "medium"}
+        )
+    }
+    focused = service.findings(
+        snapshot_id,
+        preset="high-signal-v1",
+        search="PRESET-MATRIX",
+        sort="finding_id",
+        direction="asc",
+        page_size=100,
+    )
+    all_first = service.findings(
+        snapshot_id,
+        preset="all",
+        search="preset-matrix",
+        sort="finding_id",
+        direction="asc",
+        page=1,
+        page_size=100,
+    )
+    all_second = service.findings(
+        snapshot_id,
+        preset="all",
+        search="preset-matrix",
+        sort="finding_id",
+        direction="asc",
+        page=2,
+        page_size=100,
+    )
+
+    assert focused["total"] == 42
+    assert {item["finding_id"] for item in focused["items"]} == expected_focused
+    assert all_first["total"] == all_second["total"] == len(records) == 108
+    all_ids = [item["finding_id"] for item in [*all_first["items"], *all_second["items"]]]
+    assert all_ids == sorted(finding_id for finding_id, *_rest in records)
 
 
 def test_nested_scope_complexity_is_not_charged_to_enclosing_symbol(tmp_path: Path) -> None:

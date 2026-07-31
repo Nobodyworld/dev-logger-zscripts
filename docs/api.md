@@ -101,6 +101,12 @@ Deterministic findings and local review state use:
 Finding lists use bounded search, allowlisted family/severity/confidence/
 evidence/review filters, allowlisted sort tokens, and pages of at most 100.
 Responses include total matches and explicit support/truncation metadata.
+The allowlisted `preset` query is `all` (the API and CLI-compatible default) or
+`high-signal-v1`; the applied preset is returned in each page. Preset version
+`1` includes all dependency/inheritance cycles and medium-or-higher severity
+and confidence findings from the size, complexity, nesting, parameter,
+coupling, and inheritance families. Summary `families` counts always describe
+the complete current repository lifecycle and are independent of list filters.
 Review updates require the current integer `version`; stale writes return `409`
 with a generic conflict message and the current safe record. Notes are limited
 to 2,000 characters and reason codes are allowlisted. Older schema snapshots

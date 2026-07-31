@@ -5,12 +5,15 @@ import { describe, expect, it, vi } from "vitest";
 import { FindingsView } from "../components/FindingsView";
 import type { Finding } from "../types";
 import {
+    completeEvidenceStatus,
     finding,
     findingHistory,
     findingSummary,
+    partialEvidenceStatus,
     response,
     secondFinding,
     snapshot,
+    unsupportedEvidenceStatus,
 } from "./fixtures";
 
 interface Deferred<T> {
@@ -364,16 +367,21 @@ describe("FindingsView", () => {
     it("explains when automatic resolution was skipped", async () => {
         vi.stubGlobal(
             "fetch",
-            findingsFetch(undefined, undefined, {
-                ...findingSummary,
-                reconciliation_complete: false,
-                lifecycle_reconciled: true,
-                reconciliation_skip_reason: "parse-gaps",
-            }),
+            findingsFetch(
+                undefined,
+                undefined,
+                {
+                    ...findingSummary,
+                    reconciliation_complete: false,
+                    lifecycle_reconciled: true,
+                    reconciliation_skip_reason: "parse-gaps",
+                },
+                partialEvidenceStatus(),
+            ),
         );
         render(<FindingsView snapshotId={snapshot.snapshot_id} />);
 
-        expect(await screen.findByText(/parse gaps made absence unreliable/i)).toBeTruthy();
+        expect(await screen.findByText(/absence was not reliable/i)).toBeTruthy();
     });
 
     it("refreshes a status-filtered queue after a successful review", async () => {
@@ -656,6 +664,11 @@ describe("FindingsView", () => {
             "fetch",
             vi.fn((input: RequestInfo | URL) => {
                 const url = String(input);
+                if (url.includes("/evidence-status")) {
+                    return Promise.resolve(
+                        response(unsupportedEvidenceStatus(snapshot.snapshot_id)),
+                    );
+                }
                 if (url.includes("/summary")) {
                     return Promise.resolve(response({ ...findingSummary, supported: false }));
                 }
@@ -675,6 +688,7 @@ describe("FindingsView", () => {
             }),
         );
         const { rerender } = render(<FindingsView snapshotId={snapshot.snapshot_id} />);
+        expect(await screen.findByRole("heading", { name: "Unsupported evidence" })).toBeTruthy();
         expect(
             await screen.findByText(/Findings are not available for this older snapshot/),
         ).toBeTruthy();
@@ -698,9 +712,13 @@ function findingsFetch(
     reviewResponse?: () => Response | Promise<Response>,
     firstDetail?: Deferred<Response>,
     summary = findingSummary,
+    evidenceStatus = completeEvidenceStatus(),
 ) {
     return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
+        if (url.includes("/evidence-status")) {
+            return Promise.resolve(response(evidenceStatus));
+        }
         if (url.includes("/findings/summary")) return Promise.resolve(response(summary));
         if (url.includes("/findings?")) {
             const parameters = new URL(url, "http://localhost").searchParams;
@@ -770,6 +788,9 @@ function reviewQueueFetch(initialItems: Finding[]) {
     let items = initialItems.map((item) => ({ ...item }));
     return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
+        if (url.includes("/evidence-status")) {
+            return Promise.resolve(response(completeEvidenceStatus()));
+        }
         if (url.includes("/findings/summary")) {
             const counts = {
                 ...findingSummary,

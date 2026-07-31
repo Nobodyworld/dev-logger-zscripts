@@ -71,6 +71,14 @@ FINDING_FAMILIES = frozenset(
 )
 FINDING_QUEUE_PRESET_VERSION = "1"
 FINDING_QUEUE_PRESETS = frozenset({"all", "high-signal-v1"})
+RECONCILIATION_SKIP_REASONS = frozenset(
+    {
+        "truncated-scan",
+        "parse-gaps",
+        "superseded-by-newer-analysis",
+        "analysis-status-unavailable",
+    }
+)
 _HIGH_SIGNAL_CYCLE_FAMILIES = frozenset({"dependency-cycle", "inheritance-cycle"})
 _HIGH_SIGNAL_MEASURED_FAMILIES = frozenset(
     {"oversized", "complexity", "nesting", "parameters", "coupling", "inheritance"}
@@ -190,6 +198,21 @@ class AnalysisStatusRecord:
     completed_at: str | None
     snapshot_id: str | None
     repository_generation: int
+    lifecycle_reconciled: bool
+    reconciliation_skip_reason: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class SnapshotEvidenceFacts:
+    """Lightweight exact-snapshot facts used by status and comparison presentation."""
+
+    snapshot: SnapshotRecord
+    observed_state_known: bool
+    observed_branch: str | None
+    observed_git_sha: str | None
+    observed_dirty: bool | None
+    observed_staged: bool | None
+    observed_untracked: bool | None
     lifecycle_reconciled: bool
     reconciliation_skip_reason: str | None
 
@@ -476,6 +499,60 @@ class SnapshotStore:
         if row is None:
             raise SnapshotNotFoundError("Completed snapshot was not found.")
         return _repository_from_row(row)
+
+    def snapshot_evidence_facts(self, snapshot_id: str) -> SnapshotEvidenceFacts:
+        """Load bounded presentation facts linked to one exact completed snapshot."""
+
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT snapshots.*,
+                       analyses.analysis_id AS linked_analysis_id,
+                       analyses.lifecycle_reconciled AS linked_lifecycle_reconciled,
+                       analyses.reconciliation_skip_reason AS linked_skip_reason
+                FROM snapshots
+                LEFT JOIN analyses ON analyses.analysis_id = (
+                    SELECT candidate.analysis_id
+                    FROM analyses AS candidate
+                    WHERE candidate.snapshot_id = snapshots.snapshot_id
+                      AND candidate.state = 'completed'
+                    ORDER BY candidate.repository_generation DESC,
+                             candidate.analysis_id DESC
+                    LIMIT 1
+                )
+                WHERE snapshots.snapshot_id = ? AND snapshots.state = 'completed'
+                """,
+                (snapshot_id,),
+            ).fetchone()
+        if row is None:
+            raise SnapshotNotFoundError("Completed snapshot was not found.")
+        analysis_available = row["linked_analysis_id"] is not None
+        lifecycle_reconciled = bool(row["linked_lifecycle_reconciled"]) if analysis_available else False
+        raw_reason = str(row["linked_skip_reason"]) if row["linked_skip_reason"] is not None else None
+        if raw_reason not in RECONCILIATION_SKIP_REASONS:
+            raw_reason = None
+        if not analysis_available or (not lifecycle_reconciled and raw_reason is None):
+            raw_reason = "analysis-status-unavailable"
+        observed_state_known = bool(row["observed_state_known"])
+        return SnapshotEvidenceFacts(
+            snapshot=_snapshot_from_row(row),
+            observed_state_known=observed_state_known,
+            observed_branch=(
+                str(row["observed_branch"])
+                if observed_state_known and row["observed_branch"] is not None
+                else None
+            ),
+            observed_git_sha=(
+                str(row["observed_git_sha"])
+                if observed_state_known and row["observed_git_sha"] is not None
+                else None
+            ),
+            observed_dirty=bool(row["observed_dirty"]) if observed_state_known else None,
+            observed_staged=bool(row["observed_staged"]) if observed_state_known else None,
+            observed_untracked=bool(row["observed_untracked"]) if observed_state_known else None,
+            lifecycle_reconciled=lifecycle_reconciled,
+            reconciliation_skip_reason=raw_reason,
+        )
 
     def list_symbols(
         self,
@@ -1168,30 +1245,10 @@ class SnapshotStore:
     def comparison_snapshot(self, snapshot_id: str) -> ComparisonSnapshotEvidence:
         """Load exact immutable comparison evidence without current lifecycle substitution."""
 
-        snapshot = self.get_snapshot(snapshot_id)
+        facts = self.snapshot_evidence_facts(snapshot_id)
+        snapshot = facts.snapshot
         repository = self.get_snapshot_repository(snapshot_id)
         with self._connect() as connection:
-            snapshot_row = connection.execute(
-                """
-                SELECT observed_state_known, observed_branch, observed_git_sha,
-                       observed_dirty, observed_staged, observed_untracked
-                FROM snapshots
-                WHERE snapshot_id = ?
-                """,
-                (snapshot_id,),
-            ).fetchone()
-            if snapshot_row is None:
-                raise SnapshotNotFoundError("Completed snapshot was not found.")
-            analysis = connection.execute(
-                """
-                SELECT lifecycle_reconciled, reconciliation_skip_reason
-                FROM analyses
-                WHERE snapshot_id = ? AND state = 'completed'
-                ORDER BY repository_generation DESC, analysis_id DESC
-                LIMIT 1
-                """,
-                (snapshot_id,),
-            ).fetchone()
             file_rows = connection.execute(
                 """
                 SELECT * FROM files
@@ -1281,30 +1338,17 @@ class SnapshotStore:
             )
             for row in cycle_rows
         )
-        observed_state_known = bool(snapshot_row["observed_state_known"])
         return ComparisonSnapshotEvidence(
             repository=repository,
             snapshot=snapshot,
-            observed_state_known=observed_state_known,
-            observed_branch=(
-                str(snapshot_row["observed_branch"])
-                if observed_state_known and snapshot_row["observed_branch"] is not None
-                else None
-            ),
-            observed_git_sha=(
-                str(snapshot_row["observed_git_sha"])
-                if observed_state_known and snapshot_row["observed_git_sha"] is not None
-                else None
-            ),
-            observed_dirty=bool(snapshot_row["observed_dirty"]) if observed_state_known else None,
-            observed_staged=bool(snapshot_row["observed_staged"]) if observed_state_known else None,
-            observed_untracked=bool(snapshot_row["observed_untracked"]) if observed_state_known else None,
-            lifecycle_reconciled=bool(analysis["lifecycle_reconciled"]) if analysis else False,
-            reconciliation_skip_reason=(
-                str(analysis["reconciliation_skip_reason"])
-                if analysis is not None and analysis["reconciliation_skip_reason"] is not None
-                else ("analysis-status-unavailable" if analysis is None else None)
-            ),
+            observed_state_known=facts.observed_state_known,
+            observed_branch=facts.observed_branch,
+            observed_git_sha=facts.observed_git_sha,
+            observed_dirty=facts.observed_dirty,
+            observed_staged=facts.observed_staged,
+            observed_untracked=facts.observed_untracked,
+            lifecycle_reconciled=facts.lifecycle_reconciled,
+            reconciliation_skip_reason=facts.reconciliation_skip_reason,
             files=tuple(_file_from_row(row) for row in file_rows),
             symbols=tuple(_symbol_from_row(row) for row in symbol_rows),
             graph_nodes=tuple(_graph_node_from_row(row) for row in node_rows),
@@ -2728,6 +2772,7 @@ __all__ = [
     "FindingPage",
     "GraphNodePage",
     "ReviewConflictError",
+    "SnapshotEvidenceFacts",
     "SavedHandoffIntegrityError",
     "RelationshipPage",
     "SnapshotNotFoundError",

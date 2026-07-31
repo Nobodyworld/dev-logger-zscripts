@@ -3,19 +3,22 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { RelationshipsView } from "../components/RelationshipsView";
-import type { RelationshipNeighborhood } from "../types";
+import type { RelationshipNeighborhood, SnapshotEvidenceStatus } from "../types";
 import {
     classNode,
+    completeEvidenceStatus,
     cycleGroup,
     importRelationship,
     moduleA,
     moduleB,
     packageNode,
+    partialEvidenceStatus,
     relationshipNeighborhood,
     relationshipNodePage,
     relationshipSummary,
     response,
     snapshot,
+    unsupportedEvidenceStatus,
 } from "./fixtures";
 
 interface Deferred<T> {
@@ -494,6 +497,11 @@ describe("RelationshipsView", () => {
             "fetch",
             vi.fn((input: RequestInfo | URL) => {
                 const url = String(input);
+                if (url.includes("/evidence-status")) {
+                    return Promise.resolve(
+                        response(unsupportedEvidenceStatus(snapshot.snapshot_id)),
+                    );
+                }
                 if (url.includes("/relationships/summary")) {
                     return Promise.resolve(
                         response({ ...relationshipSummary, supported: false, nodes: [] }),
@@ -503,6 +511,7 @@ describe("RelationshipsView", () => {
             }),
         );
         const old = render(<RelationshipsView snapshotId={snapshot.snapshot_id} />);
+        expect(await screen.findByRole("heading", { name: "Unsupported evidence" })).toBeTruthy();
         expect(await screen.findByText(/predates relationship analysis/)).toBeTruthy();
         old.unmount();
 
@@ -534,15 +543,37 @@ describe("RelationshipsView", () => {
         expect(narrow.container.querySelector(".relationship-workspace")).not.toBeNull();
         expect(narrow.container.querySelector("[style]")).toBeNull();
     });
+
+    it("keeps snapshot partial evidence distinct from bounded graph truncation", async () => {
+        vi.stubGlobal(
+            "fetch",
+            relationshipFetch(
+                undefined,
+                { ...relationshipNeighborhood, truncated: true },
+                undefined,
+                partialEvidenceStatus(snapshot.snapshot_id),
+            ),
+        );
+
+        render(<RelationshipsView snapshotId={snapshot.snapshot_id} />);
+
+        expect(await screen.findByRole("heading", { name: "Partial evidence" })).toBeTruthy();
+        expect(screen.getByText("snapshot-parse-gaps")).toBeTruthy();
+        expect(await screen.findByText(/configured local graph limits/i)).toBeTruthy();
+    });
 });
 
 function relationshipFetch(
     sourceOverride?: (url: string) => Promise<Response> | null,
     neighborhood: RelationshipNeighborhood = relationshipNeighborhood,
     graphOverride?: (url: string) => Promise<Response> | null,
+    evidenceStatus: SnapshotEvidenceStatus = completeEvidenceStatus(),
 ) {
     return vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
+        if (url.includes("/evidence-status")) {
+            return Promise.resolve(response(evidenceStatus));
+        }
         if (url.includes("/relationships/summary")) {
             return Promise.resolve(response(relationshipSummary));
         }

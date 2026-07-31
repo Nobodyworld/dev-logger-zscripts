@@ -65,11 +65,30 @@ service = build_toolkit_service(config, adapter_registry=registry)
 
 The loopback-only workspace also exposes versioned snapshot evidence:
 
+- `GET /api/snapshots/{snapshot_id}/evidence-status`
 - `GET /api/snapshots/{snapshot_id}/relationships/summary`
 - `GET /api/snapshots/{snapshot_id}/relationships`
 - `GET /api/snapshots/{snapshot_id}/relationships/nodes`
 - `GET /api/snapshots/{snapshot_id}/relationships/neighborhood`
 - `GET /api/snapshots/{snapshot_id}/cycles`
+
+The evidence-status response is strict, bounded, and presentation-only. It has
+`presentation_version: "1"`, the exact `snapshot_id`, `evidence_complete`,
+`observation_state_known`, `lifecycle_reconciled`, the bounded
+`reconciliation_skip_reason`, and deterministically ordered `limitations`.
+Each limitation has `code`, `category`, `consequence`, and nullable `count`.
+Codes are `snapshot-truncated`, `snapshot-parse-gaps`,
+`snapshot-schema-unsupported`, `observation-state-unknown`,
+`lifecycle-truncated-scan`, `lifecycle-parse-gaps`, `lifecycle-superseded`, and
+`lifecycle-analysis-status-unavailable`. Complete supported snapshots return an
+empty limitation list. Missing snapshots return a generic `404`; responses do
+not include paths or source.
+
+The service reads the immutable observations and completed analysis associated
+with that exact snapshot. It does not use the newest repository scan.
+Unsupported stored schemas and migrated observation-unknown snapshots remain
+selectable but are explicit limitations. Snapshot truncation is distinct from
+the `truncated` flag on a bounded relationship/node/neighborhood response.
 
 Graph modes are `modules`, `packages`, `inheritance`, `containment`, and
 `types`. Relationship filters are allowlisted to `contains`, `imports`,

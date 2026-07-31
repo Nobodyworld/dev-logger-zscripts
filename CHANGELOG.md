@@ -12,6 +12,13 @@
 
 ### Added
 
+- Evidence-status presentation contract version `1`, a strict lightweight
+  snapshot endpoint, and shared accessible persistent banners across Overview,
+  Symbols, Relationships, Findings, Compare, and Handoff. The presentation
+  distinguishes snapshot partial evidence from bounded-query truncation,
+  preserves exact selected-snapshot lifecycle authority, and leaves analyzer,
+  evidence, rule-set, SQLite, comparison, Handoff, and queue-preset versions
+  unchanged.
 - A versioned server-side `high-signal-v1` Findings queue preset, used by the
   clearly labeled default workspace while complete family/lifecycle counts and
   one-action access to all findings remain available. Finding evidence,

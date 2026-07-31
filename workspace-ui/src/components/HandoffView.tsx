@@ -11,6 +11,8 @@ import {
     previewHandoff,
     saveHandoff,
 } from "../api";
+import { comparisonCompatibilityMessage } from "../comparisonCompatibility";
+import { useEvidenceStatusPair } from "../hooks/useEvidenceStatus";
 import type {
     ComparisonItem,
     ComparisonSection,
@@ -21,6 +23,7 @@ import type {
     HandoffSelectionRequest,
     SavedHandoff,
 } from "../types";
+import { EvidenceStatusBanner } from "./EvidenceStatusBanner";
 
 interface HandoffViewProps {
     repositoryId: string;
@@ -79,6 +82,7 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
     const actionGeneration = useRef(0);
     const loadedPair = useRef("");
     const normalPairChange = useRef(false);
+    const evidenceStatus = useEvidenceStatusPair(baselineId, targetId);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -285,6 +289,14 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
     );
     const selectionKey = useMemo(() => selectionIdentity(selection), [selection]);
     const displayedPreview = savedPreview ?? (previewKey === selectionKey ? preview : null);
+    const sectionCompatibility = summary?.compatibility.sections.find(
+        (item) => item.section === section,
+    );
+    const evidenceLimited =
+        evidenceStatus.baseline?.evidence_complete === false ||
+        evidenceStatus.target?.evidence_complete === false ||
+        Boolean(evidenceStatus.baselineError) ||
+        Boolean(evidenceStatus.targetError);
 
     const buildPreview = async () => {
         const generation = ++actionGeneration.current;
@@ -427,6 +439,35 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
                     </select>
                 </label>
             </div>
+
+            {evidenceLimited ? (
+                <>
+                    <div className="evidence-status-pair">
+                        <EvidenceStatusBanner
+                            status={evidenceStatus.baseline}
+                            side="baseline"
+                            compact
+                            error={evidenceStatus.baselineError}
+                        />
+                        <EvidenceStatusBanner
+                            status={evidenceStatus.target}
+                            side="target"
+                            compact
+                            error={evidenceStatus.targetError}
+                        />
+                    </div>
+                    <p className="notice-banner notice-banner--warning">
+                        Baseline and target limitations shown above will be carried into the handoff
+                        preview.
+                    </p>
+                </>
+            ) : null}
+            {sectionCompatibility && sectionCompatibility.status !== "supported" ? (
+                <p className="notice-banner notice-banner--warning" role="status">
+                    {comparisonCompatibilityMessage(section, sectionCompatibility)} Selectable
+                    handoff evidence for this section may be incomplete or unavailable.
+                </p>
+            ) : null}
 
             <div className="handoff-builder">
                 <div className="handoff-inputs">

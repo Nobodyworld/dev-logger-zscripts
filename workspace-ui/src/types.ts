@@ -32,6 +32,38 @@ export interface Snapshot {
     parse_gap_count: number;
 }
 
+export type EvidenceLimitationCode =
+    | "snapshot-truncated"
+    | "snapshot-parse-gaps"
+    | "snapshot-schema-unsupported"
+    | "observation-state-unknown"
+    | "lifecycle-truncated-scan"
+    | "lifecycle-parse-gaps"
+    | "lifecycle-superseded"
+    | "lifecycle-analysis-status-unavailable";
+
+export interface EvidenceLimitation {
+    code: EvidenceLimitationCode;
+    category: "partial" | "unsupported" | "historical" | "lifecycle";
+    consequence: string;
+    count: number | null;
+}
+
+export interface SnapshotEvidenceStatus {
+    presentation_version: "1";
+    snapshot_id: string;
+    evidence_complete: boolean;
+    observation_state_known: boolean;
+    lifecycle_reconciled: boolean;
+    reconciliation_skip_reason:
+        | "truncated-scan"
+        | "parse-gaps"
+        | "superseded-by-newer-analysis"
+        | "analysis-status-unavailable"
+        | null;
+    limitations: EvidenceLimitation[];
+}
+
 export interface Overview {
     repository: Repository;
     snapshot: Snapshot;

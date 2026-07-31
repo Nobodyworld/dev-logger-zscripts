@@ -11,7 +11,16 @@ import type {
     HandoffSelectionRequest,
     SavedHandoff,
 } from "../types";
-import { finding, findingSummary, olderSnapshot, repository, response, snapshot } from "./fixtures";
+import {
+    completeEvidenceStatus,
+    finding,
+    findingSummary,
+    olderSnapshot,
+    partialEvidenceStatus,
+    repository,
+    response,
+    snapshot,
+} from "./fixtures";
 
 const snapshots: ComparisonSnapshot[] = [
     {
@@ -391,6 +400,17 @@ describe("HandoffView", () => {
             if (url.includes("comparison-snapshots")) {
                 return response({ repository, snapshots: allSnapshots });
             }
+            if (url.includes("/evidence-status")) {
+                return response(
+                    url.includes(snapshotC.snapshot_id)
+                        ? partialEvidenceStatus(snapshotC.snapshot_id)
+                        : completeEvidenceStatus(
+                              url.includes(olderSnapshot.snapshot_id)
+                                  ? olderSnapshot.snapshot_id
+                                  : snapshot.snapshot_id,
+                          ),
+                );
+            }
             if (url.startsWith("/api/handoffs?")) return response({ items: [savedBC] });
             if (url === "/api/handoffs/handoff-b-c") return response(savedBC);
             if (url.includes("/api/comparisons/summary")) {
@@ -451,6 +471,7 @@ describe("HandoffView", () => {
         );
 
         await screen.findByRole("heading", { name: "Handoff" });
+        expect(screen.queryByText("Target evidence is partial.")).toBeNull();
         await user.click(await screen.findByRole("button", { name: /Saved B to C/ }));
 
         await waitFor(() => {
@@ -461,6 +482,7 @@ describe("HandoffView", () => {
                 snapshotC.snapshot_id,
             );
         });
+        expect(await screen.findByText("Target evidence is partial.")).toBeTruthy();
         expect(await screen.findByText("# Exact saved B to C", { exact: false })).toBeTruthy();
         expect(screen.getByText("Immutable saved output")).toBeTruthy();
         expect(screen.getByText("Digest saved-b-c-digest")).toBeTruthy();
@@ -544,6 +566,15 @@ function handoffFetch(
         const url = String(input);
         if (url.includes("comparison-snapshots")) {
             return response({ repository, snapshots });
+        }
+        if (url.includes("/evidence-status")) {
+            return response(
+                completeEvidenceStatus(
+                    url.includes(olderSnapshot.snapshot_id)
+                        ? olderSnapshot.snapshot_id
+                        : snapshot.snapshot_id,
+                ),
+            );
         }
         if (url.startsWith("/api/handoffs?")) return response({ items: [] });
         if (url.includes("/api/comparisons/summary")) return response(summary);

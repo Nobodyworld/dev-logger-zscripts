@@ -20,6 +20,7 @@ import type {
     HandoffSelectionRequest,
     SavedHandoff,
     Snapshot,
+    SnapshotEvidenceStatus,
     SourceEvidence,
     SymbolPage,
 } from "./types";
@@ -92,6 +93,16 @@ export async function listSnapshots(repositoryId: string): Promise<Snapshot[]> {
 
 export function getOverview(snapshotId: string): Promise<Overview> {
     return request<Overview>(`/api/snapshots/${encodeURIComponent(snapshotId)}/overview`);
+}
+
+export function getSnapshotEvidenceStatus(
+    snapshotId: string,
+    signal?: AbortSignal,
+): Promise<SnapshotEvidenceStatus> {
+    return request<SnapshotEvidenceStatus>(
+        `/api/snapshots/${encodeURIComponent(snapshotId)}/evidence-status`,
+        { signal },
+    );
 }
 
 export interface SymbolQuery {

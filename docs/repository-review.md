@@ -66,6 +66,31 @@ The Overview includes repository and Git state, completed snapshot identity,
 analyzer/schema/rule-set versions, files analyzed and excluded, package/module
 counts, class/function/method counts, parse gaps, and truncation state.
 
+Overview, Symbols, Relationships, and Findings load evidence status for the
+exact selected snapshot. Compare and Handoff show it independently for the
+baseline and target. Complete, currently supported evidence produces no
+banner. A status request failure is local to the banner and does not hide
+successfully loaded evidence. Presentation contract version `1` uses these
+stable codes and consequences:
+
+| Code | Consequence |
+| --- | --- |
+| `snapshot-truncated` | Some files were not analyzed. Absence from this snapshot does not prove that a file, symbol, relationship, metric, or finding was removed or does not exist. |
+| `snapshot-parse-gaps` | One or more files could not be parsed. Evidence derived from those files may be absent or incomplete. |
+| `snapshot-schema-unsupported` | This view cannot interpret the stored evidence version. Run a new scan to produce currently supported evidence. |
+| `observation-state-unknown` | Branch, Git SHA, and working-tree facts were not recorded for this historical snapshot. |
+| `lifecycle-truncated-scan` | Automatic finding resolution was skipped because absence was not reliable. Previously active findings may remain active. |
+| `lifecycle-parse-gaps` | Automatic finding resolution was skipped because absence was not reliable. Previously active findings may remain active. |
+| `lifecycle-superseded` | This completed snapshot was superseded by a newer analysis and did not become authoritative for current finding lifecycle state. |
+| `lifecycle-analysis-status-unavailable` | Finding lifecycle authority could not be established for this historical snapshot. Do not infer finding resolution from absence. |
+
+Status derives from the selected snapshot's immutable truncation, parse-gap,
+schema, and observation facts plus the completed analysis linked to that exact
+snapshot. It never substitutes the newest repository scan. Lifecycle reasons
+remain `truncated-scan`, `parse-gaps`, `superseded-by-newer-analysis`, or
+`analysis-status-unavailable`. This presentation does not alter analysis,
+finding, lifecycle, comparison, Handoff, persistence, or snapshot identity.
+
 The Symbols view supports:
 
 - search across qualified names and signatures;
@@ -88,6 +113,11 @@ The Relationships view supports:
 - incoming and outgoing evidence lists, exact repository-relative source
   locations, and an on-demand source panel;
 - explicit loading, unsupported, error, empty, and truncation states.
+
+Snapshot partial evidence is separate from a bounded node, summary, or
+neighborhood response's `truncated` flag. The former limits conclusions about
+what exists in the repository; the latter only says that the current bounded
+query returned a deterministic subset.
 
 The Findings view supports bounded server-side search, family/severity/
 confidence/lifecycle/review filters, allowlisted sorting, pagination, source
@@ -130,6 +160,9 @@ schemas, and incomplete/superseded lifecycle reconciliation are explicit.
 When target evidence is incomplete, an absent subject is **not observed in
 partial target evidence**, not claimed removed. Current finding lifecycle and
 review status are labeled separately from immutable snapshot occurrence.
+Persistent baseline and target banners identify which side is limited, while
+the selected section keeps its compatibility warning. A complete side has no
+banner. Unsupported sections remain unavailable rather than implying absence.
 
 The Handoff view renders selected comparison deltas, findings, analysis gaps,
 and a plain-text objective as deterministic Markdown and normalized JSON.
@@ -144,6 +177,10 @@ notes are excluded unless the user separately enables the exact finding. Copy
 uses the clipboard only after an explicit click; downloads are same-origin
 Markdown or JSON blobs with fixed media types. Saved handoffs are immutable
 local records, preserve the exact digested strings, and can be reopened.
+The builder shows the current baseline and target limitations before preview or
+save and explains that they will be carried into the handoff. Reopening a saved
+pair clears the previous pair's presentation immediately. Format, digest,
+saved-record schema, rendering, and byte budgets are unchanged.
 
 Finding families cover dependency and inheritance cycles, exact duplicate-name
 candidates, size, complexity, nesting, parameter count, coupling, inheritance
@@ -366,6 +403,7 @@ The same process serves the SPA and these experimental routes:
 - `POST /api/analyses/{analysis_id}/cancel`
 - `GET /api/repositories/{repository_id}/snapshots`
 - `GET /api/snapshots/{snapshot_id}`
+- `GET /api/snapshots/{snapshot_id}/evidence-status`
 - `GET /api/snapshots/{snapshot_id}/overview`
 - `GET /api/snapshots/{snapshot_id}/symbols`
 - `GET /api/snapshots/{snapshot_id}/source`

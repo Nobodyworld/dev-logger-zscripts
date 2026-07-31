@@ -156,6 +156,10 @@ zscripts experimental analyze PATH \
   complete per-family summary counts are never narrowed by it.
 - Comparison item pages contain at most 100 records; section/change/sort tokens
   are allowlisted and search text is limited to 200 characters.
+- Evidence-status presentation version `1` is derived from exact stored
+  snapshot and linked-analysis facts. Its codes, consequences, ordering, and
+  complete-snapshot no-banner behavior are not repository-configurable. It
+  adds no scan setting, persistence migration, or snapshot identity input.
 - Handoff format `2` fixes budgets at 8 sections, 50 items per section, 50
   findings, 20 explicitly selected notes, 1,000 characters per note, 4,000
   objective characters, 100,000 Markdown characters, and exactly 500,000

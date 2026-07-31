@@ -133,6 +133,173 @@ def test_snapshot_round_trip_filters_and_source_evidence(tmp_path: Path) -> None
         service.read_source(first.snapshot.snapshot_id, "../outside.py", start_line=1, end_line=5)
 
 
+def test_snapshot_evidence_status_is_complete_and_zero_noise(tmp_path: Path) -> None:
+    repository = tmp_path / "ordinary"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+
+    status = service.snapshot_evidence_status(evidence.snapshot.snapshot_id)
+
+    assert status.presentation_version == "1"
+    assert status.snapshot_id == evidence.snapshot.snapshot_id
+    assert status.evidence_complete is True
+    assert status.observation_state_known is True
+    assert status.lifecycle_reconciled is True
+    assert status.reconciliation_skip_reason is None
+    assert status.limitations == ()
+
+
+def test_snapshot_evidence_status_orders_combined_limitations_and_redacts_paths(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "private-repository-name"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    snapshot_id = evidence.snapshot.snapshot_id
+    with sqlite3.connect(service.store.database_path) as connection:
+        connection.execute(
+            """
+            UPDATE snapshots
+            SET truncated = 1, parse_gap_count = 2, schema_version = '1',
+                observed_state_known = 0
+            WHERE snapshot_id = ?
+            """,
+            (snapshot_id,),
+        )
+        connection.execute(
+            """
+            UPDATE analyses
+            SET lifecycle_reconciled = 1, reconciliation_skip_reason = 'parse-gaps'
+            WHERE snapshot_id = ? AND state = 'completed'
+            """,
+            (snapshot_id,),
+        )
+
+    status = service.snapshot_evidence_status(snapshot_id)
+
+    assert status.evidence_complete is False
+    assert [item.code for item in status.limitations] == [
+        "snapshot-truncated",
+        "snapshot-parse-gaps",
+        "snapshot-schema-unsupported",
+        "observation-state-unknown",
+        "lifecycle-parse-gaps",
+    ]
+    assert status.limitations[1].count == 2
+    assert all(str(repository.resolve()) not in item.consequence for item in status.limitations)
+
+
+def test_snapshot_evidence_status_reports_individual_snapshot_limitations(tmp_path: Path) -> None:
+    repository = tmp_path / "ordinary"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    snapshot_id = evidence.snapshot.snapshot_id
+    cases = (
+        (1, 0, "4", 1, ["snapshot-truncated"]),
+        (0, 2, "4", 1, ["snapshot-parse-gaps"]),
+        (1, 2, "4", 1, ["snapshot-truncated", "snapshot-parse-gaps"]),
+        (0, 0, "1", 1, ["snapshot-schema-unsupported"]),
+        (0, 0, "4", 0, ["observation-state-unknown"]),
+    )
+    for truncated, parse_gaps, schema_version, observation_known, expected in cases:
+        with sqlite3.connect(service.store.database_path) as connection:
+            connection.execute(
+                """
+                UPDATE snapshots
+                SET truncated = ?, parse_gap_count = ?, schema_version = ?,
+                    observed_state_known = ?
+                WHERE snapshot_id = ?
+                """,
+                (truncated, parse_gaps, schema_version, observation_known, snapshot_id),
+            )
+
+        status = service.snapshot_evidence_status(snapshot_id)
+
+        assert [item.code for item in status.limitations] == expected
+
+
+def test_snapshot_evidence_status_maps_allowlisted_lifecycle_reasons(tmp_path: Path) -> None:
+    repository = tmp_path / "ordinary"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    snapshot_id = evidence.snapshot.snapshot_id
+    cases = (
+        ("truncated-scan", True, "lifecycle-truncated-scan"),
+        ("parse-gaps", True, "lifecycle-parse-gaps"),
+        ("superseded-by-newer-analysis", False, "lifecycle-superseded"),
+        (None, False, "lifecycle-analysis-status-unavailable"),
+    )
+    for reason, reconciled, expected_code in cases:
+        with sqlite3.connect(service.store.database_path) as connection:
+            connection.execute(
+                """
+                UPDATE analyses
+                SET lifecycle_reconciled = ?, reconciliation_skip_reason = ?
+                WHERE snapshot_id = ? AND state = 'completed'
+                """,
+                (int(reconciled), reason, snapshot_id),
+            )
+
+        status = service.snapshot_evidence_status(snapshot_id)
+
+        assert status.limitations[-1].code == expected_code
+        assert status.reconciliation_skip_reason == (reason or "analysis-status-unavailable")
+
+
+def test_snapshot_evidence_status_uses_latest_completed_analysis_for_exact_snapshot(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "ordinary"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    first_analysis = service.store.allocate_analysis_id()
+    first = service.analyze(repository, analysis_id=first_analysis)
+    repeated_analysis = service.store.allocate_analysis_id()
+    repeated = service.analyze(repository, analysis_id=repeated_analysis)
+    assert repeated.snapshot.snapshot_id == first.snapshot.snapshot_id
+    (repository / "pkg" / "module.py").write_text("def next_snapshot(): ...\n", encoding="utf-8")
+    next_analysis = service.store.allocate_analysis_id()
+    next_evidence = service.analyze(repository, analysis_id=next_analysis)
+    with sqlite3.connect(service.store.database_path) as connection:
+        connection.execute(
+            """
+            UPDATE analyses
+            SET lifecycle_reconciled = 1, reconciliation_skip_reason = 'truncated-scan'
+            WHERE analysis_id = ?
+            """,
+            (first_analysis,),
+        )
+        connection.execute(
+            """
+            UPDATE analyses
+            SET lifecycle_reconciled = 0,
+                reconciliation_skip_reason = 'superseded-by-newer-analysis'
+            WHERE analysis_id = ?
+            """,
+            (repeated_analysis,),
+        )
+        connection.execute(
+            """
+            UPDATE analyses
+            SET lifecycle_reconciled = 1, reconciliation_skip_reason = 'parse-gaps'
+            WHERE analysis_id = ?
+            """,
+            (next_analysis,),
+        )
+
+    first_status = service.snapshot_evidence_status(first.snapshot.snapshot_id)
+    next_status = service.snapshot_evidence_status(next_evidence.snapshot.snapshot_id)
+
+    assert first_status.reconciliation_skip_reason == "superseded-by-newer-analysis"
+    assert first_status.limitations[-1].code == "lifecycle-superseded"
+    assert next_status.reconciliation_skip_reason == "parse-gaps"
+    assert next_status.limitations[-1].code == "lifecycle-parse-gaps"
+
+
 def test_snapshot_promotion_rolls_back_all_evidence_on_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -233,6 +400,12 @@ def test_mvp_schema_migrates_without_reinterpreting_old_snapshot(tmp_path: Path)
     assert service.cycles("old-snapshot")["items"] == []
     assert service.finding_summary("old-snapshot")["supported"] is False
     assert service.findings("old-snapshot")["items"] == []
+    old_status = service.snapshot_evidence_status("old-snapshot")
+    assert [item.code for item in old_status.limitations] == [
+        "snapshot-schema-unsupported",
+        "observation-state-unknown",
+        "lifecycle-analysis-status-unavailable",
+    ]
     with sqlite3.connect(database) as connection:
         assert (
             connection.execute("SELECT version FROM schema_version").fetchone()[0] == DATABASE_SCHEMA_VERSION

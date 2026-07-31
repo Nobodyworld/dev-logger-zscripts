@@ -30,6 +30,206 @@ function deferred<T>(): Deferred<T> {
 }
 
 describe("FindingsView", () => {
+    it("opens the ordinary workspace in a labeled focused queue with complete family counts", async () => {
+        const fetchMock = findingsFetch();
+        vi.stubGlobal("fetch", fetchMock);
+        render(<FindingsView snapshotId={snapshot.snapshot_id} />);
+
+        expect(await screen.findByRole("heading", { name: "Focused queue" })).toBeTruthy();
+        expect(screen.getByText("Applied preset: high-signal-v1")).toBeTruthy();
+        expect(
+            screen.getByText(/documentation and orphan candidates remain available/i),
+        ).toBeTruthy();
+        await waitFor(() => {
+            expect(screen.getByText("Documentation").nextElementSibling?.textContent).toBe("14");
+            expect(screen.getByText("Orphan candidates").nextElementSibling?.textContent).toBe(
+                "18",
+            );
+            expect(
+                screen.getByText("Duplicate-name candidates").nextElementSibling?.textContent,
+            ).toBe("0");
+            expect(
+                screen.getByText("Test-evidence candidates").nextElementSibling?.textContent,
+            ).toBe("3");
+        });
+        await waitFor(() => {
+            expect(
+                fetchMock.mock.calls.some(([input]) =>
+                    String(input).includes("preset=high-signal-v1"),
+                ),
+            ).toBe(true);
+        });
+    });
+
+    it("switches between all and focused queues in one action", async () => {
+        const fetchMock = findingsFetch();
+        vi.stubGlobal("fetch", fetchMock);
+        const user = userEvent.setup();
+        render(<FindingsView snapshotId={snapshot.snapshot_id} />);
+
+        await user.type(
+            screen.getByPlaceholderText("Search title or qualified subject"),
+            "candidate",
+        );
+        await user.selectOptions(screen.getByLabelText("Status"), "new");
+        await user.selectOptions(screen.getByLabelText("Evidence"), "resolved");
+        await user.selectOptions(screen.getByLabelText("Sort"), "family");
+        await user.click(await screen.findByRole("button", { name: "Show all findings" }));
+        expect(await screen.findByRole("heading", { name: "All findings" })).toBeTruthy();
+        expect(screen.getByPlaceholderText("Search title or qualified subject")).toHaveProperty(
+            "value",
+            "candidate",
+        );
+        expect(screen.getByLabelText("Status")).toHaveProperty("value", "new");
+        expect(screen.getByLabelText("Evidence")).toHaveProperty("value", "resolved");
+        expect(screen.getByLabelText("Sort")).toHaveProperty("value", "family");
+        await waitFor(() => {
+            expect(
+                fetchMock.mock.calls.some(([input]) => String(input).includes("preset=all")),
+            ).toBe(true);
+        });
+        await user.click(screen.getByRole("button", { name: "Restore focused queue" }));
+        expect(await screen.findByRole("heading", { name: "Focused queue" })).toBeTruthy();
+        expect(screen.getByText("Focused high-signal-v1 queue restored.")).toBeTruthy();
+    });
+
+    it("exposes the queue selector in native keyboard order", async () => {
+        vi.stubGlobal("fetch", findingsFetch());
+        const user = userEvent.setup();
+        render(<FindingsView snapshotId={snapshot.snapshot_id} />);
+
+        const focused = await screen.findByRole("button", { name: "Focused" });
+        const all = screen.getByRole("button", { name: "All findings" });
+        focused.focus();
+        await user.tab();
+        expect(document.activeElement).toBe(all);
+        await user.keyboard("{Enter}");
+        expect(await screen.findByRole("heading", { name: "All findings" })).toBeTruthy();
+    });
+
+    it("clears the focused preset for an explicit family filter", async () => {
+        const fetchMock = findingsFetch();
+        vi.stubGlobal("fetch", fetchMock);
+        const user = userEvent.setup();
+        render(<FindingsView snapshotId={snapshot.snapshot_id} />);
+
+        await user.selectOptions(await screen.findByLabelText("Family"), "documentation");
+        expect(
+            await screen.findByText("Focused preset cleared for explicit filters."),
+        ).toBeTruthy();
+        expect(screen.getByRole("heading", { name: "All findings" })).toBeTruthy();
+        await waitFor(() => {
+            expect(
+                fetchMock.mock.calls.some(([input]) => {
+                    const url = String(input);
+                    return url.includes("preset=all") && url.includes("family=documentation");
+                }),
+            ).toBe(true);
+        });
+    });
+
+    it.each(["needs-action", "resolved", "high-confidence-severity"])(
+        "keeps the explicit %s navigation preset on the complete queue",
+        async (navigationPreset) => {
+            const fetchMock = findingsFetch();
+            vi.stubGlobal("fetch", fetchMock);
+            render(<FindingsView snapshotId={snapshot.snapshot_id} preset={navigationPreset} />);
+
+            expect(await screen.findByRole("heading", { name: "All findings" })).toBeTruthy();
+            await waitFor(() => {
+                expect(
+                    fetchMock.mock.calls.some(([input]) => String(input).includes("preset=all")),
+                ).toBe(true);
+            });
+        },
+    );
+
+    it("resets an explicit navigation preset when ordinary Findings is reopened", async () => {
+        const fetchMock = findingsFetch();
+        vi.stubGlobal("fetch", fetchMock);
+        const { rerender } = render(
+            <FindingsView snapshotId={snapshot.snapshot_id} preset="needs-action" />,
+        );
+
+        expect(await screen.findByRole("heading", { name: "All findings" })).toBeTruthy();
+        expect(screen.getByLabelText("Status")).toHaveProperty("value", "needs-action");
+        rerender(<FindingsView snapshotId={snapshot.snapshot_id} preset="" />);
+
+        expect(await screen.findByRole("heading", { name: "Focused queue" })).toBeTruthy();
+        expect(screen.getByLabelText("Status")).toHaveProperty("value", "");
+        await waitFor(() => {
+            expect(
+                fetchMock.mock.calls.some(([input]) =>
+                    String(input).includes("preset=high-signal-v1"),
+                ),
+            ).toBe(true);
+        });
+    });
+
+    it("ignores a stale focused response after switching to all findings", async () => {
+        const focusedList = deferred<Response>();
+        const fetchMock = vi.fn((input: RequestInfo | URL) => {
+            const url = String(input);
+            if (url.includes("/findings/summary")) {
+                return Promise.resolve(response(findingSummary));
+            }
+            if (url.includes("/findings?") && url.includes("preset=high-signal-v1")) {
+                return focusedList.promise;
+            }
+            if (url.includes("/findings?") && url.includes("preset=all")) {
+                return Promise.resolve(
+                    response({
+                        supported: true,
+                        preset: "all",
+                        items: [secondFinding],
+                        total: 1,
+                        page: 1,
+                        page_size: 25,
+                    }),
+                );
+            }
+            if (url.includes(`/${secondFinding.finding_id}/history`)) {
+                return Promise.resolve(response(findingHistory));
+            }
+            if (url.includes(`/${secondFinding.finding_id}?`)) {
+                return Promise.resolve(response(secondFinding));
+            }
+            if (url.includes("/source?")) {
+                return Promise.resolve(
+                    response({
+                        relative_path: secondFinding.relative_path,
+                        start_line: 1,
+                        end_line: 4,
+                        lines: [],
+                        truncated: false,
+                        content_hash: "source-hash",
+                    }),
+                );
+            }
+            return Promise.resolve(response({ detail: "Unexpected request" }, 500));
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        const user = userEvent.setup();
+        render(<FindingsView snapshotId={snapshot.snapshot_id} />);
+
+        await user.click(await screen.findByRole("button", { name: "Show all findings" }));
+        expect(await screen.findByRole("heading", { name: secondFinding.title })).toBeTruthy();
+        focusedList.resolve(
+            response({
+                supported: true,
+                preset: "high-signal-v1",
+                items: [finding],
+                total: 1,
+                page: 1,
+                page_size: 25,
+            }),
+        );
+        await waitFor(() => {
+            expect(screen.getByRole("heading", { name: secondFinding.title })).toBeTruthy();
+            expect(screen.queryByRole("heading", { name: finding.title })).toBeNull();
+        });
+    });
+
     it("loads, filters, selects, escapes content, and shows bounded evidence", async () => {
         const fetchMock = findingsFetch();
         vi.stubGlobal("fetch", fetchMock);
@@ -58,6 +258,7 @@ describe("FindingsView", () => {
                         url.includes("search=complex_target") &&
                         url.includes("severity=low") &&
                         url.includes("confidence=high") &&
+                        url.includes("preset=all") &&
                         url.includes("sort=qualified_subject")
                     );
                 }),
@@ -83,6 +284,28 @@ describe("FindingsView", () => {
         expect(patch).toBeTruthy();
         expect(String(patch?.[1]?.body)).toContain("<script>");
         expect(document.querySelector("script")).toBeNull();
+    });
+
+    it("reviews an excluded family from All findings without resetting the queue", async () => {
+        const fetchMock = reviewQueueFetch([finding, secondFinding]);
+        vi.stubGlobal("fetch", fetchMock);
+        const user = userEvent.setup();
+        render(<FindingsView snapshotId={snapshot.snapshot_id} />);
+
+        await user.click(await screen.findByRole("button", { name: "Show all findings" }));
+        await user.click(
+            await screen.findByRole("button", { name: /Orphan-looking public symbol candidate/ }),
+        );
+        await user.selectOptions(await screen.findByLabelText("Review status"), "accepted");
+        await user.click(screen.getByRole("button", { name: "Save review" }));
+
+        expect(await screen.findByText("Review saved.")).toBeTruthy();
+        expect(screen.getByRole("heading", { name: "All findings" })).toBeTruthy();
+        expect(
+            fetchMock.mock.calls
+                .filter(([input]) => String(input).includes("/findings?"))
+                .every(([input]) => String(input).includes("preset=all")),
+        ).toBe(true);
     });
 
     it("reloads safe current state on optimistic concurrency conflict", async () => {
@@ -130,6 +353,11 @@ describe("FindingsView", () => {
                 fetchMock.mock.calls.filter(([input]) => String(input).includes("/findings?"))
                     .length,
             ).toBeGreaterThanOrEqual(2);
+            expect(
+                fetchMock.mock.calls
+                    .filter(([input]) => String(input).includes("/findings?"))
+                    .every(([input]) => String(input).includes("preset=high-signal-v1")),
+            ).toBe(true);
         });
     });
 
@@ -166,6 +394,11 @@ describe("FindingsView", () => {
         expect(
             fetchMock.mock.calls.filter(([input]) => String(input).includes("/findings?")).length,
         ).toBeGreaterThanOrEqual(2);
+        expect(
+            fetchMock.mock.calls
+                .filter(([input]) => String(input).includes("/findings?"))
+                .every(([input]) => String(input).includes("preset=high-signal-v1")),
+        ).toBe(true);
     });
 
     it("refreshes needs-action filters and status ordering after saves", async () => {
@@ -242,6 +475,7 @@ describe("FindingsView", () => {
                 return Promise.resolve(
                     response({
                         supported: true,
+                        preset: parameters.get("preset") ?? "all",
                         items,
                         total: items.length,
                         page: 1,
@@ -292,6 +526,7 @@ describe("FindingsView", () => {
         staleList.resolve(
             response({
                 supported: true,
+                preset: "high-signal-v1",
                 items: [finding],
                 total: 1,
                 page: 1,
@@ -428,6 +663,7 @@ describe("FindingsView", () => {
                     return Promise.resolve(
                         response({
                             supported: false,
+                            preset: "high-signal-v1",
                             items: [],
                             total: 0,
                             page: 1,
@@ -467,9 +703,11 @@ function findingsFetch(
         const url = String(input);
         if (url.includes("/findings/summary")) return Promise.resolve(response(summary));
         if (url.includes("/findings?")) {
+            const parameters = new URL(url, "http://localhost").searchParams;
             return Promise.resolve(
                 response({
                     supported: true,
+                    preset: parameters.get("preset") ?? "all",
                     items: [finding, secondFinding],
                     total: 2,
                     page: 1,
@@ -562,6 +800,7 @@ function reviewQueueFetch(initialItems: Finding[]) {
             return Promise.resolve(
                 response({
                     supported: true,
+                    preset: parameters.get("preset") ?? "all",
                     items: matches.slice(start, start + pageSize),
                     total: matches.length,
                     page: pageNumber,

@@ -310,6 +310,7 @@ class FindingSummaryResponse(_StrictModel):
     accepted: int
     dismissed: int
     severity: dict[str, int]
+    families: dict[str, int]
     low_confidence: int
     reconciliation_complete: bool
     lifecycle_reconciled: bool
@@ -318,6 +319,7 @@ class FindingSummaryResponse(_StrictModel):
 
 class FindingPageResponse(_StrictModel):
     supported: bool
+    preset: Literal["all", "high-signal-v1"]
     items: list[FindingResponse]
     total: int
     page: int
@@ -942,6 +944,7 @@ def create_workspace_app(
     )
     def findings(
         snapshot_id: str,
+        preset: Literal["all", "high-signal-v1"] = "all",
         family: Annotated[str | None, Query(max_length=64)] = None,
         severity: Literal["high", "medium", "low"] | None = None,
         confidence: Literal["high", "medium", "low"] | None = None,
@@ -965,6 +968,7 @@ def create_workspace_app(
         try:
             return review_service.findings(
                 snapshot_id,
+                preset=preset,
                 family=family,
                 severity=severity,
                 confidence=confidence,

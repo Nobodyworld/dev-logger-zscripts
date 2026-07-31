@@ -3,6 +3,7 @@ import type {
     Overview,
     CycleList,
     Finding,
+    FindingQueuePreset,
     FindingHistory,
     FindingPage,
     FindingSummary,
@@ -211,6 +212,7 @@ export function getFindingSummary(snapshotId: string): Promise<FindingSummary> {
 }
 
 export interface FindingQuery {
+    preset?: FindingQueuePreset;
     search: string;
     family: string;
     severity: string;
@@ -235,6 +237,7 @@ export function getFindings(
         page: String(query.page),
         page_size: String(query.pageSize),
     });
+    if (query.preset) parameters.set("preset", query.preset);
     if (query.family) parameters.set("family", query.family);
     if (query.severity) parameters.set("severity", query.severity);
     if (query.confidence) parameters.set("confidence", query.confidence);

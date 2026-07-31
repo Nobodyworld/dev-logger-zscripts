@@ -12,8 +12,10 @@ import {
 import { SearchIcon } from "../icons";
 import type {
     Finding,
+    FindingFamily,
     FindingHistory,
     FindingPage,
+    FindingQueuePreset,
     FindingSummary,
     ReviewStatus,
     SourceEvidence,
@@ -32,12 +34,26 @@ const emptySummary: FindingSummary = {
     accepted: 0,
     dismissed: 0,
     severity: { high: 0, medium: 0, low: 0 },
+    families: {
+        "dependency-cycle": 0,
+        "inheritance-cycle": 0,
+        "duplicate-name-candidate": 0,
+        oversized: 0,
+        complexity: 0,
+        nesting: 0,
+        parameters: 0,
+        coupling: 0,
+        inheritance: 0,
+        documentation: 0,
+        "test-evidence-candidate": 0,
+        "orphan-candidate": 0,
+    },
     low_confidence: 0,
     reconciliation_complete: true,
     lifecycle_reconciled: true,
     reconciliation_skip_reason: null,
 };
-const findingFamilies = [
+const findingFamilies: FindingFamily[] = [
     "dependency-cycle",
     "inheritance-cycle",
     "duplicate-name-candidate",
@@ -51,8 +67,17 @@ const findingFamilies = [
     "test-evidence-candidate",
     "orphan-candidate",
 ];
+const excludedFamilyLabels: Array<[FindingFamily, string]> = [
+    ["documentation", "Documentation"],
+    ["orphan-candidate", "Orphan candidates"],
+    ["duplicate-name-candidate", "Duplicate-name candidates"],
+    ["test-evidence-candidate", "Test-evidence candidates"],
+];
 
 export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
+    const [queuePreset, setQueuePreset] = useState<FindingQueuePreset>(
+        preset ? "all" : "high-signal-v1",
+    );
     const [summary, setSummary] = useState<FindingSummary>(emptySummary);
     const [page, setPage] = useState<FindingPage | null>(null);
     const [search, setSearch] = useState("");
@@ -83,10 +108,12 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
     const [saving, setSaving] = useState(false);
     const [saveMessage, setSaveMessage] = useState("");
     const [reviewNotice, setReviewNotice] = useState("");
+    const [filterNotice, setFilterNotice] = useState("");
     const [reloadVersion, setReloadVersion] = useState(0);
     const listGeneration = useRef(0);
     const detailGeneration = useRef(0);
     const saveGeneration = useRef(0);
+    const previousNavigationPreset = useRef(preset);
     const selectedIdRef = useRef(selectedId);
     const pageRef = useRef(page);
 
@@ -95,6 +122,7 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
     const pageSize = 25;
     const listQuery = useMemo(
         () => ({
+            preset: queuePreset,
             search,
             family,
             severity,
@@ -107,6 +135,7 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
             pageSize,
         }),
         [
+            queuePreset,
             search,
             family,
             severity,
@@ -117,6 +146,19 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
             direction,
             pageNumber,
         ],
+    );
+
+    const activeConstraints = useMemo(
+        () => [
+            queuePreset === "high-signal-v1" ? "Queue: Focused" : "Queue: All findings",
+            ...(family ? [`Family: ${family}`] : []),
+            ...(severity ? [`Severity: ${severity}`] : []),
+            ...(confidence ? [`Confidence: ${confidence}`] : []),
+            `Status: ${effectiveStatus || "all"}`,
+            `Evidence: ${evidenceState || "active and resolved"}`,
+            ...(search ? [`Search: ${search}`] : []),
+        ],
+        [queuePreset, family, severity, confidence, effectiveStatus, evidenceState, search],
     );
 
     const dirty =
@@ -142,6 +184,25 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
         setDetailError(null);
         setSaveMessage("");
     }, []);
+
+    useEffect(() => {
+        if (previousNavigationPreset.current === preset) return;
+        previousNavigationPreset.current = preset;
+        listGeneration.current += 1;
+        setQueuePreset(preset ? "all" : "high-signal-v1");
+        setPage(null);
+        setSearch("");
+        setFamily("");
+        setSeverity(preset === "high-confidence-severity" ? "high" : "");
+        setConfidence(preset === "high-confidence-severity" ? "high" : "");
+        setEffectiveStatus(preset === "needs-action" ? "needs-action" : "");
+        setEvidenceState(preset === "resolved" ? "resolved" : "active");
+        setSort("severity");
+        setPageNumber(1);
+        setFilterNotice("");
+        invalidateSelection();
+        setSelectedId(null);
+    }, [invalidateSelection, preset]);
 
     const reloadWorkspace = useCallback(async () => {
         const generation = ++listGeneration.current;
@@ -268,6 +329,40 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
         setSelectedId(findingId);
     };
 
+    const clearFocusedForExplicitFilter = (value: string) => {
+        if (value && queuePreset === "high-signal-v1") {
+            setQueuePreset("all");
+            setFilterNotice("Focused preset cleared for explicit filters.");
+        }
+        setPageNumber(1);
+    };
+
+    const showAllFindings = () => {
+        setQueuePreset("all");
+        setPageNumber(1);
+        setFilterNotice("All finding families are now included.");
+    };
+
+    const restoreFocusedQueue = () => {
+        setQueuePreset("high-signal-v1");
+        setFamily("");
+        setSeverity("");
+        setConfidence("");
+        setPageNumber(1);
+        setFilterNotice("Focused high-signal-v1 queue restored.");
+    };
+
+    const clearExplicitFilters = () => {
+        setSearch("");
+        setFamily("");
+        setSeverity("");
+        setConfidence("");
+        setEffectiveStatus("");
+        setEvidenceState("active");
+        setPageNumber(1);
+        setFilterNotice("Explicit filters cleared.");
+    };
+
     const saveReview = async () => {
         if (!selected || !dirty || saving) return;
         const findingId = selected.finding_id;
@@ -371,6 +466,82 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
                 </p>
             ) : null}
 
+            <section
+                className={`finding-preset-banner finding-preset-banner--${queuePreset === "high-signal-v1" ? "focused" : "all"}`}
+                aria-labelledby="finding-preset-heading"
+            >
+                <div>
+                    <p className="eyebrow">Queue preset</p>
+                    <h3 id="finding-preset-heading">
+                        {queuePreset === "high-signal-v1" ? "Focused queue" : "All findings"}
+                    </h3>
+                    <p className="finding-preset-name">Applied preset: {queuePreset}</p>
+                    <p>
+                        {queuePreset === "high-signal-v1"
+                            ? "Showing higher-signal cycles and measured complexity, size, coupling, nesting, parameter, and inheritance findings. Full lifecycle counts remain above; documentation and orphan candidates remain available in All findings."
+                            : "Showing every finding family in the current lifecycle."}
+                    </p>
+                    <dl
+                        className="finding-excluded-counts"
+                        aria-label="Full low-signal family counts"
+                    >
+                        {excludedFamilyLabels.map(([familyName, label]) => (
+                            <div key={familyName}>
+                                <dt>{label}</dt>
+                                <dd>{summary.families[familyName] ?? 0}</dd>
+                            </div>
+                        ))}
+                    </dl>
+                </div>
+                <div
+                    className="finding-preset-controls"
+                    role="group"
+                    aria-label="Finding queue preset. Focused is a higher-signal subset."
+                >
+                    <button
+                        type="button"
+                        aria-pressed={queuePreset === "high-signal-v1"}
+                        onClick={restoreFocusedQueue}
+                    >
+                        Focused
+                    </button>
+                    <button
+                        type="button"
+                        aria-pressed={queuePreset === "all"}
+                        onClick={showAllFindings}
+                    >
+                        All findings
+                    </button>
+                </div>
+                {queuePreset === "high-signal-v1" ? (
+                    <button type="button" className="text-action" onClick={showAllFindings}>
+                        Show all findings
+                    </button>
+                ) : (
+                    <button type="button" className="text-action" onClick={restoreFocusedQueue}>
+                        Restore focused queue
+                    </button>
+                )}
+            </section>
+
+            <div className="finding-active-filters" aria-label="Active finding constraints">
+                <span>Active constraints</span>
+                <ul>
+                    {activeConstraints.map((constraint) => (
+                        <li key={constraint}>{constraint}</li>
+                    ))}
+                </ul>
+                <button type="button" onClick={clearExplicitFilters}>
+                    Clear explicit filters
+                </button>
+            </div>
+
+            {filterNotice ? (
+                <p className="selection-status" role="status">
+                    {filterNotice}
+                </p>
+            ) : null}
+
             <div className="finding-toolbar" aria-label="Finding filters">
                 <label className="search-field">
                     <span className="sr-only">Search findings</span>
@@ -385,7 +556,14 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
                         }}
                     />
                 </label>
-                <Filter label="Family" value={family} onChange={setFamily}>
+                <Filter
+                    label="Family"
+                    value={family}
+                    onChange={(value) => {
+                        clearFocusedForExplicitFilter(value);
+                        setFamily(value);
+                    }}
+                >
                     <option value="">All families</option>
                     {findingFamilies.map((item) => (
                         <option value={item} key={item}>
@@ -393,19 +571,40 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
                         </option>
                     ))}
                 </Filter>
-                <Filter label="Severity" value={severity} onChange={setSeverity}>
+                <Filter
+                    label="Severity"
+                    value={severity}
+                    onChange={(value) => {
+                        clearFocusedForExplicitFilter(value);
+                        setSeverity(value);
+                    }}
+                >
                     <option value="">All severities</option>
                     <option value="high">High</option>
                     <option value="medium">Medium</option>
                     <option value="low">Low</option>
                 </Filter>
-                <Filter label="Confidence" value={confidence} onChange={setConfidence}>
+                <Filter
+                    label="Confidence"
+                    value={confidence}
+                    onChange={(value) => {
+                        clearFocusedForExplicitFilter(value);
+                        setConfidence(value);
+                    }}
+                >
                     <option value="">All confidence</option>
                     <option value="high">High</option>
                     <option value="medium">Medium</option>
                     <option value="low">Low</option>
                 </Filter>
-                <Filter label="Status" value={effectiveStatus} onChange={setEffectiveStatus}>
+                <Filter
+                    label="Status"
+                    value={effectiveStatus}
+                    onChange={(value) => {
+                        setEffectiveStatus(value);
+                        setPageNumber(1);
+                    }}
+                >
                     <option value="">All statuses</option>
                     <option value="new">New</option>
                     <option value="reviewed">Reviewed</option>
@@ -414,12 +613,26 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
                     <option value="dismissed">Dismissed</option>
                     <option value="resolved">Resolved</option>
                 </Filter>
-                <Filter label="Evidence" value={evidenceState} onChange={setEvidenceState}>
+                <Filter
+                    label="Evidence"
+                    value={evidenceState}
+                    onChange={(value) => {
+                        setEvidenceState(value);
+                        setPageNumber(1);
+                    }}
+                >
                     <option value="">Active and resolved</option>
                     <option value="active">Active</option>
                     <option value="resolved">Resolved</option>
                 </Filter>
-                <Filter label="Sort" value={sort} onChange={setSort}>
+                <Filter
+                    label="Sort"
+                    value={sort}
+                    onChange={(value) => {
+                        setSort(value);
+                        setPageNumber(1);
+                    }}
+                >
                     <option value="severity">Severity</option>
                     <option value="family">Family</option>
                     <option value="status">Status</option>

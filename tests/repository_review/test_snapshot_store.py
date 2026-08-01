@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from zscripts.application.repository_review import RepositoryReviewService, SourceEvidenceError
-from zscripts.domain.repository_review import AnalysisEvidence, AnalysisState
+from zscripts.domain.repository_review import AnalysisEvidence, AnalysisState, EvidenceStatusSurface
 from zscripts.infrastructure import snapshot_store as snapshot_store_module
 from zscripts.infrastructure.snapshot_store import DATABASE_SCHEMA_VERSION, SnapshotStore
 
@@ -133,6 +133,307 @@ def test_snapshot_round_trip_filters_and_source_evidence(tmp_path: Path) -> None
         service.read_source(first.snapshot.snapshot_id, "../outside.py", start_line=1, end_line=5)
 
 
+def test_snapshot_evidence_status_is_complete_and_zero_noise(tmp_path: Path) -> None:
+    repository = tmp_path / "ordinary"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+
+    status = service.snapshot_evidence_status(evidence.snapshot.snapshot_id)
+
+    assert status.presentation_version == "1"
+    assert status.surface == "generic"
+    assert status.snapshot_id == evidence.snapshot.snapshot_id
+    assert status.evidence_complete is True
+    assert status.observation_state_known is True
+    assert status.lifecycle_reconciled is True
+    assert status.reconciliation_skip_reason is None
+    assert status.limitations == ()
+
+
+def test_generic_evidence_status_does_not_reject_readable_historical_schema(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "ordinary"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    snapshot_id = evidence.snapshot.snapshot_id
+
+    for schema_version in ("1", "2", "3", "4"):
+        with sqlite3.connect(service.store.database_path) as connection:
+            connection.execute(
+                "UPDATE snapshots SET schema_version = ? WHERE snapshot_id = ?",
+                (schema_version, snapshot_id),
+            )
+
+        status = service.snapshot_evidence_status(snapshot_id)
+
+        assert "snapshot-schema-unsupported" not in {limitation.code for limitation in status.limitations}
+
+
+@pytest.mark.parametrize(
+    ("schema_version", "surface", "supported"),
+    [
+        ("1", "overview", True),
+        ("1", "symbols", True),
+        ("1", "relationships", False),
+        ("1", "findings", False),
+        ("1", "generic", True),
+        ("2", "overview", True),
+        ("2", "symbols", True),
+        ("2", "relationships", True),
+        ("2", "findings", False),
+        ("2", "generic", True),
+        ("3", "overview", True),
+        ("3", "symbols", True),
+        ("3", "relationships", True),
+        ("3", "findings", True),
+        ("3", "generic", True),
+        ("4", "overview", True),
+        ("4", "symbols", True),
+        ("4", "relationships", True),
+        ("4", "findings", True),
+        ("4", "generic", True),
+    ],
+)
+def test_snapshot_evidence_status_schema_support_is_surface_aware(
+    tmp_path: Path,
+    schema_version: str,
+    surface: EvidenceStatusSurface,
+    supported: bool,
+) -> None:
+    repository = tmp_path / f"schema-{schema_version}-{surface}"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    snapshot_id = evidence.snapshot.snapshot_id
+    with sqlite3.connect(service.store.database_path) as connection:
+        connection.execute(
+            "UPDATE snapshots SET schema_version = ? WHERE snapshot_id = ?",
+            (schema_version, snapshot_id),
+        )
+
+    status = service.snapshot_evidence_status(snapshot_id, surface=surface)
+
+    assert status.surface == surface
+    assert ("snapshot-schema-unsupported" not in {item.code for item in status.limitations}) is (supported)
+
+
+@pytest.mark.parametrize("schema_version", ["5", "future", "", "1.0", "0"])
+def test_snapshot_evidence_status_rejects_newer_or_malformed_schema(
+    tmp_path: Path,
+    schema_version: str,
+) -> None:
+    repository = tmp_path / f"schema-{schema_version or 'empty'}"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    with sqlite3.connect(service.store.database_path) as connection:
+        connection.execute(
+            "UPDATE snapshots SET schema_version = ? WHERE snapshot_id = ?",
+            (schema_version, evidence.snapshot.snapshot_id),
+        )
+
+    status = service.snapshot_evidence_status(evidence.snapshot.snapshot_id)
+
+    assert [item.code for item in status.limitations] == ["snapshot-schema-unsupported"]
+
+
+@pytest.mark.parametrize(
+    "surface",
+    ["generic", "overview", "symbols", "relationships", "findings"],
+)
+def test_snapshot_partial_facts_are_preserved_for_each_surface(
+    tmp_path: Path,
+    surface: EvidenceStatusSurface,
+) -> None:
+    repository = tmp_path / f"partial-{surface}"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    with sqlite3.connect(service.store.database_path) as connection:
+        connection.execute(
+            """
+            UPDATE snapshots
+            SET truncated = 1, parse_gap_count = 2
+            WHERE snapshot_id = ?
+            """,
+            (evidence.snapshot.snapshot_id,),
+        )
+
+    status = service.snapshot_evidence_status(evidence.snapshot.snapshot_id, surface=surface)
+
+    assert [item.code for item in status.limitations[:2]] == [
+        "snapshot-truncated",
+        "snapshot-parse-gaps",
+    ]
+    assert status.limitations[1].count == 2
+
+
+def test_snapshot_evidence_status_rejects_an_unallowlisted_surface(tmp_path: Path) -> None:
+    repository = tmp_path / "ordinary"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+
+    with pytest.raises(ValueError, match="Unsupported evidence status surface"):
+        service.snapshot_evidence_status(
+            evidence.snapshot.snapshot_id,
+            surface="metrics",  # type: ignore[arg-type]
+        )
+
+
+def test_snapshot_evidence_status_orders_combined_limitations_and_redacts_paths(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "private-repository-name"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    snapshot_id = evidence.snapshot.snapshot_id
+    with sqlite3.connect(service.store.database_path) as connection:
+        connection.execute(
+            """
+            UPDATE snapshots
+            SET truncated = 1, parse_gap_count = 2, schema_version = '1',
+                observed_state_known = 0
+            WHERE snapshot_id = ?
+            """,
+            (snapshot_id,),
+        )
+        connection.execute(
+            """
+            UPDATE analyses
+            SET lifecycle_reconciled = 1, reconciliation_skip_reason = 'parse-gaps'
+            WHERE snapshot_id = ? AND state = 'completed'
+            """,
+            (snapshot_id,),
+        )
+
+    status = service.snapshot_evidence_status(snapshot_id, surface="findings")
+
+    assert status.evidence_complete is False
+    assert [item.code for item in status.limitations] == [
+        "snapshot-truncated",
+        "snapshot-parse-gaps",
+        "snapshot-schema-unsupported",
+        "observation-state-unknown",
+        "lifecycle-parse-gaps",
+    ]
+    assert status.limitations[1].count == 2
+    assert all(str(repository.resolve()) not in item.consequence for item in status.limitations)
+
+
+def test_snapshot_evidence_status_reports_individual_snapshot_limitations(tmp_path: Path) -> None:
+    repository = tmp_path / "ordinary"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    snapshot_id = evidence.snapshot.snapshot_id
+    cases = (
+        (1, 0, "4", 1, ["snapshot-truncated"]),
+        (0, 2, "4", 1, ["snapshot-parse-gaps"]),
+        (1, 2, "4", 1, ["snapshot-truncated", "snapshot-parse-gaps"]),
+        (0, 0, "5", 1, ["snapshot-schema-unsupported"]),
+        (0, 0, "4", 0, ["observation-state-unknown"]),
+    )
+    for truncated, parse_gaps, schema_version, observation_known, expected in cases:
+        with sqlite3.connect(service.store.database_path) as connection:
+            connection.execute(
+                """
+                UPDATE snapshots
+                SET truncated = ?, parse_gap_count = ?, schema_version = ?,
+                    observed_state_known = ?
+                WHERE snapshot_id = ?
+                """,
+                (truncated, parse_gaps, schema_version, observation_known, snapshot_id),
+            )
+
+        status = service.snapshot_evidence_status(snapshot_id)
+
+        assert [item.code for item in status.limitations] == expected
+
+
+def test_snapshot_evidence_status_maps_allowlisted_lifecycle_reasons(tmp_path: Path) -> None:
+    repository = tmp_path / "ordinary"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    snapshot_id = evidence.snapshot.snapshot_id
+    cases = (
+        ("truncated-scan", True, "lifecycle-truncated-scan"),
+        ("parse-gaps", True, "lifecycle-parse-gaps"),
+        ("superseded-by-newer-analysis", False, "lifecycle-superseded"),
+        (None, False, "lifecycle-analysis-status-unavailable"),
+    )
+    for reason, reconciled, expected_code in cases:
+        with sqlite3.connect(service.store.database_path) as connection:
+            connection.execute(
+                """
+                UPDATE analyses
+                SET lifecycle_reconciled = ?, reconciliation_skip_reason = ?
+                WHERE snapshot_id = ? AND state = 'completed'
+                """,
+                (int(reconciled), reason, snapshot_id),
+            )
+
+        status = service.snapshot_evidence_status(snapshot_id)
+
+        assert status.limitations[-1].code == expected_code
+        assert status.reconciliation_skip_reason == (reason or "analysis-status-unavailable")
+
+
+def test_snapshot_evidence_status_uses_latest_completed_analysis_for_exact_snapshot(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "ordinary"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    first_analysis = service.store.allocate_analysis_id()
+    first = service.analyze(repository, analysis_id=first_analysis)
+    repeated_analysis = service.store.allocate_analysis_id()
+    repeated = service.analyze(repository, analysis_id=repeated_analysis)
+    assert repeated.snapshot.snapshot_id == first.snapshot.snapshot_id
+    (repository / "pkg" / "module.py").write_text("def next_snapshot(): ...\n", encoding="utf-8")
+    next_analysis = service.store.allocate_analysis_id()
+    next_evidence = service.analyze(repository, analysis_id=next_analysis)
+    with sqlite3.connect(service.store.database_path) as connection:
+        connection.execute(
+            """
+            UPDATE analyses
+            SET lifecycle_reconciled = 1, reconciliation_skip_reason = 'truncated-scan'
+            WHERE analysis_id = ?
+            """,
+            (first_analysis,),
+        )
+        connection.execute(
+            """
+            UPDATE analyses
+            SET lifecycle_reconciled = 0,
+                reconciliation_skip_reason = 'superseded-by-newer-analysis'
+            WHERE analysis_id = ?
+            """,
+            (repeated_analysis,),
+        )
+        connection.execute(
+            """
+            UPDATE analyses
+            SET lifecycle_reconciled = 1, reconciliation_skip_reason = 'parse-gaps'
+            WHERE analysis_id = ?
+            """,
+            (next_analysis,),
+        )
+
+    first_status = service.snapshot_evidence_status(first.snapshot.snapshot_id)
+    next_status = service.snapshot_evidence_status(next_evidence.snapshot.snapshot_id)
+
+    assert first_status.reconciliation_skip_reason == "superseded-by-newer-analysis"
+    assert first_status.limitations[-1].code == "lifecycle-superseded"
+    assert next_status.reconciliation_skip_reason == "parse-gaps"
+    assert next_status.limitations[-1].code == "lifecycle-parse-gaps"
+
+
 def test_snapshot_promotion_rolls_back_all_evidence_on_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -233,6 +534,23 @@ def test_mvp_schema_migrates_without_reinterpreting_old_snapshot(tmp_path: Path)
     assert service.cycles("old-snapshot")["items"] == []
     assert service.finding_summary("old-snapshot")["supported"] is False
     assert service.findings("old-snapshot")["items"] == []
+    old_status = service.snapshot_evidence_status("old-snapshot")
+    assert [item.code for item in old_status.limitations] == [
+        "observation-state-unknown",
+        "lifecycle-analysis-status-unavailable",
+    ]
+    assert (
+        service.snapshot_evidence_status("old-snapshot", surface="overview").limitations[0].code
+        == "observation-state-unknown"
+    )
+    assert (
+        service.snapshot_evidence_status("old-snapshot", surface="relationships").limitations[0].code
+        == "snapshot-schema-unsupported"
+    )
+    assert (
+        service.snapshot_evidence_status("old-snapshot", surface="findings").limitations[0].code
+        == "snapshot-schema-unsupported"
+    )
     with sqlite3.connect(database) as connection:
         assert (
             connection.execute("SELECT version FROM schema_version").fetchone()[0] == DATABASE_SCHEMA_VERSION

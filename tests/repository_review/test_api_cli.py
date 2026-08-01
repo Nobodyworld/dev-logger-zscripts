@@ -100,6 +100,150 @@ def test_validation_is_generic_and_does_not_reflect_input(tmp_path: Path) -> Non
     assert secret_path not in response.text
 
 
+def test_snapshot_evidence_status_api_is_strict_bounded_and_allowlisted(tmp_path: Path) -> None:
+    repository = tmp_path / "private-status-repository"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    snapshot_id = evidence.snapshot.snapshot_id
+    app = create_workspace_app(service=service)
+
+    with TestClient(app) as client:
+        complete = client.get(f"/api/snapshots/{snapshot_id}/evidence-status")
+        assert complete.status_code == 200
+        assert complete.json() == {
+            "presentation_version": "1",
+            "surface": "generic",
+            "snapshot_id": snapshot_id,
+            "evidence_complete": True,
+            "observation_state_known": True,
+            "lifecycle_reconciled": True,
+            "reconciliation_skip_reason": None,
+            "limitations": [],
+        }
+        with sqlite3.connect(service.store.database_path) as connection:
+            connection.execute(
+                """
+                UPDATE snapshots
+                SET truncated = 1, parse_gap_count = 3, schema_version = '1',
+                    observed_state_known = 0
+                WHERE snapshot_id = ?
+                """,
+                (snapshot_id,),
+            )
+            connection.execute(
+                """
+                UPDATE analyses
+                SET lifecycle_reconciled = 1,
+                    reconciliation_skip_reason = 'truncated-scan'
+                WHERE snapshot_id = ? AND state = 'completed'
+                """,
+                (snapshot_id,),
+            )
+
+        partial = client.get(f"/api/snapshots/{snapshot_id}/evidence-status?surface=findings")
+        assert partial.status_code == 200
+        payload = partial.json()
+        assert set(payload) == {
+            "presentation_version",
+            "surface",
+            "snapshot_id",
+            "evidence_complete",
+            "observation_state_known",
+            "lifecycle_reconciled",
+            "reconciliation_skip_reason",
+            "limitations",
+        }
+        assert [item["code"] for item in payload["limitations"]] == [
+            "snapshot-truncated",
+            "snapshot-parse-gaps",
+            "snapshot-schema-unsupported",
+            "observation-state-unknown",
+            "lifecycle-truncated-scan",
+        ]
+        assert payload["surface"] == "findings"
+        assert all(
+            set(item) == {"code", "category", "consequence", "count"} for item in payload["limitations"]
+        )
+        assert payload["limitations"][1]["count"] == 3
+        assert str(repository.resolve()) not in partial.text
+        assert "canonical_path" not in partial.text
+        assert '"source"' not in partial.text
+
+        for reason, expected_code in (
+            ("parse-gaps", "lifecycle-parse-gaps"),
+            ("superseded-by-newer-analysis", "lifecycle-superseded"),
+            ("analysis-status-unavailable", "lifecycle-analysis-status-unavailable"),
+        ):
+            with sqlite3.connect(service.store.database_path) as connection:
+                connection.execute(
+                    """
+                    UPDATE analyses
+                    SET lifecycle_reconciled = 0, reconciliation_skip_reason = ?
+                    WHERE snapshot_id = ? AND state = 'completed'
+                    """,
+                    (reason, snapshot_id),
+                )
+            response = client.get(f"/api/snapshots/{snapshot_id}/evidence-status?surface=findings")
+            assert response.status_code == 200
+            assert response.json()["limitations"][-1]["code"] == expected_code
+
+        missing = client.get("/api/snapshots/not-a-snapshot/evidence-status")
+        assert missing.status_code == 404
+        assert missing.json() == {"detail": "Snapshot was not found."}
+
+        invalid_surface = client.get(f"/api/snapshots/{snapshot_id}/evidence-status?surface=metrics")
+        assert invalid_surface.status_code == 422
+        assert invalid_surface.json() == {"detail": "Request validation failed."}
+
+
+def test_snapshot_evidence_status_api_schema_support_matrix(tmp_path: Path) -> None:
+    repository = tmp_path / "schema-matrix"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    evidence = service.analyze(repository)
+    snapshot_id = evidence.snapshot.snapshot_id
+    app = create_workspace_app(service=service)
+    matrix = {
+        "1": {"overview": True, "symbols": True, "relationships": False, "findings": False},
+        "2": {"overview": True, "symbols": True, "relationships": True, "findings": False},
+        "3": {"overview": True, "symbols": True, "relationships": True, "findings": True},
+        "4": {"overview": True, "symbols": True, "relationships": True, "findings": True},
+    }
+
+    with TestClient(app) as client:
+        for schema_version, surfaces in matrix.items():
+            with sqlite3.connect(service.store.database_path) as connection:
+                connection.execute(
+                    "UPDATE snapshots SET schema_version = ? WHERE snapshot_id = ?",
+                    (schema_version, snapshot_id),
+                )
+            generic = client.get(f"/api/snapshots/{snapshot_id}/evidence-status")
+            assert generic.status_code == 200
+            assert generic.json()["surface"] == "generic"
+            assert generic.json()["limitations"] == []
+            for surface, supported in surfaces.items():
+                response = client.get(f"/api/snapshots/{snapshot_id}/evidence-status?surface={surface}")
+                assert response.status_code == 200
+                payload = response.json()
+                assert payload["surface"] == surface
+                assert (
+                    "snapshot-schema-unsupported" not in {item["code"] for item in payload["limitations"]}
+                ) is supported
+
+        for schema_version in ("5", "future"):
+            with sqlite3.connect(service.store.database_path) as connection:
+                connection.execute(
+                    "UPDATE snapshots SET schema_version = ? WHERE snapshot_id = ?",
+                    (schema_version, snapshot_id),
+                )
+            response = client.get(f"/api/snapshots/{snapshot_id}/evidence-status")
+            assert response.status_code == 200
+            assert [item["code"] for item in response.json()["limitations"]] == [
+                "snapshot-schema-unsupported"
+            ]
+
+
 def test_relationship_api_is_bounded_typed_and_path_redacted(tmp_path: Path) -> None:
     repository = tmp_path / "relationships"
     shutil.copytree(FIXTURES / "relationships", repository)

@@ -20,13 +20,14 @@ from zscripts.application.repository_review import (
     public_finding,
     public_repository,
     public_snapshot,
+    public_snapshot_evidence_status,
     public_symbol,
 )
 from zscripts.domain.repository_comparison import (
     DEFAULT_HANDOFF_BUDGET,
     HandoffSelection,
 )
-from zscripts.domain.repository_review import AnalysisState
+from zscripts.domain.repository_review import AnalysisState, EvidenceStatusSurface
 from zscripts.infrastructure.handoff_rendering import (
     HANDOFF_BUDGET_ERROR_MESSAGE,
     HandoffBudgetError,
@@ -110,6 +111,41 @@ class SnapshotListResponse(_StrictModel):
 class SnapshotDetailResponse(_StrictModel):
     repository: RepositoryResponse
     snapshot: SnapshotResponse
+
+
+class EvidenceLimitationResponse(_StrictModel):
+    code: Literal[
+        "snapshot-truncated",
+        "snapshot-parse-gaps",
+        "snapshot-schema-unsupported",
+        "observation-state-unknown",
+        "lifecycle-truncated-scan",
+        "lifecycle-parse-gaps",
+        "lifecycle-superseded",
+        "lifecycle-analysis-status-unavailable",
+    ]
+    category: Literal["partial", "unsupported", "historical", "lifecycle"]
+    consequence: str
+    count: int | None = Field(default=None, ge=0)
+
+
+class SnapshotEvidenceStatusResponse(_StrictModel):
+    presentation_version: Literal["1"]
+    surface: Literal["generic", "overview", "symbols", "relationships", "findings"]
+    snapshot_id: str
+    evidence_complete: bool
+    observation_state_known: bool
+    lifecycle_reconciled: bool
+    reconciliation_skip_reason: (
+        Literal[
+            "truncated-scan",
+            "parse-gaps",
+            "superseded-by-newer-analysis",
+            "analysis-status-unavailable",
+        ]
+        | None
+    )
+    limitations: list[EvidenceLimitationResponse]
 
 
 class OverviewCounts(_StrictModel):
@@ -742,6 +778,20 @@ def create_workspace_app(
             "repository": public_repository(repository),
             "snapshot": public_snapshot(record),
         }
+
+    @app.get(
+        "/api/snapshots/{snapshot_id}/evidence-status",
+        response_model=SnapshotEvidenceStatusResponse,
+    )
+    def snapshot_evidence_status(
+        snapshot_id: str,
+        surface: Annotated[EvidenceStatusSurface, Query()] = "generic",
+    ) -> dict[str, object]:
+        try:
+            status = review_service.snapshot_evidence_status(snapshot_id, surface=surface)
+        except SnapshotNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Snapshot was not found.") from exc
+        return public_snapshot_evidence_status(status)
 
     @app.get("/api/snapshots/{snapshot_id}/overview", response_model=OverviewResponse)
     def overview(snapshot_id: str) -> dict[str, object]:

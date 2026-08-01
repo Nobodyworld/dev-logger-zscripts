@@ -10,7 +10,14 @@ import type {
     ComparisonSnapshot,
     ComparisonSummary,
 } from "../types";
-import { olderSnapshot, repository, response, snapshot } from "./fixtures";
+import {
+    completeEvidenceStatus,
+    olderSnapshot,
+    partialEvidenceStatus,
+    repository,
+    response,
+    snapshot,
+} from "./fixtures";
 
 const comparisonSnapshots: ComparisonSnapshot[] = [
     {
@@ -128,8 +135,12 @@ describe("CompareView", () => {
         );
 
         expect(await screen.findByRole("heading", { name: "Compare" })).toBeTruthy();
+        expect(await screen.findByText("Target evidence is partial.")).toBeTruthy();
+        expect(screen.getByText(/target evidence has parse gaps/i)).toBeTruthy();
         expect(await screen.findByRole("button", { name: /pkg\/module\.py/ })).toBeTruthy();
-        expect(screen.getByRole("status").textContent).toContain("partial");
+        expect(
+            screen.getByRole("status", { name: "target evidence status" }).textContent,
+        ).toContain("partial");
         expect(screen.getByText("Repository-relative path")).toBeTruthy();
 
         await user.type(screen.getByPlaceholderText("Search files"), "module");
@@ -158,6 +169,72 @@ describe("CompareView", () => {
             expect(
                 fetchMock.mock.calls.some(([input]) => String(input).includes("section=metrics")),
             ).toBe(true);
+        });
+    });
+
+    it("keeps generic schema-3 status neutral while version mismatch stays section-authoritative", async () => {
+        const schemaThreeSnapshots = comparisonSnapshots.map((item) =>
+            item.snapshot_id === olderSnapshot.snapshot_id
+                ? { ...item, schema_version: "3" }
+                : item,
+        );
+        const mismatchSummary: ComparisonSummary = {
+            ...summary,
+            compatibility: {
+                ...summary.compatibility,
+                baseline_schema_version: "3",
+                target_schema_version: "4",
+                sections: summary.compatibility.sections.map((item) => ({
+                    ...item,
+                    status: "partial",
+                    reason_codes: ["version-mismatch"],
+                })),
+            },
+        };
+        const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+            const url = String(input);
+            if (url.includes("comparison-snapshots")) {
+                return response({ repository, snapshots: schemaThreeSnapshots });
+            }
+            if (url.includes("/evidence-status")) {
+                const snapshotId = url.includes(olderSnapshot.snapshot_id)
+                    ? olderSnapshot.snapshot_id
+                    : snapshot.snapshot_id;
+                return response(completeEvidenceStatus(snapshotId, "generic"));
+            }
+            if (url.includes("/comparisons/summary")) return response(mismatchSummary);
+            if (url.includes("/comparisons/items")) {
+                return response({
+                    ...page("files", [fileItem]),
+                    section_status: "partial",
+                    reason_codes: ["version-mismatch"],
+                });
+            }
+            return response({ detail: "Unexpected request" }, 500);
+        });
+        vi.stubGlobal("fetch", fetchMock);
+
+        render(
+            <CompareView
+                repositoryId={repository.repository_id}
+                targetSnapshotId={snapshot.snapshot_id}
+            />,
+        );
+
+        expect(
+            await screen.findByText(
+                "Files comparison is partial because baseline and target evidence versions differ.",
+            ),
+        ).toBeTruthy();
+        expect(screen.queryByText("Baseline evidence is unsupported.")).toBeNull();
+        await waitFor(() => {
+            const statusCalls = fetchMock.mock.calls.filter(([input]) =>
+                String(input).includes("/evidence-status"),
+            );
+            expect(statusCalls).toHaveLength(2);
+            expect(statusCalls.every(([input]) => String(input).includes("surface=generic"))).toBe(
+                true,
+            );
         });
     });
 
@@ -203,6 +280,53 @@ describe("CompareView", () => {
         });
     });
 
+    it("does not display a stale baseline status after the pair changes", async () => {
+        let resolveOldStatus!: (value: Response) => void;
+        const oldStatus = new Promise<Response>((resolve) => {
+            resolveOldStatus = resolve;
+        });
+        const fetchMock = vi.fn((input: RequestInfo | URL) => {
+            const url = String(input);
+            if (url.includes("comparison-snapshots")) {
+                return Promise.resolve(response({ repository, snapshots: comparisonSnapshots }));
+            }
+            if (url.includes("/evidence-status")) {
+                return url.includes(olderSnapshot.snapshot_id)
+                    ? oldStatus
+                    : Promise.resolve(response(completeEvidenceStatus(snapshot.snapshot_id)));
+            }
+            if (url.includes("/comparisons/summary")) return Promise.resolve(response(summary));
+            if (url.includes("/comparisons/items")) {
+                return Promise.resolve(response(page("files", [fileItem])));
+            }
+            return Promise.resolve(response({ detail: "Unexpected request" }, 500));
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        const user = userEvent.setup();
+        render(
+            <CompareView
+                repositoryId={repository.repository_id}
+                targetSnapshotId={snapshot.snapshot_id}
+            />,
+        );
+
+        await waitFor(() => {
+            expect(
+                fetchMock.mock.calls.some(([input]) =>
+                    String(input).includes(
+                        `/snapshots/${olderSnapshot.snapshot_id}/evidence-status?surface=generic`,
+                    ),
+                ),
+            ).toBe(true);
+        });
+        await user.selectOptions(screen.getByLabelText("Baseline"), snapshot.snapshot_id);
+        resolveOldStatus(response(partialEvidenceStatus(olderSnapshot.snapshot_id)));
+
+        await waitFor(() => {
+            expect(screen.queryByText("Baseline evidence is partial.")).toBeNull();
+        });
+    });
+
     it("renders migrated snapshot observations as unknown", async () => {
         const unknownSnapshots = comparisonSnapshots.map((item) => ({
             ...item,
@@ -218,6 +342,25 @@ describe("CompareView", () => {
             if (url.includes("comparison-snapshots")) {
                 return response({ repository, snapshots: unknownSnapshots });
             }
+            if (url.includes("/evidence-status")) {
+                const snapshotId = url.includes(olderSnapshot.snapshot_id)
+                    ? olderSnapshot.snapshot_id
+                    : snapshot.snapshot_id;
+                return response({
+                    ...completeEvidenceStatus(snapshotId),
+                    evidence_complete: false,
+                    observation_state_known: false,
+                    limitations: [
+                        {
+                            code: "observation-state-unknown",
+                            category: "historical",
+                            consequence:
+                                "Branch, Git SHA, and working-tree facts were not recorded for this historical snapshot.",
+                            count: null,
+                        },
+                    ],
+                });
+            }
             if (url.includes("/comparisons/summary")) return response(summary);
             if (url.includes("/comparisons/items")) return response(page("files", [fileItem]));
             return response({ detail: "Unexpected request" }, 500);
@@ -232,6 +375,8 @@ describe("CompareView", () => {
         );
 
         expect(await screen.findAllByText("Repository observation: unknown")).toHaveLength(2);
+        expect(await screen.findByText("Baseline historical state is unknown.")).toBeTruthy();
+        expect(screen.getByText("Target historical state is unknown.")).toBeTruthy();
         expect(screen.queryByText(/detached/)).toBeNull();
         expect(screen.queryByText(/clean worktree/)).toBeNull();
     });
@@ -242,6 +387,13 @@ function comparisonFetch() {
         const url = String(input);
         if (url.includes("comparison-snapshots")) {
             return response({ repository, snapshots: comparisonSnapshots });
+        }
+        if (url.includes("/evidence-status")) {
+            return response(
+                url.includes(snapshot.snapshot_id)
+                    ? partialEvidenceStatus(snapshot.snapshot_id)
+                    : completeEvidenceStatus(olderSnapshot.snapshot_id),
+            );
         }
         if (url.includes("/comparisons/summary")) return response(summary);
         if (url.includes("section=symbols")) return response(page("symbols", [symbolItem]));

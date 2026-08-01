@@ -1,8 +1,10 @@
 import { useDeferredValue, useEffect, useRef, useState } from "react";
 
 import { ApiError, getSource, getSymbols } from "../api";
+import { useEvidenceStatus } from "../hooks/useEvidenceStatus";
 import { SearchIcon, SortIcon } from "../icons";
 import type { SourceEvidence, SymbolPage, SymbolRecord } from "../types";
+import { EvidenceStatusBanner } from "./EvidenceStatusBanner";
 import { SourceDrawer } from "./SourceDrawer";
 
 interface SymbolsViewProps {
@@ -20,6 +22,7 @@ const initialPage: SymbolPage = {
 };
 
 export function SymbolsView({ snapshotId }: SymbolsViewProps) {
+    const evidenceStatus = useEvidenceStatus(snapshotId, "symbols");
     const [search, setSearch] = useState("");
     const deferredSearch = useDeferredValue(search);
     const [kind, setKind] = useState("");
@@ -123,6 +126,7 @@ export function SymbolsView({ snapshotId }: SymbolsViewProps) {
         <section className={`view symbols-view ${selected ? "symbols-view--drawer" : ""}`}>
             <div className="symbols-main">
                 <h2>Symbols</h2>
+                <EvidenceStatusBanner status={evidenceStatus.status} error={evidenceStatus.error} />
                 <div className="symbol-toolbar">
                     <label className="search-field">
                         <span className="sr-only">Search symbols</span>

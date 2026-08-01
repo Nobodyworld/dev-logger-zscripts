@@ -11,6 +11,7 @@ import type {
     RelationshipSummary,
     Repository,
     Snapshot,
+    SnapshotEvidenceStatus,
     SymbolRecord,
 } from "../types";
 
@@ -75,6 +76,72 @@ export const overview: Overview = {
         high_confidence_high_severity_findings: 1,
     },
 };
+
+export function completeEvidenceStatus(
+    snapshotId = snapshot.snapshot_id,
+    surface: SnapshotEvidenceStatus["surface"] = "generic",
+): SnapshotEvidenceStatus {
+    return {
+        presentation_version: "1",
+        surface,
+        snapshot_id: snapshotId,
+        evidence_complete: true,
+        observation_state_known: true,
+        lifecycle_reconciled: true,
+        reconciliation_skip_reason: null,
+        limitations: [],
+    };
+}
+
+export function partialEvidenceStatus(
+    snapshotId = snapshot.snapshot_id,
+    surface: SnapshotEvidenceStatus["surface"] = "generic",
+): SnapshotEvidenceStatus {
+    return {
+        presentation_version: "1",
+        surface,
+        snapshot_id: snapshotId,
+        evidence_complete: false,
+        observation_state_known: true,
+        lifecycle_reconciled: true,
+        reconciliation_skip_reason: "parse-gaps",
+        limitations: [
+            {
+                code: "snapshot-parse-gaps",
+                category: "partial",
+                consequence:
+                    "One or more files could not be parsed. Evidence derived from those files may be absent or incomplete.",
+                count: 2,
+            },
+            {
+                code: "lifecycle-parse-gaps",
+                category: "lifecycle",
+                consequence:
+                    "Automatic finding resolution was skipped because absence was not reliable. Previously active findings may remain active.",
+                count: null,
+            },
+        ],
+    };
+}
+
+export function unsupportedEvidenceStatus(
+    snapshotId = snapshot.snapshot_id,
+    surface: SnapshotEvidenceStatus["surface"] = "generic",
+): SnapshotEvidenceStatus {
+    return {
+        ...completeEvidenceStatus(snapshotId, surface),
+        evidence_complete: false,
+        limitations: [
+            {
+                code: "snapshot-schema-unsupported",
+                category: "unsupported",
+                consequence:
+                    "This view cannot interpret the stored evidence version. Run a new scan to produce currently supported evidence.",
+                count: null,
+            },
+        ],
+    };
+}
 
 export const symbol: SymbolRecord = {
     symbol_id: "symbol-0123456789abcdef",

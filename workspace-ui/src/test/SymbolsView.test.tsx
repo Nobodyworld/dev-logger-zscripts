@@ -3,7 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { SymbolsView } from "../components/SymbolsView";
-import { response, snapshot, symbol } from "./fixtures";
+import {
+    completeEvidenceStatus,
+    partialEvidenceStatus,
+    response,
+    snapshot,
+    symbol,
+} from "./fixtures";
 
 interface Deferred<T> {
     promise: Promise<T>;
@@ -46,6 +52,9 @@ describe("SymbolsView", () => {
     it("searches, filters, escapes repository text, and opens bounded source evidence", async () => {
         const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
             const url = String(input);
+            if (url.includes("/evidence-status")) {
+                return response(partialEvidenceStatus(snapshot.snapshot_id, "symbols"));
+            }
             if (url.includes("/source?")) {
                 return response({
                     relative_path: symbol.relative_path,
@@ -59,10 +68,11 @@ describe("SymbolsView", () => {
                     content_hash: "abcdef",
                 });
             }
+            const parameters = new URL(url, "http://localhost").searchParams;
             return response({
                 items: [symbol],
-                total: 1,
-                page: 1,
+                total: 51,
+                page: Number(parameters.get("page") ?? "1"),
                 page_size: 50,
                 filters: {
                     kinds: ["method"],
@@ -75,17 +85,22 @@ describe("SymbolsView", () => {
         const user = userEvent.setup();
         const { container } = render(<SymbolsView snapshotId={snapshot.snapshot_id} />);
 
-        const unsafeName = await screen.findByRole("button", {
+        await screen.findByRole("button", {
             name: "<img src=x onerror=alert(1)>",
         });
+        expect(await screen.findByRole("heading", { name: "Partial evidence" })).toBeTruthy();
         expect(container.querySelector("img")).toBeNull();
         await user.type(screen.getByPlaceholderText("Search symbols"), "analyze");
         await user.selectOptions(screen.getByLabelText("Kind"), "method");
-        await user.click(unsafeName);
+        expect(screen.getByRole("heading", { name: "Partial evidence" })).toBeTruthy();
+        await user.click(screen.getByRole("button", { name: "Next" }));
+        expect(screen.getByRole("heading", { name: "Partial evidence" })).toBeTruthy();
+        await user.click(screen.getByRole("button", { name: "<img src=x onerror=alert(1)>" }));
 
         expect(await screen.findByRole("heading", { name: "Source evidence" })).toBeTruthy();
         expect(screen.getByLabelText("Read-only source excerpt")).toBeTruthy();
         expect(screen.getByRole("button", { name: "Close source evidence" })).toBeTruthy();
+        expect(screen.getByRole("heading", { name: "Partial evidence" })).toBeTruthy();
         await waitFor(() => {
             expect(
                 fetchMock.mock.calls.some(([url]) => String(url).includes("search=analyze")),
@@ -172,5 +187,36 @@ describe("SymbolsView", () => {
                 within(screen.getByRole("complementary")).getByText(secondSymbol.relative_path),
             ).toBeTruthy();
         });
+    });
+
+    it("requests the symbols surface without an unsupported banner for schema 3", async () => {
+        const fetchMock = vi.fn((input: RequestInfo | URL) => {
+            const url = String(input);
+            if (url.includes("/evidence-status")) {
+                return Promise.resolve(
+                    response(completeEvidenceStatus(snapshot.snapshot_id, "symbols")),
+                );
+            }
+            return Promise.resolve(
+                response({
+                    items: [symbol],
+                    total: 1,
+                    page: 1,
+                    page_size: 50,
+                    filters: { kinds: [], modules: [], visibilities: [] },
+                }),
+            );
+        });
+        vi.stubGlobal("fetch", fetchMock);
+
+        render(<SymbolsView snapshotId={snapshot.snapshot_id} />);
+
+        expect(await screen.findByRole("button", { name: symbol.qualified_name })).toBeTruthy();
+        expect(
+            fetchMock.mock.calls.some(([input]) =>
+                String(input).includes("evidence-status?surface=symbols"),
+            ),
+        ).toBe(true);
+        expect(screen.queryByText("Unsupported evidence")).toBeNull();
     });
 });

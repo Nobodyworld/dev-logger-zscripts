@@ -9,6 +9,7 @@ import {
     getSource,
     updateFindingReview,
 } from "../api";
+import { useEvidenceStatus } from "../hooks/useEvidenceStatus";
 import { SearchIcon } from "../icons";
 import type {
     Finding,
@@ -20,6 +21,7 @@ import type {
     ReviewStatus,
     SourceEvidence,
 } from "../types";
+import { EvidenceStatusBanner } from "./EvidenceStatusBanner";
 
 interface FindingsViewProps {
     snapshotId: string;
@@ -75,6 +77,7 @@ const excludedFamilyLabels: Array<[FindingFamily, string]> = [
 ];
 
 export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
+    const evidenceStatus = useEvidenceStatus(snapshotId, "findings");
     const [queuePreset, setQueuePreset] = useState<FindingQueuePreset>(
         preset ? "all" : "high-signal-v1",
     );
@@ -425,6 +428,7 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
         return (
             <section className="view findings-view" aria-labelledby="findings-heading">
                 <h2 id="findings-heading">Findings</h2>
+                <EvidenceStatusBanner status={evidenceStatus.status} error={evidenceStatus.error} />
                 <p className="relationships-empty">
                     Findings are not available for this older snapshot. Run a new completed scan to
                     generate versioned finding evidence.
@@ -459,12 +463,7 @@ export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
                     ))}
                 </dl>
             </div>
-
-            {!summary.reconciliation_complete ? (
-                <p className="selection-status" role="status">
-                    {reconciliationMessage(summary)}
-                </p>
-            ) : null}
+            <EvidenceStatusBanner status={evidenceStatus.status} error={evidenceStatus.error} />
 
             <section
                 className={`finding-preset-banner finding-preset-banner--${queuePreset === "high-signal-v1" ? "focused" : "all"}`}
@@ -923,17 +922,4 @@ function formatEvidence(items: Array<[string, number]>): string {
     return items.length
         ? items.map(([name, value]) => `${name.replaceAll("_", " ")}: ${value}`).join(", ")
         : "Not applicable";
-}
-
-function reconciliationMessage(summary: FindingSummary): string {
-    if (summary.reconciliation_skip_reason === "truncated-scan") {
-        return "Automatic finding resolution was skipped because the latest scan was truncated. Observed findings were retained.";
-    }
-    if (summary.reconciliation_skip_reason === "parse-gaps") {
-        return "Automatic finding resolution was skipped because parse gaps made absence unreliable. Observed findings were retained.";
-    }
-    if (summary.reconciliation_skip_reason === "superseded-by-newer-analysis") {
-        return "This completed scan was superseded by a newer analysis and did not change finding lifecycle state.";
-    }
-    return "Automatic finding resolution was not completed for the latest scan.";
 }

@@ -6,11 +6,72 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass
 from enum import StrEnum
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 ANALYZER_VERSION = "3"
 SCHEMA_VERSION = "4"
 RULE_SET_VERSION = "4"
+EVIDENCE_STATUS_PRESENTATION_VERSION = "1"
+
+EvidenceStatusSurface = Literal[
+    "generic",
+    "overview",
+    "symbols",
+    "relationships",
+    "findings",
+]
+EVIDENCE_STATUS_SURFACES: tuple[EvidenceStatusSurface, ...] = (
+    "generic",
+    "overview",
+    "symbols",
+    "relationships",
+    "findings",
+)
+EVIDENCE_STATUS_MINIMUM_SCHEMA: dict[EvidenceStatusSurface, int | None] = {
+    "generic": None,
+    "overview": 1,
+    "symbols": 1,
+    "relationships": 2,
+    "findings": 3,
+}
+
+SNAPSHOT_TRUNCATED_CONSEQUENCE = (
+    "Some files were not analyzed. Absence from this snapshot does not prove that a file, "
+    "symbol, relationship, metric, or finding was removed or does not exist."
+)
+SNAPSHOT_PARSE_GAPS_CONSEQUENCE = (
+    "One or more files could not be parsed. Evidence derived from those files may be absent or incomplete."
+)
+LIFECYCLE_RESOLUTION_SKIPPED_CONSEQUENCE = (
+    "Automatic finding resolution was skipped because absence was not reliable. Previously "
+    "active findings may remain active."
+)
+LIFECYCLE_SUPERSEDED_CONSEQUENCE = (
+    "This completed snapshot was superseded by a newer analysis and did not become "
+    "authoritative for current finding lifecycle state."
+)
+SNAPSHOT_SCHEMA_UNSUPPORTED_CONSEQUENCE = (
+    "This view cannot interpret the stored evidence version. Run a new scan to produce "
+    "currently supported evidence."
+)
+OBSERVATION_STATE_UNKNOWN_CONSEQUENCE = (
+    "Branch, Git SHA, and working-tree facts were not recorded for this historical snapshot."
+)
+LIFECYCLE_STATUS_UNAVAILABLE_CONSEQUENCE = (
+    "Finding lifecycle authority could not be established for this historical snapshot. "
+    "Do not infer finding resolution from absence."
+)
+
+EVIDENCE_LIMITATION_CODES = (
+    "snapshot-truncated",
+    "snapshot-parse-gaps",
+    "snapshot-schema-unsupported",
+    "observation-state-unknown",
+    "lifecycle-truncated-scan",
+    "lifecycle-parse-gaps",
+    "lifecycle-superseded",
+    "lifecycle-analysis-status-unavailable",
+)
 
 
 class AnalysisState(StrEnum):
@@ -76,6 +137,136 @@ class SnapshotRecord:
     duration_ms: int
     truncated: bool
     parse_gap_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceLimitation:
+    """One bounded, allowlisted consequence of limited stored evidence."""
+
+    code: str
+    category: str
+    consequence: str
+    count: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.code not in EVIDENCE_LIMITATION_CODES:
+            raise ValueError("Unsupported evidence limitation code.")
+        if self.category not in {"partial", "unsupported", "historical", "lifecycle"}:
+            raise ValueError("Unsupported evidence limitation category.")
+        if self.count is not None and self.count < 0:
+            raise ValueError("Evidence limitation counts cannot be negative.")
+
+
+@dataclass(frozen=True, slots=True)
+class SnapshotEvidenceStatus:
+    """Presentation-only status for the exact selected immutable snapshot."""
+
+    presentation_version: str
+    surface: EvidenceStatusSurface
+    snapshot_id: str
+    evidence_complete: bool
+    observation_state_known: bool
+    lifecycle_reconciled: bool
+    reconciliation_skip_reason: str | None
+    limitations: tuple[EvidenceLimitation, ...]
+
+
+def build_snapshot_evidence_status(
+    snapshot: SnapshotRecord,
+    *,
+    surface: EvidenceStatusSurface = "generic",
+    observation_state_known: bool,
+    lifecycle_reconciled: bool,
+    reconciliation_skip_reason: str | None,
+) -> SnapshotEvidenceStatus:
+    """Derive deterministic presentation consequences from exact stored snapshot facts."""
+
+    if surface not in EVIDENCE_STATUS_SURFACES:
+        raise ValueError("Unsupported evidence status surface.")
+
+    limitations: list[EvidenceLimitation] = []
+    if snapshot.truncated:
+        limitations.append(
+            EvidenceLimitation(
+                code="snapshot-truncated",
+                category="partial",
+                consequence=SNAPSHOT_TRUNCATED_CONSEQUENCE,
+            )
+        )
+    if snapshot.parse_gap_count:
+        limitations.append(
+            EvidenceLimitation(
+                code="snapshot-parse-gaps",
+                category="partial",
+                consequence=SNAPSHOT_PARSE_GAPS_CONSEQUENCE,
+                count=snapshot.parse_gap_count,
+            )
+        )
+    if not _schema_is_supported_for_surface(snapshot.schema_version, surface):
+        limitations.append(
+            EvidenceLimitation(
+                code="snapshot-schema-unsupported",
+                category="unsupported",
+                consequence=SNAPSHOT_SCHEMA_UNSUPPORTED_CONSEQUENCE,
+            )
+        )
+    if not observation_state_known:
+        limitations.append(
+            EvidenceLimitation(
+                code="observation-state-unknown",
+                category="historical",
+                consequence=OBSERVATION_STATE_UNKNOWN_CONSEQUENCE,
+            )
+        )
+    lifecycle_codes = {
+        "truncated-scan": "lifecycle-truncated-scan",
+        "parse-gaps": "lifecycle-parse-gaps",
+        "superseded-by-newer-analysis": "lifecycle-superseded",
+        "analysis-status-unavailable": "lifecycle-analysis-status-unavailable",
+    }
+    lifecycle_code = (
+        None if reconciliation_skip_reason is None else lifecycle_codes.get(reconciliation_skip_reason)
+    )
+    if lifecycle_code is not None:
+        consequence = {
+            "lifecycle-truncated-scan": LIFECYCLE_RESOLUTION_SKIPPED_CONSEQUENCE,
+            "lifecycle-parse-gaps": LIFECYCLE_RESOLUTION_SKIPPED_CONSEQUENCE,
+            "lifecycle-superseded": LIFECYCLE_SUPERSEDED_CONSEQUENCE,
+            "lifecycle-analysis-status-unavailable": LIFECYCLE_STATUS_UNAVAILABLE_CONSEQUENCE,
+        }[lifecycle_code]
+        limitations.append(
+            EvidenceLimitation(
+                code=lifecycle_code,
+                category="lifecycle",
+                consequence=consequence,
+            )
+        )
+    return SnapshotEvidenceStatus(
+        presentation_version=EVIDENCE_STATUS_PRESENTATION_VERSION,
+        surface=surface,
+        snapshot_id=snapshot.snapshot_id,
+        evidence_complete=not limitations,
+        observation_state_known=observation_state_known,
+        lifecycle_reconciled=lifecycle_reconciled,
+        reconciliation_skip_reason=reconciliation_skip_reason,
+        limitations=tuple(limitations),
+    )
+
+
+def _schema_is_supported_for_surface(
+    schema_version: str,
+    surface: EvidenceStatusSurface,
+) -> bool:
+    """Return whether one stored schema is readable by the requested presentation surface."""
+
+    if not schema_version.isascii() or not schema_version.isdecimal():
+        return False
+    stored_version = int(schema_version)
+    current_version = int(SCHEMA_VERSION)
+    if stored_version < 1 or stored_version > current_version:
+        return False
+    minimum_version = EVIDENCE_STATUS_MINIMUM_SCHEMA[surface]
+    return minimum_version is None or stored_version >= minimum_version
 
 
 @dataclass(frozen=True, slots=True)
@@ -448,12 +639,18 @@ def _relationship_sort_key(record: RelationshipRecord) -> tuple[str, str, str, s
 
 __all__ = [
     "ANALYZER_VERSION",
+    "EVIDENCE_LIMITATION_CODES",
+    "EVIDENCE_STATUS_MINIMUM_SCHEMA",
+    "EVIDENCE_STATUS_PRESENTATION_VERSION",
+    "EVIDENCE_STATUS_SURFACES",
     "RULE_SET_VERSION",
     "SCHEMA_VERSION",
     "AnalysisEvidence",
     "AnalysisState",
     "CycleGroupRecord",
     "DiagnosticRecord",
+    "EvidenceLimitation",
+    "EvidenceStatusSurface",
     "FileRecord",
     "FindingEvidenceRecord",
     "FindingLifecycleRecord",
@@ -467,8 +664,10 @@ __all__ = [
     "ReviewEventRecord",
     "ScanLimits",
     "SnapshotRecord",
+    "SnapshotEvidenceStatus",
     "SymbolRecord",
     "TypeReferenceCandidate",
     "canonical_json_bytes",
+    "build_snapshot_evidence_status",
     "stable_digest",
 ]

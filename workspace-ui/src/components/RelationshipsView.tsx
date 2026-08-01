@@ -9,6 +9,7 @@ import {
     getRelationshipSummary,
     getSource,
 } from "../api";
+import { useEvidenceStatus } from "../hooks/useEvidenceStatus";
 import { SearchIcon } from "../icons";
 import type {
     CycleGroup,
@@ -20,6 +21,7 @@ import type {
     RelationshipSummary,
     SourceEvidence,
 } from "../types";
+import { EvidenceStatusBanner } from "./EvidenceStatusBanner";
 
 interface RelationshipsViewProps {
     snapshotId: string;
@@ -34,6 +36,7 @@ interface PositionedNode {
 const graphLimits = { maxNodes: 40, maxEdges: 80 };
 
 export function RelationshipsView({ snapshotId }: RelationshipsViewProps) {
+    const evidenceStatus = useEvidenceStatus(snapshotId, "relationships");
     const [summary, setSummary] = useState<RelationshipSummary | null>(null);
     const [cycles, setCycles] = useState<CycleGroup[]>([]);
     const [mode, setMode] = useState<GraphMode>("modules");
@@ -330,6 +333,7 @@ export function RelationshipsView({ snapshotId }: RelationshipsViewProps) {
         return (
             <section className="view relationships-view">
                 <h2>Relationships</h2>
+                <EvidenceStatusBanner status={evidenceStatus.status} error={evidenceStatus.error} />
                 <p role="status">Loading bounded relationship evidence…</p>
             </section>
         );
@@ -339,6 +343,7 @@ export function RelationshipsView({ snapshotId }: RelationshipsViewProps) {
         return (
             <section className="view relationships-view">
                 <h2>Relationships</h2>
+                <EvidenceStatusBanner status={evidenceStatus.status} error={evidenceStatus.error} />
                 <p className="error-message" role="alert">
                     {summaryError}
                 </p>
@@ -350,6 +355,7 @@ export function RelationshipsView({ snapshotId }: RelationshipsViewProps) {
         return (
             <section className="view relationships-view">
                 <h2>Relationships</h2>
+                <EvidenceStatusBanner status={evidenceStatus.status} error={evidenceStatus.error} />
                 <p className="relationships-empty">
                     This snapshot predates relationship analysis. Run a new repository scan to
                     create version 2 graph evidence.
@@ -385,6 +391,7 @@ export function RelationshipsView({ snapshotId }: RelationshipsViewProps) {
                     </dl>
                 ) : null}
             </div>
+            <EvidenceStatusBanner status={evidenceStatus.status} error={evidenceStatus.error} />
             <div className="relationship-toolbar">
                 <Filter
                     label="Graph mode"

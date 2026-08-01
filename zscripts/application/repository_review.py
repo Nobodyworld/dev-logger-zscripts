@@ -29,14 +29,17 @@ from zscripts.domain.repository_review import (
     AnalysisEvidence,
     AnalysisState,
     CycleGroupRecord,
+    EvidenceStatusSurface,
     FindingEvidenceRecord,
     GraphNodeRecord,
     MetricRecord,
     RelationshipRecord,
     RepositoryRecord,
     ScanLimits,
+    SnapshotEvidenceStatus,
     SnapshotRecord,
     SymbolRecord,
+    build_snapshot_evidence_status,
     stable_digest,
 )
 from zscripts.infrastructure.comparison_analysis import (
@@ -308,6 +311,23 @@ class RepositoryReviewService:
 
     def get_snapshot(self, snapshot_id: str) -> SnapshotRecord:
         return self.store.get_snapshot(snapshot_id)
+
+    def snapshot_evidence_status(
+        self,
+        snapshot_id: str,
+        *,
+        surface: EvidenceStatusSurface = "generic",
+    ) -> SnapshotEvidenceStatus:
+        """Return presentation-only limitations for one exact stored snapshot."""
+
+        facts = self.store.snapshot_evidence_facts(snapshot_id)
+        return build_snapshot_evidence_status(
+            facts.snapshot,
+            surface=surface,
+            observation_state_known=facts.observed_state_known,
+            lifecycle_reconciled=facts.lifecycle_reconciled,
+            reconciliation_skip_reason=facts.reconciliation_skip_reason,
+        )
 
     def comparison_snapshots(self, repository_id: str) -> dict[str, object]:
         """Return same-repository completed snapshots with compatibility metadata."""
@@ -1235,6 +1255,29 @@ def public_snapshot(snapshot: SnapshotRecord) -> dict[str, object]:
     return _public_snapshot(snapshot)
 
 
+def public_snapshot_evidence_status(status: SnapshotEvidenceStatus) -> dict[str, object]:
+    """Return the bounded, language-neutral status presentation payload."""
+
+    return {
+        "presentation_version": status.presentation_version,
+        "surface": status.surface,
+        "snapshot_id": status.snapshot_id,
+        "evidence_complete": status.evidence_complete,
+        "observation_state_known": status.observation_state_known,
+        "lifecycle_reconciled": status.lifecycle_reconciled,
+        "reconciliation_skip_reason": status.reconciliation_skip_reason,
+        "limitations": [
+            {
+                "code": limitation.code,
+                "category": limitation.category,
+                "consequence": limitation.consequence,
+                "count": limitation.count,
+            }
+            for limitation in status.limitations
+        ],
+    }
+
+
 def public_symbol(symbol: SymbolRecord) -> dict[str, object]:
     """Return a JSON-compatible symbol representation."""
 
@@ -1526,5 +1569,6 @@ __all__ = [
     "public_relationship",
     "public_repository",
     "public_snapshot",
+    "public_snapshot_evidence_status",
     "public_symbol",
 ]

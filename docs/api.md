@@ -65,11 +65,39 @@ service = build_toolkit_service(config, adapter_registry=registry)
 
 The loopback-only workspace also exposes versioned snapshot evidence:
 
+- `GET /api/snapshots/{snapshot_id}/evidence-status?surface={surface}`
 - `GET /api/snapshots/{snapshot_id}/relationships/summary`
 - `GET /api/snapshots/{snapshot_id}/relationships`
 - `GET /api/snapshots/{snapshot_id}/relationships/nodes`
 - `GET /api/snapshots/{snapshot_id}/relationships/neighborhood`
 - `GET /api/snapshots/{snapshot_id}/cycles`
+
+The evidence-status response is strict, bounded, and presentation-only. The
+allowlisted `surface` values are `generic`, `overview`, `symbols`,
+`relationships`, and `findings`; omission defaults to `generic`, and invalid
+values receive the generic validation response. The payload has
+`presentation_version: "1"`, the applied `surface`, exact `snapshot_id`, `evidence_complete`,
+`observation_state_known`, `lifecycle_reconciled`, the bounded
+`reconciliation_skip_reason`, and deterministically ordered `limitations`.
+Each limitation has `code`, `category`, `consequence`, and nullable `count`.
+Codes are `snapshot-truncated`, `snapshot-parse-gaps`,
+`snapshot-schema-unsupported`, `observation-state-unknown`,
+`lifecycle-truncated-scan`, `lifecycle-parse-gaps`, `lifecycle-superseded`, and
+`lifecycle-analysis-status-unavailable`. Complete supported snapshots return an
+empty limitation list. Missing snapshots return a generic `404`; responses do
+not include paths or source.
+
+The service reads the immutable observations and completed analysis associated
+with that exact snapshot. It does not use the newest repository scan. Generic
+status stays neutral for readable schema versions 1–4. Overview and Symbols
+support schema v1+, Relationships v2+, and Findings v3+; only a surface below
+its minimum receives `snapshot-schema-unsupported`. Malformed, non-positive,
+and newer schemas are unsupported for every surface. Compare and Handoff use
+generic status for truncation, parse gaps, observation state, and lifecycle
+authority while their per-section compatibility records remain authoritative
+for schema/version support. Migrated observation-unknown snapshots remain
+selectable with an explicit limitation. Snapshot truncation is distinct from
+the `truncated` flag on a bounded relationship/node/neighborhood response.
 
 Graph modes are `modules`, `packages`, `inheritance`, `containment`, and
 `types`. Relationship filters are allowlisted to `contains`, `imports`,

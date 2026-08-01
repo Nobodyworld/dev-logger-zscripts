@@ -1,4 +1,6 @@
 import type { Overview } from "../types";
+import { useEvidenceStatus } from "../hooks/useEvidenceStatus";
+import { EvidenceStatusBanner } from "./EvidenceStatusBanner";
 
 interface OverviewViewProps {
     overview: Overview;
@@ -7,6 +9,7 @@ interface OverviewViewProps {
 
 export function OverviewView({ overview, onOpenFindings }: OverviewViewProps) {
     const { counts, snapshot } = overview;
+    const evidenceStatus = useEvidenceStatus(snapshot.snapshot_id, "overview");
     const summary = [
         ["Files analyzed", counts.files_analyzed.toLocaleString()],
         ["Files excluded", counts.files_excluded.toLocaleString()],
@@ -27,6 +30,7 @@ export function OverviewView({ overview, onOpenFindings }: OverviewViewProps) {
     return (
         <section className="view" aria-labelledby="overview-heading">
             <h2 id="overview-heading">Overview</h2>
+            <EvidenceStatusBanner status={evidenceStatus.status} error={evidenceStatus.error} />
             <dl className="summary-band">
                 {summary.map(([label, value]) => (
                     <div key={label}>

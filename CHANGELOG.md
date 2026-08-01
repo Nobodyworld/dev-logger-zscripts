@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- Make snapshot evidence-status schema support surface-aware so readable schema
+  versions are not labeled globally unsupported, and announce asynchronous
+  status-load failures through one stable polite live region.
 - Enforce the Handoff format-2 JSON limit against the exact final normalized
   UTF-8 bytes after warnings, omitted counts, and truncation metadata. Optional
   evidence is removed deterministically; an oversized required envelope fails
@@ -12,6 +15,13 @@
 
 ### Added
 
+- Evidence-status presentation contract version `1`, a strict lightweight
+  snapshot endpoint, and shared accessible persistent banners across Overview,
+  Symbols, Relationships, Findings, Compare, and Handoff. The presentation
+  distinguishes snapshot partial evidence from bounded-query truncation,
+  preserves exact selected-snapshot lifecycle authority, and leaves analyzer,
+  evidence, rule-set, SQLite, comparison, Handoff, and queue-preset versions
+  unchanged.
 - A versioned server-side `high-signal-v1` Findings queue preset, used by the
   clearly labeled default workspace while complete family/lifecycle counts and
   one-action access to all findings remain available. Finding evidence,

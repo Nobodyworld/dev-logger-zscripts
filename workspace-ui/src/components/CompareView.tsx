@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
 import { ApiError, getComparisonItems, getComparisonSnapshots, getComparisonSummary } from "../api";
+import { comparisonCompatibilityMessage } from "../comparisonCompatibility";
+import { useEvidenceStatusPair } from "../hooks/useEvidenceStatus";
 import type {
     ComparisonItem,
     ComparisonPage,
@@ -8,6 +10,7 @@ import type {
     ComparisonSnapshot,
     ComparisonSummary,
 } from "../types";
+import { EvidenceStatusBanner } from "./EvidenceStatusBanner";
 
 interface CompareViewProps {
     repositoryId: string;
@@ -39,6 +42,7 @@ export function CompareView({ repositoryId, targetSnapshotId }: CompareViewProps
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const requestGeneration = useRef(0);
+    const evidenceStatus = useEvidenceStatusPair(baselineId, targetId);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -163,6 +167,26 @@ export function CompareView({ repositoryId, targetSnapshotId }: CompareViewProps
                 <SnapshotFacts label="Target" snapshot={targetSnapshot} />
             </div>
 
+            {evidenceStatus.baseline?.evidence_complete === false ||
+            evidenceStatus.target?.evidence_complete === false ||
+            evidenceStatus.baselineError ||
+            evidenceStatus.targetError ? (
+                <div className="evidence-status-pair">
+                    <EvidenceStatusBanner
+                        status={evidenceStatus.baseline}
+                        side="baseline"
+                        compact
+                        error={evidenceStatus.baselineError}
+                    />
+                    <EvidenceStatusBanner
+                        status={evidenceStatus.target}
+                        side="target"
+                        compact
+                        error={evidenceStatus.targetError}
+                    />
+                </div>
+            ) : null}
+
             {summary?.equal_snapshots ? (
                 <p className="notice-banner" role="status">
                     Baseline and target are the same snapshot. No changes are expected.
@@ -170,8 +194,7 @@ export function CompareView({ repositoryId, targetSnapshotId }: CompareViewProps
             ) : null}
             {sectionCompatibility && sectionCompatibility.status !== "supported" ? (
                 <p className="notice-banner notice-banner--warning" role="status">
-                    {sectionLabel(section)} evidence is {sectionCompatibility.status}:{" "}
-                    {sectionCompatibility.reason_codes.join(", ") || "not available"}.
+                    {comparisonCompatibilityMessage(section, sectionCompatibility)}
                 </p>
             ) : null}
 

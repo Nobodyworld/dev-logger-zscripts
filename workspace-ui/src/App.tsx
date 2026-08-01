@@ -4,9 +4,9 @@ import {
     ApiError,
     cancelAnalysis,
     getAnalysis,
+    getComparisonSnapshots,
     getOverview,
     listRepositories,
-    listSnapshots,
     startAnalysis,
 } from "./api";
 import { RepositoryControls } from "./components/RepositoryControls";
@@ -18,14 +18,14 @@ import { FindingsView } from "./components/FindingsView";
 import { RelationshipsView } from "./components/RelationshipsView";
 import { Sidebar } from "./components/Sidebar";
 import { SymbolsView } from "./components/SymbolsView";
-import type { AnalysisJob, Overview, Repository, Snapshot, ViewName } from "./types";
+import type { AnalysisJob, Overview, Repository, SnapshotChoice, ViewName } from "./types";
 
 export function App() {
     const [repositories, setRepositories] = useState<Repository[]>([]);
     const [repositoryPath, setRepositoryPath] = useState("");
     const [job, setJob] = useState<AnalysisJob | null>(null);
     const [overview, setOverview] = useState<Overview | null>(null);
-    const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+    const [snapshots, setSnapshots] = useState<SnapshotChoice[]>([]);
     const [activeView, setActiveView] = useState<ViewName>("overview");
     const [findingPreset, setFindingPreset] = useState<string>("");
     const [navigationOpen, setNavigationOpen] = useState(false);
@@ -51,12 +51,12 @@ export function App() {
     const loadSnapshot = async (snapshotId: string, repositoryId: string) => {
         setError(null);
         try {
-            const [nextOverview, nextSnapshots] = await Promise.all([
+            const [nextOverview, snapshotResult] = await Promise.all([
                 getOverview(snapshotId),
-                listSnapshots(repositoryId),
+                getComparisonSnapshots(repositoryId),
             ]);
             setOverview(nextOverview);
-            setSnapshots(nextSnapshots);
+            setSnapshots(snapshotResult.snapshots);
         } catch (caught) {
             setError(messageFrom(caught, "The completed snapshot could not be opened."));
         }
@@ -65,7 +65,8 @@ export function App() {
     const openRecentRepository = async (repositoryId: string) => {
         setError(null);
         try {
-            const nextSnapshots = await listSnapshots(repositoryId);
+            const snapshotResult = await getComparisonSnapshots(repositoryId);
+            const nextSnapshots = snapshotResult.snapshots;
             if (nextSnapshots.length === 0) {
                 setError("This repository has no completed snapshots.");
                 return;
@@ -97,13 +98,13 @@ export function App() {
             }
             if (generation !== pollGeneration.current) return;
             if (nextJob.state === "completed" && nextJob.snapshot_id && nextJob.repository_id) {
-                const [nextOverview, nextSnapshots, nextRepositories] = await Promise.all([
+                const [nextOverview, snapshotResult, nextRepositories] = await Promise.all([
                     getOverview(nextJob.snapshot_id),
-                    listSnapshots(nextJob.repository_id),
+                    getComparisonSnapshots(nextJob.repository_id),
                     listRepositories(),
                 ]);
                 setOverview(nextOverview);
-                setSnapshots(nextSnapshots);
+                setSnapshots(snapshotResult.snapshots);
                 setRepositories(nextRepositories);
                 setActiveView("overview");
             } else if (nextJob.state === "failed" || nextJob.state === "cancelled") {

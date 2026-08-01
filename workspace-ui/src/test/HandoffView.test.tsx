@@ -3,13 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { HandoffView } from "../components/HandoffView";
+import { formatSnapshotChoiceLabel } from "../snapshotLabels";
 import type {
     ComparisonItem,
-    ComparisonSnapshot,
     ComparisonSummary,
     HandoffPreview,
     HandoffSelectionRequest,
     SavedHandoff,
+    SnapshotChoice,
 } from "../types";
 import {
     completeEvidenceStatus,
@@ -22,7 +23,7 @@ import {
     snapshot,
 } from "./fixtures";
 
-const snapshots: ComparisonSnapshot[] = [
+const snapshots: SnapshotChoice[] = [
     {
         ...snapshot,
         analyzer_version: "3",
@@ -152,6 +153,16 @@ describe("HandoffView", () => {
         );
 
         expect(await screen.findByRole("heading", { name: "Handoff" })).toBeTruthy();
+        const baseline = screen.getByLabelText("Baseline") as HTMLSelectElement;
+        const target = screen.getByLabelText("Target") as HTMLSelectElement;
+        expect(baseline.value).toBe(olderSnapshot.snapshot_id);
+        expect(target.value).toBe(snapshot.snapshot_id);
+        expect(Array.from(target.options, (option) => option.value)).toEqual(
+            snapshots.map((choice) => choice.snapshot_id),
+        );
+        expect(Array.from(target.options, (option) => option.textContent)).toEqual(
+            snapshots.map(formatSnapshotChoiceLabel),
+        );
         await user.click(await screen.findByRole("checkbox", { name: /pkg\/metrics.py/ }));
         await user.click(screen.getByRole("tab", { name: "findings" }));
         const findingSelection = await screen.findByRole("checkbox", {
@@ -367,7 +378,7 @@ describe("HandoffView", () => {
     });
 
     it("rehydrates a saved B to C handoff without losing its immutable output", async () => {
-        const snapshotC: ComparisonSnapshot = {
+        const snapshotC: SnapshotChoice = {
             ...snapshots[0],
             snapshot_id: "snapshot-c-0123456789abcdef",
             completed_at: "2026-07-29T12:00:00Z",
@@ -472,7 +483,18 @@ describe("HandoffView", () => {
 
         await screen.findByRole("heading", { name: "Handoff" });
         expect(screen.queryByText("Target evidence is partial.")).toBeNull();
-        await user.click(await screen.findByRole("button", { name: /Saved B to C/ }));
+        const savedRow = await screen.findByRole("button", { name: /Saved B to C/ });
+        expect(savedRow.textContent).toContain(`Target: ${formatSnapshotChoiceLabel(snapshotC)}`);
+        expect(savedRow.textContent).toContain(
+            `Baseline: ${formatSnapshotChoiceLabel(snapshots[0])}`,
+        );
+        expect((screen.getByLabelText("Baseline") as HTMLSelectElement).value).toBe(
+            olderSnapshot.snapshot_id,
+        );
+        expect((screen.getByLabelText("Target") as HTMLSelectElement).value).toBe(
+            snapshot.snapshot_id,
+        );
+        await user.click(savedRow);
 
         await waitFor(() => {
             expect((screen.getByLabelText("Baseline") as HTMLSelectElement).value).toBe(
@@ -483,6 +505,10 @@ describe("HandoffView", () => {
             );
         });
         expect(await screen.findByText("Target evidence is partial.")).toBeTruthy();
+        expect(savedRow.textContent).toContain(`Target: ${formatSnapshotChoiceLabel(snapshotC)}`);
+        expect(savedRow.textContent).toContain(
+            `Baseline: ${formatSnapshotChoiceLabel(snapshots[0])}`,
+        );
         expect(await screen.findByText("# Exact saved B to C", { exact: false })).toBeTruthy();
         expect(screen.getByText("Immutable saved output")).toBeTruthy();
         expect(screen.getByText("Digest saved-b-c-digest")).toBeTruthy();
@@ -574,6 +600,38 @@ describe("HandoffView", () => {
         expect(statusCalls.every(([input]) => String(input).includes("surface=generic"))).toBe(
             true,
         );
+    });
+
+    it("uses deterministic saved-context fallbacks without persisting labels", async () => {
+        const missingTargetId = "snapshot-not-loaded-89abcdef";
+        const missing = savedHandoff({
+            ...defaultSelection(),
+            target_snapshot_id: missingTargetId,
+            baseline_snapshot_id: null,
+            task_objective: "Unresolved snapshot context",
+        });
+        vi.stubGlobal(
+            "fetch",
+            handoffFetch((input) =>
+                String(input).startsWith("/api/handoffs?")
+                    ? Promise.resolve(response({ items: [missing] }))
+                    : null,
+            ),
+        );
+
+        render(
+            <HandoffView
+                repositoryId={repository.repository_id}
+                targetSnapshotId={snapshot.snapshot_id}
+            />,
+        );
+
+        const row = await screen.findByRole("button", {
+            name: /Unresolved snapshot context/,
+        });
+        expect(row.textContent).toContain("Target: Snapshot …89abcdef");
+        expect(row.textContent).toContain("Baseline: none");
+        expect(row.textContent).not.toContain(missingTargetId);
     });
 
     it("ignores a stale saved-handoff reopen response", async () => {

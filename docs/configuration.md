@@ -160,6 +160,10 @@ zscripts experimental analyze PATH \
   snapshot and linked-analysis facts. Its codes, consequences, ordering, and
   complete-snapshot no-banner behavior are not repository-configurable. It
   adds no scan setting, persistence migration, or snapshot identity input.
+- Snapshot-label presentation version `1` deterministically combines UTC
+  completion seconds, stored observation facts, short Git/snapshot references,
+  worktree state, and partial-evidence markers. It is not configurable or
+  persisted and does not affect ordering, default selection, or any identity.
 - Handoff format `2` fixes budgets at 8 sections, 50 items per section, 50
   findings, 20 explicitly selected notes, 1,000 characters per note, 4,000
   objective characters, 100,000 Markdown characters, and exactly 500,000

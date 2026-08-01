@@ -15,6 +15,11 @@
 
 ### Added
 
+- Snapshot-label presentation contract version `1`, shared across the current,
+  Compare, and Handoff selectors and saved-handoff context. Labels use UTC
+  second precision, observed branch/Git/worktree facts or an explicit unknown
+  state, a short snapshot suffix, and partial-evidence markers without changing
+  snapshot ordering, defaults, identity, comparison, or Handoff persistence.
 - Evidence-status presentation contract version `1`, a strict lightweight
   snapshot endpoint, and shared accessible persistent banners across Overview,
   Symbols, Relationships, Findings, Compare, and Handoff. The presentation

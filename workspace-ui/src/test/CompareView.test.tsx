@@ -3,12 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { CompareView } from "../components/CompareView";
+import { formatSnapshotChoiceLabel } from "../snapshotLabels";
 import type {
     ComparisonItem,
     ComparisonPage,
     ComparisonSection,
-    ComparisonSnapshot,
     ComparisonSummary,
+    SnapshotChoice,
 } from "../types";
 import {
     completeEvidenceStatus,
@@ -19,7 +20,7 @@ import {
     snapshot,
 } from "./fixtures";
 
-const comparisonSnapshots: ComparisonSnapshot[] = [
+const comparisonSnapshots: SnapshotChoice[] = [
     {
         ...snapshot,
         analyzer_version: "3",
@@ -135,6 +136,16 @@ describe("CompareView", () => {
         );
 
         expect(await screen.findByRole("heading", { name: "Compare" })).toBeTruthy();
+        const baseline = screen.getByLabelText("Baseline") as HTMLSelectElement;
+        const target = screen.getByLabelText("Target") as HTMLSelectElement;
+        expect(baseline.value).toBe(olderSnapshot.snapshot_id);
+        expect(target.value).toBe(snapshot.snapshot_id);
+        expect(Array.from(target.options, (option) => option.value)).toEqual(
+            comparisonSnapshots.map((choice) => choice.snapshot_id),
+        );
+        expect(Array.from(target.options, (option) => option.textContent)).toEqual(
+            comparisonSnapshots.map(formatSnapshotChoiceLabel),
+        );
         expect(await screen.findByText("Target evidence is partial.")).toBeTruthy();
         expect(screen.getByText(/target evidence has parse gaps/i)).toBeTruthy();
         expect(await screen.findByRole("button", { name: /pkg\/module\.py/ })).toBeTruthy();
@@ -374,7 +385,8 @@ describe("CompareView", () => {
             />,
         );
 
-        expect(await screen.findAllByText("Repository observation: unknown")).toHaveLength(2);
+        const facts = await screen.findAllByText("observation unknown");
+        expect(facts.filter((item) => item.closest(".snapshot-facts"))).toHaveLength(2);
         expect(await screen.findByText("Baseline historical state is unknown.")).toBeTruthy();
         expect(screen.getByText("Target historical state is unknown.")).toBeTruthy();
         expect(screen.queryByText(/detached/)).toBeNull();

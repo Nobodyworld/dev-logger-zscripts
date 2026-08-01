@@ -13,15 +13,16 @@ import {
 } from "../api";
 import { comparisonCompatibilityMessage } from "../comparisonCompatibility";
 import { useEvidenceStatusPair } from "../hooks/useEvidenceStatus";
+import { formatSnapshotChoiceLabel, formatSnapshotReference } from "../snapshotLabels";
 import type {
     ComparisonItem,
     ComparisonSection,
-    ComparisonSnapshot,
     ComparisonSummary,
     Finding,
     HandoffPreview,
     HandoffSelectionRequest,
     SavedHandoff,
+    SnapshotChoice,
 } from "../types";
 import { EvidenceStatusBanner } from "./EvidenceStatusBanner";
 
@@ -50,7 +51,7 @@ const DELTA_SECTIONS: ComparisonSection[] = [
 ];
 
 export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps) {
-    const [snapshots, setSnapshots] = useState<ComparisonSnapshot[]>([]);
+    const [snapshots, setSnapshots] = useState<SnapshotChoice[]>([]);
     const [baselineId, setBaselineId] = useState("");
     const [targetId, setTargetId] = useState(targetSnapshotId);
     const [summary, setSummary] = useState<ComparisonSummary | null>(null);
@@ -83,6 +84,10 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
     const loadedPair = useRef("");
     const normalPairChange = useRef(false);
     const evidenceStatus = useEvidenceStatusPair(baselineId, targetId);
+    const snapshotChoices = useMemo(
+        () => new Map(snapshots.map((snapshot) => [snapshot.snapshot_id, snapshot])),
+        [snapshots],
+    );
 
     useEffect(() => {
         const controller = new AbortController();
@@ -420,7 +425,7 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
                     >
                         {snapshots.map((snapshot) => (
                             <option key={snapshot.snapshot_id} value={snapshot.snapshot_id}>
-                                {snapshotOptionLabel(snapshot)}
+                                {formatSnapshotChoiceLabel(snapshot)}
                             </option>
                         ))}
                     </select>
@@ -433,7 +438,7 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
                     >
                         {snapshots.map((snapshot) => (
                             <option key={snapshot.snapshot_id} value={snapshot.snapshot_id}>
-                                {snapshotOptionLabel(snapshot)}
+                                {formatSnapshotChoiceLabel(snapshot)}
                             </option>
                         ))}
                     </select>
@@ -736,6 +741,16 @@ export function HandoffView({ repositoryId, targetSnapshotId }: HandoffViewProps
                             onClick={() => reopen(item.handoff_id)}
                         >
                             <strong>{item.task_objective || "Untitled handoff"}</strong>
+                            <span>
+                                Target:{" "}
+                                {savedSnapshotLabel(item.target_snapshot_id, snapshotChoices)}
+                            </span>
+                            <span>
+                                Baseline:{" "}
+                                {item.baseline_snapshot_id
+                                    ? savedSnapshotLabel(item.baseline_snapshot_id, snapshotChoices)
+                                    : "none"}
+                            </span>
                             <span>{item.created_at}</span>
                             <small>{item.rendered_digest.slice(0, 16)}</small>
                         </button>
@@ -755,11 +770,12 @@ function toggleSet(values: Set<string>, value: string): Set<string> {
     return next;
 }
 
-function snapshotOptionLabel(snapshot: ComparisonSnapshot): string {
-    const observation = snapshot.observed_state_known
-        ? `${snapshot.branch ?? "detached"} · ${snapshot.git_sha?.slice(0, 8) ?? "no SHA"}`
-        : "observation unknown";
-    return `${snapshot.completed_at} · ${observation}`;
+function savedSnapshotLabel(
+    snapshotId: string,
+    snapshots: ReadonlyMap<string, SnapshotChoice>,
+): string {
+    const snapshot = snapshots.get(snapshotId);
+    return snapshot ? formatSnapshotChoiceLabel(snapshot) : formatSnapshotReference(snapshotId);
 }
 
 function selectionIdentity(selection: HandoffSelectionRequest): string {

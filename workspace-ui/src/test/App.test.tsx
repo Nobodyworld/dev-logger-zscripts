@@ -3,7 +3,21 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
+import { formatSnapshotChoiceLabel } from "../snapshotLabels";
+import type { SnapshotChoice } from "../types";
 import { olderSnapshot, overview, repository, response, snapshot } from "./fixtures";
+
+const snapshotChoices: SnapshotChoice[] = [snapshot, olderSnapshot].map((choice) => ({
+    ...choice,
+    observed_state_known: true,
+    branch: "main",
+    git_sha: repository.git_sha,
+    dirty: false,
+    staged: false,
+    untracked: false,
+    lifecycle_reconciled: true,
+    reconciliation_skip_reason: null,
+}));
 
 describe("App", () => {
     afterEach(() => {
@@ -73,8 +87,8 @@ describe("App", () => {
         const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
             const url = String(input);
             if (url === "/api/repositories") return response({ repositories: [repository] });
-            if (url.includes("/snapshots") && url.includes(repository.repository_id)) {
-                return response({ snapshots: [snapshot, olderSnapshot] });
+            if (url === `/api/repositories/${repository.repository_id}/comparison-snapshots`) {
+                return response({ repository, snapshots: snapshotChoices });
             }
             if (url.includes(olderSnapshot.snapshot_id)) {
                 return response({
@@ -91,8 +105,15 @@ describe("App", () => {
 
         const recent = await screen.findByLabelText("Recent repositories");
         await user.selectOptions(recent, repository.repository_id);
-        const snapshots = await screen.findByLabelText("Current snapshot");
-        await user.selectOptions(snapshots, olderSnapshot.snapshot_id);
+        const selector = (await screen.findByLabelText("Current snapshot")) as HTMLSelectElement;
+        expect(selector.value).toBe(snapshot.snapshot_id);
+        expect(Array.from(selector.options, (option) => option.value)).toEqual(
+            snapshotChoices.map((choice) => choice.snapshot_id),
+        );
+        expect(Array.from(selector.options, (option) => option.textContent)).toEqual(
+            snapshotChoices.map(formatSnapshotChoiceLabel),
+        );
+        await user.selectOptions(selector, olderSnapshot.snapshot_id);
 
         await waitFor(() => {
             expect(
@@ -101,6 +122,11 @@ describe("App", () => {
                 ),
             ).toBe(true);
         });
+        expect(
+            fetchMock.mock.calls.some(([url]) =>
+                String(url).endsWith(`/${repository.repository_id}/snapshots`),
+            ),
+        ).toBe(false);
     });
 
     it("presents API errors without exposing raw response content", async () => {

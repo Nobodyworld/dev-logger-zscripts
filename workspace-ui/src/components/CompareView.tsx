@@ -3,12 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import { ApiError, getComparisonItems, getComparisonSnapshots, getComparisonSummary } from "../api";
 import { comparisonCompatibilityMessage } from "../comparisonCompatibility";
 import { useEvidenceStatusPair } from "../hooks/useEvidenceStatus";
+import { formatSnapshotChoiceLabel } from "../snapshotLabels";
 import type {
     ComparisonItem,
     ComparisonPage,
     ComparisonSection,
-    ComparisonSnapshot,
     ComparisonSummary,
+    SnapshotChoice,
 } from "../types";
 import { EvidenceStatusBanner } from "./EvidenceStatusBanner";
 
@@ -27,7 +28,7 @@ const SECTIONS: ComparisonSection[] = [
 ];
 
 export function CompareView({ repositoryId, targetSnapshotId }: CompareViewProps) {
-    const [snapshots, setSnapshots] = useState<ComparisonSnapshot[]>([]);
+    const [snapshots, setSnapshots] = useState<SnapshotChoice[]>([]);
     const [baselineId, setBaselineId] = useState("");
     const [targetId, setTargetId] = useState(targetSnapshotId);
     const [section, setSection] = useState<ComparisonSection>("files");
@@ -350,7 +351,7 @@ function SnapshotSelect({
 }: {
     label: string;
     value: string;
-    snapshots: ComparisonSnapshot[];
+    snapshots: SnapshotChoice[];
     onChange: (value: string) => void;
 }) {
     return (
@@ -359,12 +360,7 @@ function SnapshotSelect({
             <select value={value} onChange={(event) => onChange(event.target.value)}>
                 {snapshots.map((snapshot) => (
                     <option key={snapshot.snapshot_id} value={snapshot.snapshot_id}>
-                        {snapshot.completed_at ?? "Incomplete time"} ·{" "}
-                        {snapshot.observed_state_known
-                            ? `${snapshot.branch ?? "detached"} · ${
-                                  snapshot.git_sha?.slice(0, 8) ?? "no Git SHA"
-                              }`
-                            : "observation unknown"}
+                        {formatSnapshotChoiceLabel(snapshot)}
                     </option>
                 ))}
             </select>
@@ -377,14 +373,14 @@ function SnapshotFacts({
     snapshot,
 }: {
     label: string;
-    snapshot: ComparisonSnapshot | undefined;
+    snapshot: SnapshotChoice | undefined;
 }) {
     if (!snapshot) return <div className="snapshot-facts">{label}: unavailable</div>;
     if (!snapshot.observed_state_known) {
         return (
             <div className="snapshot-facts">
                 <strong>{label}</strong>
-                <span>Repository observation: unknown</span>
+                <span>observation unknown</span>
                 <span>{snapshot.completed_at ?? "scan completion unavailable"}</span>
                 <span>
                     analyzer {snapshot.analyzer_version} · schema {snapshot.schema_version} · rules{" "}

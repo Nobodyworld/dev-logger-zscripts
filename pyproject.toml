@@ -37,7 +37,7 @@ dev = [
     "build>=1.2.2",
     "setuptools>=83.0.0",
     "pytest>=7.0",
-    "ruff==0.15.22",
+    "ruff==0.16.0",
     "mypy>=1.11.2",
     "bandit>=1.7.10",
     "pip-audit>=2.7.3",
@@ -48,7 +48,7 @@ dev = [
     "types-jsonschema==4.26.0.20260518",
 ]
 workspace = [
-    "fastapi==0.139.2",
+    "fastapi==0.140.13",
     "pydantic==2.13.4",
     "uvicorn==0.51.0",
 ]

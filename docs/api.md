@@ -163,6 +163,15 @@ side-specific: `not-observed-in-baseline` and `not-observed-in-target` never
 masquerade as confirmed additions or removals. Migrated snapshots expose
 `observed_state_known: false` and null observation fields.
 
+The comparison-snapshots response is also the UI's shared enriched snapshot-
+choice source. It retains the same deterministic order as the basic snapshot
+list and adds stored observation and lifecycle-authority facts without local
+paths or source content. Snapshot-label presentation version `1` formats those
+facts in the browser with UTC second precision, an eight-character Git prefix
+when known, an eight-character snapshot-ID suffix, explicit observation and
+worktree state, and truncation/parse-gap markers. The formatted label is not an
+API field and is never persisted; selector values remain exact snapshot IDs.
+
 Handoff request arrays and the objective are bounded by typed models. Preview
 does not create a comparison or saved record. Saved records remain local and
 immutable. Markdown downloads use `text/markdown`; JSON downloads use

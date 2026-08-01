@@ -9,7 +9,6 @@ import type {
     FindingSummary,
     ComparisonPage,
     ComparisonSection,
-    ComparisonSnapshot,
     ComparisonSummary,
     GraphMode,
     GraphNodePage,
@@ -20,6 +19,7 @@ import type {
     HandoffSelectionRequest,
     SavedHandoff,
     Snapshot,
+    SnapshotChoice,
     SnapshotEvidenceStatus,
     EvidenceStatusSurface,
     SourceEvidence,
@@ -266,8 +266,8 @@ export function getFindings(
 export async function getComparisonSnapshots(
     repositoryId: string,
     signal?: AbortSignal,
-): Promise<{ repository: Repository; snapshots: ComparisonSnapshot[] }> {
-    return request<{ repository: Repository; snapshots: ComparisonSnapshot[] }>(
+): Promise<{ repository: Repository; snapshots: SnapshotChoice[] }> {
+    return request<{ repository: Repository; snapshots: SnapshotChoice[] }>(
         `/api/repositories/${encodeURIComponent(repositoryId)}/comparison-snapshots`,
         { signal },
     );

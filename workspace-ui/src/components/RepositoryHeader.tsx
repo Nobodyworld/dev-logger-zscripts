@@ -1,14 +1,19 @@
-import type { Overview, Snapshot } from "../types";
+import { formatSnapshotChoiceLabel, formatSnapshotReference } from "../snapshotLabels";
+import type { Overview, SnapshotChoice } from "../types";
 
 interface RepositoryHeaderProps {
     overview: Overview;
-    snapshots: Snapshot[];
+    snapshots: SnapshotChoice[];
     onSnapshotChange: (snapshotId: string) => void;
 }
 
 export function RepositoryHeader({ overview, snapshots, onSnapshotChange }: RepositoryHeaderProps) {
     const { repository, snapshot } = overview;
     const state = repository.dirty ? "Dirty" : "Clean";
+    const selectedChoice = snapshots.find((item) => item.snapshot_id === snapshot.snapshot_id);
+    const selectedLabel = selectedChoice
+        ? formatSnapshotChoiceLabel(selectedChoice)
+        : formatSnapshotReference(snapshot.snapshot_id);
 
     return (
         <header className="repository-header">
@@ -33,27 +38,28 @@ export function RepositoryHeader({ overview, snapshots, onSnapshotChange }: Repo
                     </div>
                 </dl>
             </div>
-            <label className="snapshot-select">
-                Current snapshot
+            <div className="snapshot-select">
+                <label htmlFor="current-snapshot">Current snapshot</label>
                 <select
+                    id="current-snapshot"
                     value={snapshot.snapshot_id}
                     onChange={(event) => onSnapshotChange(event.target.value)}
+                    aria-describedby="current-snapshot-context"
                 >
                     {snapshots.map((item) => (
                         <option value={item.snapshot_id} key={item.snapshot_id}>
-                            {formatSnapshotDate(item.completed_at)}
+                            {formatSnapshotChoiceLabel(item)}
                         </option>
                     ))}
                 </select>
-            </label>
+                <span
+                    id="current-snapshot-context"
+                    className="snapshot-selection-context"
+                    aria-label="Selected snapshot context"
+                >
+                    Selected snapshot: {selectedLabel}
+                </span>
+            </div>
         </header>
     );
-}
-
-function formatSnapshotDate(value: string | null): string {
-    if (!value) return "Completed snapshot";
-    return new Intl.DateTimeFormat(undefined, {
-        dateStyle: "medium",
-        timeStyle: "short",
-    }).format(new Date(value));
 }

@@ -312,7 +312,7 @@ export interface FindingHistory {
     page_size: number;
 }
 
-export interface ComparisonSnapshot extends Snapshot {
+export interface SnapshotChoice extends Snapshot {
     observed_state_known: boolean;
     branch: string | null;
     git_sha: string | null;

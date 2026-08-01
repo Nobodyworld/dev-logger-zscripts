@@ -96,6 +96,19 @@ remain `truncated-scan`, `parse-gaps`, `superseded-by-newer-analysis`, or
 `analysis-status-unavailable`. This presentation does not alter analysis,
 finding, lifecycle, comparison, Handoff, persistence, or snapshot identity.
 
+Snapshot-label presentation version `1` formats every selectable snapshot as
+`YYYY-MM-DD HH:mm:ssZ · <branch|detached|observation unknown> [@ <8-char Git SHA>] · snapshot …<8-char snapshot suffix> · <complete|truncated|parse gaps> · <worktree state>`.
+Known observations without a Git SHA say `no Git SHA`; clean observations say
+`clean`, while dirty, staged, and untracked facts are listed explicitly.
+Unknown observations make no detached or worktree claim. Missing or invalid
+completion times say `Completion time unavailable`, and the snapshot suffix
+still distinguishes equal-time records. The same formatter supplies option
+text and selected context in the current-snapshot, Compare, and Handoff
+selectors, plus baseline/target context on saved handoffs. Labels are
+presentation-only: they are not persisted and do not alter server ordering,
+snapshot-ID values, default selection, snapshot identity, comparison identity,
+or Handoff identity.
+
 The Symbols view supports:
 
 - search across qualified names and signatures;

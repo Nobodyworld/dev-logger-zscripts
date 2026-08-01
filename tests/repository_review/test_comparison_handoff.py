@@ -250,7 +250,17 @@ def test_comparison_and_handoff_api_are_typed_bounded_and_download_safe(
             f"/api/repositories/{comparison['identity']['repository_id']}/comparison-snapshots"
         )
         assert snapshots.status_code == 200
-        assert len(snapshots.json()["snapshots"]) == 2
+        snapshot_choices = snapshots.json()["snapshots"]
+        assert len(snapshot_choices) == 2
+        basic_snapshots = client.get(f"/api/repositories/{comparison['identity']['repository_id']}/snapshots")
+        assert basic_snapshots.status_code == 200
+        assert [item["snapshot_id"] for item in snapshot_choices] == [
+            item["snapshot_id"] for item in basic_snapshots.json()["snapshots"]
+        ]
+        serialized_choices = json.dumps(snapshot_choices)
+        assert str(repository.resolve()) not in serialized_choices
+        assert "canonical_path" not in serialized_choices
+        assert "content" not in serialized_choices
         summary = client.get(
             "/api/comparisons/summary",
             params={
@@ -1103,10 +1113,14 @@ def test_snapshot_identity_preserves_exact_repository_observations(tmp_path: Pat
     assert branch_a.snapshot.snapshot_id != branch_b.snapshot.snapshot_id
     assert branch_b_repeat.snapshot.snapshot_id == branch_b.snapshot.snapshot_id
     choices = service.comparison_snapshots(branch_a.repository.repository_id)["snapshots"]
+    assert [item["snapshot_id"] for item in choices] == [
+        item.snapshot_id for item in service.list_snapshots(branch_a.repository.repository_id)
+    ]
     assert {item["branch"] for item in choices} == {"branch-a", "branch-b"}
     assert all(item["observed_state_known"] is True for item in choices)
     assert len(choices) == 2
     assert str(repository.resolve()) not in json.dumps(choices)
+    assert all("canonical_path" not in item and "content" not in item for item in choices)
 
     def identifier(repository_state):
         return _snapshot_identifier(

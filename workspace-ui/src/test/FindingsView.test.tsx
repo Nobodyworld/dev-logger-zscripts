@@ -376,7 +376,7 @@ describe("FindingsView", () => {
                     lifecycle_reconciled: true,
                     reconciliation_skip_reason: "parse-gaps",
                 },
-                partialEvidenceStatus(),
+                partialEvidenceStatus(snapshot.snapshot_id, "findings"),
             ),
         );
         render(<FindingsView snapshotId={snapshot.snapshot_id} />);
@@ -666,7 +666,7 @@ describe("FindingsView", () => {
                 const url = String(input);
                 if (url.includes("/evidence-status")) {
                     return Promise.resolve(
-                        response(unsupportedEvidenceStatus(snapshot.snapshot_id)),
+                        response(unsupportedEvidenceStatus(snapshot.snapshot_id, "findings")),
                     );
                 }
                 if (url.includes("/summary")) {
@@ -706,13 +706,30 @@ describe("FindingsView", () => {
             "Findings could not be loaded.",
         );
     });
+
+    it("requests the findings surface without an unsupported banner for schema 3", async () => {
+        const fetchMock = findingsFetch();
+        vi.stubGlobal("fetch", fetchMock);
+
+        render(<FindingsView snapshotId={snapshot.snapshot_id} />);
+
+        expect(await screen.findByRole("heading", { name: "Findings" })).toBeTruthy();
+        await waitFor(() => {
+            expect(
+                fetchMock.mock.calls.some(([input]) =>
+                    String(input).includes("evidence-status?surface=findings"),
+                ),
+            ).toBe(true);
+        });
+        expect(screen.queryByText("Unsupported evidence")).toBeNull();
+    });
 });
 
 function findingsFetch(
     reviewResponse?: () => Response | Promise<Response>,
     firstDetail?: Deferred<Response>,
     summary = findingSummary,
-    evidenceStatus = completeEvidenceStatus(),
+    evidenceStatus = completeEvidenceStatus(snapshot.snapshot_id, "findings"),
 ) {
     return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
@@ -789,7 +806,9 @@ function reviewQueueFetch(initialItems: Finding[]) {
     return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         if (url.includes("/evidence-status")) {
-            return Promise.resolve(response(completeEvidenceStatus()));
+            return Promise.resolve(
+                response(completeEvidenceStatus(snapshot.snapshot_id, "findings")),
+            );
         }
         if (url.includes("/findings/summary")) {
             const counts = {

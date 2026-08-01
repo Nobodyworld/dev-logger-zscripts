@@ -6,12 +6,34 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass
 from enum import StrEnum
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 ANALYZER_VERSION = "3"
 SCHEMA_VERSION = "4"
 RULE_SET_VERSION = "4"
 EVIDENCE_STATUS_PRESENTATION_VERSION = "1"
+
+EvidenceStatusSurface = Literal[
+    "generic",
+    "overview",
+    "symbols",
+    "relationships",
+    "findings",
+]
+EVIDENCE_STATUS_SURFACES: tuple[EvidenceStatusSurface, ...] = (
+    "generic",
+    "overview",
+    "symbols",
+    "relationships",
+    "findings",
+)
+EVIDENCE_STATUS_MINIMUM_SCHEMA: dict[EvidenceStatusSurface, int | None] = {
+    "generic": None,
+    "overview": 1,
+    "symbols": 1,
+    "relationships": 2,
+    "findings": 3,
+}
 
 SNAPSHOT_TRUNCATED_CONSEQUENCE = (
     "Some files were not analyzed. Absence from this snapshot does not prove that a file, "
@@ -140,6 +162,7 @@ class SnapshotEvidenceStatus:
     """Presentation-only status for the exact selected immutable snapshot."""
 
     presentation_version: str
+    surface: EvidenceStatusSurface
     snapshot_id: str
     evidence_complete: bool
     observation_state_known: bool
@@ -151,11 +174,15 @@ class SnapshotEvidenceStatus:
 def build_snapshot_evidence_status(
     snapshot: SnapshotRecord,
     *,
+    surface: EvidenceStatusSurface = "generic",
     observation_state_known: bool,
     lifecycle_reconciled: bool,
     reconciliation_skip_reason: str | None,
 ) -> SnapshotEvidenceStatus:
     """Derive deterministic presentation consequences from exact stored snapshot facts."""
+
+    if surface not in EVIDENCE_STATUS_SURFACES:
+        raise ValueError("Unsupported evidence status surface.")
 
     limitations: list[EvidenceLimitation] = []
     if snapshot.truncated:
@@ -175,7 +202,7 @@ def build_snapshot_evidence_status(
                 count=snapshot.parse_gap_count,
             )
         )
-    if snapshot.schema_version != SCHEMA_VERSION:
+    if not _schema_is_supported_for_surface(snapshot.schema_version, surface):
         limitations.append(
             EvidenceLimitation(
                 code="snapshot-schema-unsupported",
@@ -216,6 +243,7 @@ def build_snapshot_evidence_status(
         )
     return SnapshotEvidenceStatus(
         presentation_version=EVIDENCE_STATUS_PRESENTATION_VERSION,
+        surface=surface,
         snapshot_id=snapshot.snapshot_id,
         evidence_complete=not limitations,
         observation_state_known=observation_state_known,
@@ -223,6 +251,22 @@ def build_snapshot_evidence_status(
         reconciliation_skip_reason=reconciliation_skip_reason,
         limitations=tuple(limitations),
     )
+
+
+def _schema_is_supported_for_surface(
+    schema_version: str,
+    surface: EvidenceStatusSurface,
+) -> bool:
+    """Return whether one stored schema is readable by the requested presentation surface."""
+
+    if not schema_version.isascii() or not schema_version.isdecimal():
+        return False
+    stored_version = int(schema_version)
+    current_version = int(SCHEMA_VERSION)
+    if stored_version < 1 or stored_version > current_version:
+        return False
+    minimum_version = EVIDENCE_STATUS_MINIMUM_SCHEMA[surface]
+    return minimum_version is None or stored_version >= minimum_version
 
 
 @dataclass(frozen=True, slots=True)
@@ -596,7 +640,9 @@ def _relationship_sort_key(record: RelationshipRecord) -> tuple[str, str, str, s
 __all__ = [
     "ANALYZER_VERSION",
     "EVIDENCE_LIMITATION_CODES",
+    "EVIDENCE_STATUS_MINIMUM_SCHEMA",
     "EVIDENCE_STATUS_PRESENTATION_VERSION",
+    "EVIDENCE_STATUS_SURFACES",
     "RULE_SET_VERSION",
     "SCHEMA_VERSION",
     "AnalysisEvidence",
@@ -604,6 +650,7 @@ __all__ = [
     "CycleGroupRecord",
     "DiagnosticRecord",
     "EvidenceLimitation",
+    "EvidenceStatusSurface",
     "FileRecord",
     "FindingEvidenceRecord",
     "FindingLifecycleRecord",

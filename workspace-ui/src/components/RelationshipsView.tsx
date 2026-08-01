@@ -36,7 +36,7 @@ interface PositionedNode {
 const graphLimits = { maxNodes: 40, maxEdges: 80 };
 
 export function RelationshipsView({ snapshotId }: RelationshipsViewProps) {
-    const evidenceStatus = useEvidenceStatus(snapshotId);
+    const evidenceStatus = useEvidenceStatus(snapshotId, "relationships");
     const [summary, setSummary] = useState<RelationshipSummary | null>(null);
     const [cycles, setCycles] = useState<CycleGroup[]>([]);
     const [mode, setMode] = useState<GraphMode>("modules");

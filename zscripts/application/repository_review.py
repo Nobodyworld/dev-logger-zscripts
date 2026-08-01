@@ -29,6 +29,7 @@ from zscripts.domain.repository_review import (
     AnalysisEvidence,
     AnalysisState,
     CycleGroupRecord,
+    EvidenceStatusSurface,
     FindingEvidenceRecord,
     GraphNodeRecord,
     MetricRecord,
@@ -311,12 +312,18 @@ class RepositoryReviewService:
     def get_snapshot(self, snapshot_id: str) -> SnapshotRecord:
         return self.store.get_snapshot(snapshot_id)
 
-    def snapshot_evidence_status(self, snapshot_id: str) -> SnapshotEvidenceStatus:
+    def snapshot_evidence_status(
+        self,
+        snapshot_id: str,
+        *,
+        surface: EvidenceStatusSurface = "generic",
+    ) -> SnapshotEvidenceStatus:
         """Return presentation-only limitations for one exact stored snapshot."""
 
         facts = self.store.snapshot_evidence_facts(snapshot_id)
         return build_snapshot_evidence_status(
             facts.snapshot,
+            surface=surface,
             observation_state_known=facts.observed_state_known,
             lifecycle_reconciled=facts.lifecycle_reconciled,
             reconciliation_skip_reason=facts.reconciliation_skip_reason,
@@ -1253,6 +1260,7 @@ def public_snapshot_evidence_status(status: SnapshotEvidenceStatus) -> dict[str,
 
     return {
         "presentation_version": status.presentation_version,
+        "surface": status.surface,
         "snapshot_id": status.snapshot_id,
         "evidence_complete": status.evidence_complete,
         "observation_state_known": status.observation_state_known,

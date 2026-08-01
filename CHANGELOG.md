@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- Make snapshot evidence-status schema support surface-aware so readable schema
+  versions are not labeled globally unsupported, and announce asynchronous
+  status-load failures through one stable polite live region.
 - Enforce the Handoff format-2 JSON limit against the exact final normalized
   UTF-8 bytes after warnings, omitted counts, and truncation metadata. Optional
   evidence is removed deterministically; an oversized required envelope fails

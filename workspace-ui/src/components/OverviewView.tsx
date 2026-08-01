@@ -9,7 +9,7 @@ interface OverviewViewProps {
 
 export function OverviewView({ overview, onOpenFindings }: OverviewViewProps) {
     const { counts, snapshot } = overview;
-    const evidenceStatus = useEvidenceStatus(snapshot.snapshot_id);
+    const evidenceStatus = useEvidenceStatus(snapshot.snapshot_id, "overview");
     const summary = [
         ["Files analyzed", counts.files_analyzed.toLocaleString()],
         ["Files excluded", counts.files_excluded.toLocaleString()],

@@ -77,9 +77,13 @@ export const overview: Overview = {
     },
 };
 
-export function completeEvidenceStatus(snapshotId = snapshot.snapshot_id): SnapshotEvidenceStatus {
+export function completeEvidenceStatus(
+    snapshotId = snapshot.snapshot_id,
+    surface: SnapshotEvidenceStatus["surface"] = "generic",
+): SnapshotEvidenceStatus {
     return {
         presentation_version: "1",
+        surface,
         snapshot_id: snapshotId,
         evidence_complete: true,
         observation_state_known: true,
@@ -89,9 +93,13 @@ export function completeEvidenceStatus(snapshotId = snapshot.snapshot_id): Snaps
     };
 }
 
-export function partialEvidenceStatus(snapshotId = snapshot.snapshot_id): SnapshotEvidenceStatus {
+export function partialEvidenceStatus(
+    snapshotId = snapshot.snapshot_id,
+    surface: SnapshotEvidenceStatus["surface"] = "generic",
+): SnapshotEvidenceStatus {
     return {
         presentation_version: "1",
+        surface,
         snapshot_id: snapshotId,
         evidence_complete: false,
         observation_state_known: true,
@@ -118,9 +126,10 @@ export function partialEvidenceStatus(snapshotId = snapshot.snapshot_id): Snapsh
 
 export function unsupportedEvidenceStatus(
     snapshotId = snapshot.snapshot_id,
+    surface: SnapshotEvidenceStatus["surface"] = "generic",
 ): SnapshotEvidenceStatus {
     return {
-        ...completeEvidenceStatus(snapshotId),
+        ...completeEvidenceStatus(snapshotId, surface),
         evidence_complete: false,
         limitations: [
             {

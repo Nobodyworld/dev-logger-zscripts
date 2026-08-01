@@ -172,6 +172,72 @@ describe("CompareView", () => {
         });
     });
 
+    it("keeps generic schema-3 status neutral while version mismatch stays section-authoritative", async () => {
+        const schemaThreeSnapshots = comparisonSnapshots.map((item) =>
+            item.snapshot_id === olderSnapshot.snapshot_id
+                ? { ...item, schema_version: "3" }
+                : item,
+        );
+        const mismatchSummary: ComparisonSummary = {
+            ...summary,
+            compatibility: {
+                ...summary.compatibility,
+                baseline_schema_version: "3",
+                target_schema_version: "4",
+                sections: summary.compatibility.sections.map((item) => ({
+                    ...item,
+                    status: "partial",
+                    reason_codes: ["version-mismatch"],
+                })),
+            },
+        };
+        const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+            const url = String(input);
+            if (url.includes("comparison-snapshots")) {
+                return response({ repository, snapshots: schemaThreeSnapshots });
+            }
+            if (url.includes("/evidence-status")) {
+                const snapshotId = url.includes(olderSnapshot.snapshot_id)
+                    ? olderSnapshot.snapshot_id
+                    : snapshot.snapshot_id;
+                return response(completeEvidenceStatus(snapshotId, "generic"));
+            }
+            if (url.includes("/comparisons/summary")) return response(mismatchSummary);
+            if (url.includes("/comparisons/items")) {
+                return response({
+                    ...page("files", [fileItem]),
+                    section_status: "partial",
+                    reason_codes: ["version-mismatch"],
+                });
+            }
+            return response({ detail: "Unexpected request" }, 500);
+        });
+        vi.stubGlobal("fetch", fetchMock);
+
+        render(
+            <CompareView
+                repositoryId={repository.repository_id}
+                targetSnapshotId={snapshot.snapshot_id}
+            />,
+        );
+
+        expect(
+            await screen.findByText(
+                "Files comparison is partial because baseline and target evidence versions differ.",
+            ),
+        ).toBeTruthy();
+        expect(screen.queryByText("Baseline evidence is unsupported.")).toBeNull();
+        await waitFor(() => {
+            const statusCalls = fetchMock.mock.calls.filter(([input]) =>
+                String(input).includes("/evidence-status"),
+            );
+            expect(statusCalls).toHaveLength(2);
+            expect(statusCalls.every(([input]) => String(input).includes("surface=generic"))).toBe(
+                true,
+            );
+        });
+    });
+
     it("ignores a stale section response after a newer request succeeds", async () => {
         let resolveFiles!: (value: Response) => void;
         const filesPromise = new Promise<Response>((resolve) => {
@@ -248,7 +314,7 @@ describe("CompareView", () => {
             expect(
                 fetchMock.mock.calls.some(([input]) =>
                     String(input).includes(
-                        `/snapshots/${olderSnapshot.snapshot_id}/evidence-status`,
+                        `/snapshots/${olderSnapshot.snapshot_id}/evidence-status?surface=generic`,
                     ),
                 ),
             ).toBe(true);

@@ -22,7 +22,7 @@ const initialPage: SymbolPage = {
 };
 
 export function SymbolsView({ snapshotId }: SymbolsViewProps) {
-    const evidenceStatus = useEvidenceStatus(snapshotId);
+    const evidenceStatus = useEvidenceStatus(snapshotId, "symbols");
     const [search, setSearch] = useState("");
     const deferredSearch = useDeferredValue(search);
     const [kind, setKind] = useState("");

@@ -75,4 +75,31 @@ describe("EvidenceStatusBanner", () => {
         expect(region.getAttribute("aria-live")).toBe("polite");
         expect(region.getAttribute("aria-atomic")).toBe("true");
     });
+
+    it("announces one bounded asynchronous load error through a stable polite region", () => {
+        const { rerender } = render(<EvidenceStatusBanner status={null} />);
+        expect(screen.queryByRole("status")).toBeNull();
+
+        rerender(
+            <EvidenceStatusBanner
+                status={null}
+                error="Evidence status is temporarily unavailable."
+            />,
+        );
+        const region = screen.getByRole("status", { name: "Evidence status" });
+        expect(region.getAttribute("aria-live")).toBe("polite");
+        expect(region.getAttribute("aria-atomic")).toBe("true");
+        expect(region.textContent).toContain("Evidence status unavailable");
+        expect(region.textContent).toContain("Evidence status is temporarily unavailable.");
+
+        rerender(
+            <EvidenceStatusBanner
+                status={null}
+                error="Evidence status is temporarily unavailable."
+                compact
+            />,
+        );
+        expect(screen.getAllByRole("status")).toHaveLength(1);
+        expect(screen.getByRole("status")).toBe(region);
+    });
 });

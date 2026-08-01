@@ -32,6 +32,9 @@ function EvidenceStatusBannerComponent({
         return (
             <section
                 className="evidence-status evidence-status--error"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
                 aria-label="Evidence status"
             >
                 <h3>Evidence status unavailable</h3>

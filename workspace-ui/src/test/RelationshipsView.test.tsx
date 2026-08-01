@@ -499,7 +499,7 @@ describe("RelationshipsView", () => {
                 const url = String(input);
                 if (url.includes("/evidence-status")) {
                     return Promise.resolve(
-                        response(unsupportedEvidenceStatus(snapshot.snapshot_id)),
+                        response(unsupportedEvidenceStatus(snapshot.snapshot_id, "relationships")),
                     );
                 }
                 if (url.includes("/relationships/summary")) {
@@ -551,7 +551,7 @@ describe("RelationshipsView", () => {
                 undefined,
                 { ...relationshipNeighborhood, truncated: true },
                 undefined,
-                partialEvidenceStatus(snapshot.snapshot_id),
+                partialEvidenceStatus(snapshot.snapshot_id, "relationships"),
             ),
         );
 
@@ -561,13 +561,33 @@ describe("RelationshipsView", () => {
         expect(screen.getByText("snapshot-parse-gaps")).toBeTruthy();
         expect(await screen.findByText(/configured local graph limits/i)).toBeTruthy();
     });
+
+    it("requests the relationships surface without an unsupported banner for schema 3", async () => {
+        const fetchMock = relationshipFetch();
+        vi.stubGlobal("fetch", fetchMock);
+
+        render(<RelationshipsView snapshotId={snapshot.snapshot_id} />);
+
+        expect(await screen.findByRole("heading", { name: "Relationships" })).toBeTruthy();
+        await waitFor(() => {
+            expect(
+                fetchMock.mock.calls.some(([input]) =>
+                    String(input).includes("evidence-status?surface=relationships"),
+                ),
+            ).toBe(true);
+        });
+        expect(screen.queryByText("Unsupported evidence")).toBeNull();
+    });
 });
 
 function relationshipFetch(
     sourceOverride?: (url: string) => Promise<Response> | null,
     neighborhood: RelationshipNeighborhood = relationshipNeighborhood,
     graphOverride?: (url: string) => Promise<Response> | null,
-    evidenceStatus: SnapshotEvidenceStatus = completeEvidenceStatus(),
+    evidenceStatus: SnapshotEvidenceStatus = completeEvidenceStatus(
+        snapshot.snapshot_id,
+        "relationships",
+    ),
 ) {
     return vi.fn((input: RequestInfo | URL) => {
         const url = String(input);

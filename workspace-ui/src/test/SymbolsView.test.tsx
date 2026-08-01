@@ -3,7 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { SymbolsView } from "../components/SymbolsView";
-import { partialEvidenceStatus, response, snapshot, symbol } from "./fixtures";
+import {
+    completeEvidenceStatus,
+    partialEvidenceStatus,
+    response,
+    snapshot,
+    symbol,
+} from "./fixtures";
 
 interface Deferred<T> {
     promise: Promise<T>;
@@ -47,7 +53,7 @@ describe("SymbolsView", () => {
         const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
             const url = String(input);
             if (url.includes("/evidence-status")) {
-                return response(partialEvidenceStatus(snapshot.snapshot_id));
+                return response(partialEvidenceStatus(snapshot.snapshot_id, "symbols"));
             }
             if (url.includes("/source?")) {
                 return response({
@@ -181,5 +187,36 @@ describe("SymbolsView", () => {
                 within(screen.getByRole("complementary")).getByText(secondSymbol.relative_path),
             ).toBeTruthy();
         });
+    });
+
+    it("requests the symbols surface without an unsupported banner for schema 3", async () => {
+        const fetchMock = vi.fn((input: RequestInfo | URL) => {
+            const url = String(input);
+            if (url.includes("/evidence-status")) {
+                return Promise.resolve(
+                    response(completeEvidenceStatus(snapshot.snapshot_id, "symbols")),
+                );
+            }
+            return Promise.resolve(
+                response({
+                    items: [symbol],
+                    total: 1,
+                    page: 1,
+                    page_size: 50,
+                    filters: { kinds: [], modules: [], visibilities: [] },
+                }),
+            );
+        });
+        vi.stubGlobal("fetch", fetchMock);
+
+        render(<SymbolsView snapshotId={snapshot.snapshot_id} />);
+
+        expect(await screen.findByRole("button", { name: symbol.qualified_name })).toBeTruthy();
+        expect(
+            fetchMock.mock.calls.some(([input]) =>
+                String(input).includes("evidence-status?surface=symbols"),
+            ),
+        ).toBe(true);
+        expect(screen.queryByText("Unsupported evidence")).toBeNull();
     });
 });

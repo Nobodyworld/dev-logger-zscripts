@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { getSnapshotEvidenceStatus } from "../api";
-import type { SnapshotEvidenceStatus } from "../types";
+import type { EvidenceStatusSurface, SnapshotEvidenceStatus } from "../types";
 
 const STATUS_ERROR = "Evidence status is temporarily unavailable.";
 
@@ -11,7 +11,7 @@ interface EvidenceStatusState {
 }
 
 interface LoadedEvidenceStatusState extends EvidenceStatusState {
-    snapshotId: string;
+    requestKey: string;
 }
 
 interface EvidenceStatusPairState {
@@ -33,29 +33,35 @@ const emptyPair: EvidenceStatusPairState = {
     targetError: null,
 };
 
-export function useEvidenceStatus(snapshotId: string): EvidenceStatusState {
+export function useEvidenceStatus(
+    snapshotId: string,
+    surface: EvidenceStatusSurface = "generic",
+): EvidenceStatusState {
+    const requestKey = `${snapshotId}\0${surface}`;
     const [state, setState] = useState<LoadedEvidenceStatusState>({
         ...emptyStatus,
-        snapshotId: "",
+        requestKey: "",
     });
 
     useEffect(() => {
         const controller = new AbortController();
         if (!snapshotId) return () => controller.abort();
-        void getSnapshotEvidenceStatus(snapshotId, controller.signal)
+        void getSnapshotEvidenceStatus(snapshotId, surface, controller.signal)
             .then((status) => {
-                if (!isEvidenceStatus(status)) throw new Error("Invalid evidence status response.");
-                if (!controller.signal.aborted) setState({ snapshotId, status, error: null });
+                if (!isEvidenceStatus(status) || status.surface !== surface) {
+                    throw new Error("Invalid evidence status response.");
+                }
+                if (!controller.signal.aborted) setState({ requestKey, status, error: null });
             })
             .catch(() => {
                 if (!controller.signal.aborted) {
-                    setState({ snapshotId, status: null, error: STATUS_ERROR });
+                    setState({ requestKey, status: null, error: STATUS_ERROR });
                 }
             });
         return () => controller.abort();
-    }, [snapshotId]);
+    }, [requestKey, snapshotId, surface]);
 
-    return state.snapshotId === snapshotId ? state : emptyStatus;
+    return state.requestKey === requestKey ? state : emptyStatus;
 }
 
 export function useEvidenceStatusPair(
@@ -72,11 +78,11 @@ export function useEvidenceStatusPair(
         const controller = new AbortController();
         if (!baselineSnapshotId || !targetSnapshotId) return () => controller.abort();
         void Promise.allSettled([
-            getSnapshotEvidenceStatus(baselineSnapshotId, controller.signal).then(
-                requireEvidenceStatus,
+            getSnapshotEvidenceStatus(baselineSnapshotId, "generic", controller.signal).then(
+                requireGenericEvidenceStatus,
             ),
-            getSnapshotEvidenceStatus(targetSnapshotId, controller.signal).then(
-                requireEvidenceStatus,
+            getSnapshotEvidenceStatus(targetSnapshotId, "generic", controller.signal).then(
+                requireGenericEvidenceStatus,
             ),
         ]).then(([baseline, target]) => {
             if (controller.signal.aborted) return;
@@ -94,8 +100,10 @@ export function useEvidenceStatusPair(
     return state.pairKey === pairKey ? state : emptyPair;
 }
 
-function requireEvidenceStatus(status: SnapshotEvidenceStatus): SnapshotEvidenceStatus {
-    if (!isEvidenceStatus(status)) throw new Error("Invalid evidence status response.");
+function requireGenericEvidenceStatus(status: SnapshotEvidenceStatus): SnapshotEvidenceStatus {
+    if (!isEvidenceStatus(status) || status.surface !== "generic") {
+        throw new Error("Invalid evidence status response.");
+    }
     return status;
 }
 

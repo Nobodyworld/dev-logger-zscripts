@@ -77,7 +77,7 @@ const excludedFamilyLabels: Array<[FindingFamily, string]> = [
 ];
 
 export function FindingsView({ snapshotId, preset = "" }: FindingsViewProps) {
-    const evidenceStatus = useEvidenceStatus(snapshotId);
+    const evidenceStatus = useEvidenceStatus(snapshotId, "findings");
     const [queuePreset, setQueuePreset] = useState<FindingQueuePreset>(
         preset ? "all" : "high-signal-v1",
     );

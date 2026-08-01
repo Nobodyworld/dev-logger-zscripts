@@ -27,7 +27,7 @@ from zscripts.domain.repository_comparison import (
     DEFAULT_HANDOFF_BUDGET,
     HandoffSelection,
 )
-from zscripts.domain.repository_review import AnalysisState
+from zscripts.domain.repository_review import AnalysisState, EvidenceStatusSurface
 from zscripts.infrastructure.handoff_rendering import (
     HANDOFF_BUDGET_ERROR_MESSAGE,
     HandoffBudgetError,
@@ -131,6 +131,7 @@ class EvidenceLimitationResponse(_StrictModel):
 
 class SnapshotEvidenceStatusResponse(_StrictModel):
     presentation_version: Literal["1"]
+    surface: Literal["generic", "overview", "symbols", "relationships", "findings"]
     snapshot_id: str
     evidence_complete: bool
     observation_state_known: bool
@@ -782,9 +783,12 @@ def create_workspace_app(
         "/api/snapshots/{snapshot_id}/evidence-status",
         response_model=SnapshotEvidenceStatusResponse,
     )
-    def snapshot_evidence_status(snapshot_id: str) -> dict[str, object]:
+    def snapshot_evidence_status(
+        snapshot_id: str,
+        surface: Annotated[EvidenceStatusSurface, Query()] = "generic",
+    ) -> dict[str, object]:
         try:
-            status = review_service.snapshot_evidence_status(snapshot_id)
+            status = review_service.snapshot_evidence_status(snapshot_id, surface=surface)
         except SnapshotNotFoundError as exc:
             raise HTTPException(status_code=404, detail="Snapshot was not found.") from exc
         return public_snapshot_evidence_status(status)

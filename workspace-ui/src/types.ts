@@ -42,6 +42,9 @@ export type EvidenceLimitationCode =
     | "lifecycle-superseded"
     | "lifecycle-analysis-status-unavailable";
 
+export type EvidenceStatusSurface =
+    "generic" | "overview" | "symbols" | "relationships" | "findings";
+
 export interface EvidenceLimitation {
     code: EvidenceLimitationCode;
     category: "partial" | "unsupported" | "historical" | "lifecycle";
@@ -51,6 +54,7 @@ export interface EvidenceLimitation {
 
 export interface SnapshotEvidenceStatus {
     presentation_version: "1";
+    surface: EvidenceStatusSurface;
     snapshot_id: string;
     evidence_complete: boolean;
     observation_state_known: boolean;

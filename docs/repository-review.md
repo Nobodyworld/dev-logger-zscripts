@@ -66,12 +66,17 @@ The Overview includes repository and Git state, completed snapshot identity,
 analyzer/schema/rule-set versions, files analyzed and excluded, package/module
 counts, class/function/method counts, parse gaps, and truncation state.
 
-Overview, Symbols, Relationships, and Findings load evidence status for the
-exact selected snapshot. Compare and Handoff show it independently for the
-baseline and target. Complete, currently supported evidence produces no
-banner. A status request failure is local to the banner and does not hide
-successfully loaded evidence. Presentation contract version `1` uses these
-stable codes and consequences:
+Overview, Symbols, Relationships, and Findings load surface-specific evidence
+status for the exact selected snapshot. Overview and Symbols support stored
+schema v1+, Relationships supports v2+, and Findings supports v3+. Compare and
+Handoff use generic baseline/target status and leave schema/version authority
+to each existing comparison-section compatibility record. Generic status does
+not reject readable historical schemas merely because they are older than the
+current version. Malformed, non-positive, and newer-than-supported schemas are
+unsupported. Complete supported evidence produces no banner. A status request
+failure is announced through one stable polite status region, remains local to
+the banner, and does not hide successfully loaded evidence. Presentation
+contract version `1` uses these stable codes and consequences:
 
 | Code | Consequence |
 | --- | --- |

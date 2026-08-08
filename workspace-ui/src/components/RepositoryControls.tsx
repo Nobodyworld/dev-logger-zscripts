@@ -75,7 +75,10 @@ export function RepositoryControls({
                         className="button button--primary"
                         type="submit"
                         disabled={
-                            !repositoryPath || running || scopeResolving || pendingScope !== null
+                            !repositoryPath.trim() ||
+                            running ||
+                            scopeResolving ||
+                            pendingScope !== null
                         }
                     >
                         <ScanIcon />
@@ -129,7 +132,11 @@ export function RepositoryControls({
                     </h2>
                     <dl>
                         <div>
-                            <dt>Entered directory</dt>
+                            <dt>Entered path</dt>
+                            <dd className="mono-wrap">{pendingScope.entered_path}</dd>
+                        </div>
+                        <div>
+                            <dt>Canonical entered directory</dt>
                             <dd className="mono-wrap">{pendingScope.resolved_input_path}</dd>
                         </div>
                         <div>

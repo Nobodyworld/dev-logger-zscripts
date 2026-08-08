@@ -31,6 +31,7 @@ const sameRootScope = {
 
 const nestedScope = {
     ...sameRootScope,
+    entered_path: "alias\\feature",
     resolved_input_path: "C:\\Projects\\sample\\src\\feature",
     analysis_root: "C:\\Projects\\sample",
     confirmation_required: true,
@@ -61,6 +62,23 @@ describe("App", () => {
         expect(await screen.findByLabelText("Repository path")).toBeTruthy();
         expect(screen.getByRole("button", { name: "Scan repository" })).toBeTruthy();
         expect(screen.getByText("Select a local Python repository")).toBeTruthy();
+    });
+
+    it("does not preflight a whitespace-only repository path", async () => {
+        const fetchMock = vi.fn().mockResolvedValue(response({ repositories: [] }));
+        vi.stubGlobal("fetch", fetchMock);
+        const user = userEvent.setup();
+        render(<App />);
+
+        await user.type(await screen.findByLabelText("Repository path"), "   ");
+        const scan = screen.getByRole("button", { name: "Scan repository" });
+
+        expect(scan.getAttribute("disabled")).not.toBeNull();
+        expect(
+            fetchMock.mock.calls.some(([url]) =>
+                String(url).includes("/api/repositories/resolve-scope"),
+            ),
+        ).toBe(false);
     });
 
     it("shows scan progress and supports cancellation", async () => {
@@ -162,10 +180,9 @@ describe("App", () => {
         expect(screen.getByRole("alert").textContent).toBe("Local request failed.");
     });
 
-    it("requires nested scope confirmation before starting exactly one analysis", async () => {
+    it("trims a nested path and shows entered, canonical, and resolved scopes before one analysis", async () => {
         const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
             const url = String(input);
-            void init;
             if (url === "/api/repositories") return response({ repositories: [] });
             if (url === "/api/repositories/resolve-scope") return response(nestedScope);
             if (url === "/api/repositories/analyze") return response(startedAnalysis);
@@ -175,15 +192,25 @@ describe("App", () => {
         const user = userEvent.setup();
         render(<App />);
 
-        await user.type(await screen.findByLabelText("Repository path"), nestedScope.entered_path);
+        const paddedPath = `  ${nestedScope.entered_path}  `;
+        await user.type(await screen.findByLabelText("Repository path"), paddedPath);
         await user.click(screen.getByRole("button", { name: "Scan repository" }));
 
         const heading = await screen.findByRole("heading", {
             name: "Scan resolved Git repository?",
         });
         expect(heading).toBe(document.activeElement);
-        expect(screen.getByText(nestedScope.resolved_input_path)).toBeTruthy();
-        expect(screen.getByText(nestedScope.analysis_root)).toBeTruthy();
+        const dialog = screen.getByRole("dialog");
+        expect(within(dialog).getByText(nestedScope.entered_path)).toBeTruthy();
+        expect(within(dialog).getByText(nestedScope.resolved_input_path)).toBeTruthy();
+        expect(within(dialog).getByText(nestedScope.analysis_root)).toBeTruthy();
+        const scopeRequests = fetchMock.mock.calls.filter(
+            ([url]) => url === "/api/repositories/resolve-scope",
+        );
+        expect(scopeRequests).toHaveLength(1);
+        expect(JSON.parse(String(scopeRequests[0]?.[1]?.body))).toEqual({
+            repository_path: nestedScope.entered_path,
+        });
         expect(fetchMock.mock.calls.some(([url]) => url === "/api/repositories/analyze")).toBe(
             false,
         );

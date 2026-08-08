@@ -181,7 +181,7 @@ describe("App", () => {
     });
 
     it("trims a nested path and shows entered, canonical, and resolved scopes before one analysis", async () => {
-        const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
             const url = String(input);
             if (url === "/api/repositories") return response({ repositories: [] });
             if (url === "/api/repositories/resolve-scope") return response(nestedScope);

@@ -70,12 +70,14 @@ def test_resolve_scope_recognizes_git_file_and_canonical_input(
         pytest.skip("Directory symlinks are unavailable on this platform.")
     monkeypatch.chdir(tmp_path)
 
-    scope = RepositoryDiscovery().resolve_scope(Path("alias/../alias"))
+    scope = RepositoryDiscovery().resolve_scope(Path("alias"))
+    relative_scope = RepositoryDiscovery().resolve_scope(Path("linked-worktree/src/feature/../feature"))
 
     assert scope.resolved_input_path == str(nested.resolve())
     assert scope.analysis_root == str(root.resolve())
     assert scope.reason == "enclosing-git-root"
     assert scope.confirmation_required is True
+    assert relative_scope.resolved_input_path == str(nested.resolve())
 
 
 def test_resolve_scope_rejects_missing_and_non_directory_paths(tmp_path: Path) -> None:

@@ -15,6 +15,11 @@
 
 ### Added
 
+- Repository-scope presentation contract version `1`: the local workspace
+  strictly resolves an entered directory and explicitly confirms a broader
+  enclosing Git root before starting analysis. The preflight is read-only and
+  non-persistent; same-root and non-Git scans remain one-action, while direct
+  API/CLI behavior and repository identity remain unchanged.
 - Snapshot-label presentation contract version `1`, shared across the current,
   Compare, and Handoff selectors and saved-handoff context. Labels use UTC
   second precision, observed branch/Git/worktree facts or an explicit unknown

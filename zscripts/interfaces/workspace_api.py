@@ -56,6 +56,20 @@ class AnalyzeRequest(_StrictModel):
         return self
 
 
+class ResolveScopeRequest(_StrictModel):
+    repository_path: str = Field(min_length=1, max_length=1_024)
+
+
+class RepositoryScopeResolutionResponse(_StrictModel):
+    presentation_version: Literal["1"]
+    entered_path: str
+    resolved_input_path: str
+    analysis_root: str
+    git_root_detected: bool
+    confirmation_required: bool
+    reason: Literal["same-directory", "enclosing-git-root", "non-git-directory"]
+
+
 class RepositoryResponse(_StrictModel):
     repository_id: str
     display_name: str
@@ -680,6 +694,25 @@ def create_workspace_app(
             "repositories": [
                 public_repository(repository) for repository in review_service.list_repositories()
             ]
+        }
+
+    @app.post(
+        "/api/repositories/resolve-scope",
+        response_model=RepositoryScopeResolutionResponse,
+    )
+    def resolve_scope(request: ResolveScopeRequest) -> dict[str, object]:
+        try:
+            scope = review_service.discovery.resolve_scope(Path(request.repository_path))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Repository path is invalid.") from exc
+        return {
+            "presentation_version": scope.presentation_version,
+            "entered_path": scope.entered_path,
+            "resolved_input_path": scope.resolved_input_path,
+            "analysis_root": scope.analysis_root,
+            "git_root_detected": scope.git_root_detected,
+            "confirmation_required": scope.confirmation_required,
+            "reason": scope.reason,
         }
 
     @app.post("/api/repositories/analyze", response_model=AnalysisResponse, status_code=202)

@@ -65,6 +65,17 @@ service = build_toolkit_service(config, adapter_registry=registry)
 
 The loopback-only workspace also exposes versioned snapshot evidence:
 
+`POST /api/repositories/resolve-scope` is an optional, strict local workspace
+preflight. Its `{ "repository_path": "..." }` request is limited to 1,024
+characters and rejects unknown fields. Successful responses use repository-scope
+presentation version `"1"` and contain the entered path, canonical input path,
+analysis root, Git detection flag, confirmation flag, and one of
+`same-directory`, `enclosing-git-root`, or `non-git-directory`. Invalid,
+missing, inaccessible, and non-directory paths receive generic validation
+errors with no path reflection. Resolution performs no analysis, persistence,
+source reading, file enumeration, or Git command. It is optional: direct
+`POST /api/repositories/analyze` and CLI analysis remain unchanged.
+
 - `GET /api/snapshots/{snapshot_id}/evidence-status?surface={surface}`
 - `GET /api/snapshots/{snapshot_id}/relationships/summary`
 - `GET /api/snapshots/{snapshot_id}/relationships`

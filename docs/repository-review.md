@@ -416,6 +416,7 @@ The same process serves the SPA and these experimental routes:
 
 - `GET /api/health`
 - `GET /api/repositories`
+- `POST /api/repositories/resolve-scope`
 - `POST /api/repositories/analyze`
 - `GET /api/analyses/{analysis_id}`
 - `POST /api/analyses/{analysis_id}/cancel`
@@ -475,3 +476,19 @@ medium/large performance fixtures.
 See [Dependency Audit](DEPENDENCIES.md) for dependency/license rationale and
 [Repository Review Workspace Roadmap](product/REPOSITORY_INTELLIGENCE_ROADMAP.md)
 for the deliberately deferred phases.
+
+## Repository scope confirmation
+
+The local interactive workspace first resolves an entered directory with the
+presentation-only repository-scope contract version `1`. It expands and
+strictly canonicalizes the directory, detects an enclosing `.git` directory or
+worktree `.git` file, and presents the resolved analysis root. Entering a Git
+root directly or a non-Git directory starts one scan immediately. Entering a
+nested directory whose enclosing Git root is broader requires an explicit
+confirmation before analysis begins. Cancelling that confirmation creates no
+analysis, repository, snapshot, finding, review event, or saved handoff.
+
+This presentation step does not enumerate files, read source, run Git commands,
+or write local state. Paths are shown only in the local interactive workspace;
+recent repositories remain keyed by resolved repository identity. Direct API
+analysis and CLI analysis keep their existing deterministic one-action behavior.

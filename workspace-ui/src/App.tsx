@@ -153,9 +153,8 @@ export function App() {
     };
 
     const scanRepository = async () => {
-        const submittedPath = repositoryPath;
-        if (!submittedPath.trim() || scopeRequestInFlight.current || analysisStarting.current)
-            return;
+        const submittedPath = repositoryPath.trim();
+        if (!submittedPath || scopeRequestInFlight.current || analysisStarting.current) return;
         invalidatePendingScope();
         const generation = scopeGeneration.current;
         const controller = new AbortController();

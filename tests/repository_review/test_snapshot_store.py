@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import sqlite3
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -9,9 +10,30 @@ import pytest
 from zscripts.application.repository_review import RepositoryReviewService, SourceEvidenceError
 from zscripts.domain.repository_review import AnalysisEvidence, AnalysisState, EvidenceStatusSurface
 from zscripts.infrastructure import snapshot_store as snapshot_store_module
+from zscripts.infrastructure.repository_discovery import RepositoryDiscovery
 from zscripts.infrastructure.snapshot_store import DATABASE_SCHEMA_VERSION, SnapshotStore
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "repository_review"
+
+
+def test_git_root_and_confirmed_nested_scope_share_repository_identity(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    shutil.copytree(FIXTURES / "ordinary", repository)
+    subprocess.run(["git", "init", "--quiet", str(repository)], check=True)
+    nested = repository / "pkg"
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+
+    direct = service.analyze(repository)
+    scope = RepositoryDiscovery().resolve_scope(nested)
+    confirmed = service.analyze(Path(scope.analysis_root))
+
+    assert scope.confirmation_required is True
+    assert direct.repository.repository_id == confirmed.repository.repository_id
+    assert direct.snapshot.snapshot_id == confirmed.snapshot.snapshot_id
+    repositories = service.list_repositories()
+    assert len(repositories) == 1
+    assert repositories[0].repository_id == direct.repository.repository_id
+    assert repositories[0].canonical_path == str(repository.resolve())
 
 
 def test_same_named_non_git_repositories_keep_distinct_identity_and_snapshots(

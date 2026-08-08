@@ -104,6 +104,16 @@ export interface AnalysisJob {
     message: string | null;
 }
 
+export interface RepositoryScopeResolution {
+    presentation_version: "1";
+    entered_path: string;
+    resolved_input_path: string;
+    analysis_root: string;
+    git_root_detected: boolean;
+    confirmation_required: boolean;
+    reason: "same-directory" | "enclosing-git-root" | "non-git-directory";
+}
+
 export interface SymbolRecord {
     symbol_id: string;
     language: string;

@@ -7,6 +7,7 @@ import {
     getComparisonSnapshots,
     getOverview,
     listRepositories,
+    resolveRepositoryScope,
     startAnalysis,
 } from "./api";
 import { RepositoryControls } from "./components/RepositoryControls";
@@ -18,7 +19,14 @@ import { FindingsView } from "./components/FindingsView";
 import { RelationshipsView } from "./components/RelationshipsView";
 import { Sidebar } from "./components/Sidebar";
 import { SymbolsView } from "./components/SymbolsView";
-import type { AnalysisJob, Overview, Repository, SnapshotChoice, ViewName } from "./types";
+import type {
+    AnalysisJob,
+    Overview,
+    Repository,
+    RepositoryScopeResolution,
+    SnapshotChoice,
+    ViewName,
+} from "./types";
 
 export function App() {
     const [repositories, setRepositories] = useState<Repository[]>([]);
@@ -30,7 +38,14 @@ export function App() {
     const [findingPreset, setFindingPreset] = useState<string>("");
     const [navigationOpen, setNavigationOpen] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [pendingScope, setPendingScope] = useState<RepositoryScopeResolution | null>(null);
+    const [scopeResolving, setScopeResolving] = useState(false);
     const pollGeneration = useRef(0);
+    const scopeGeneration = useRef(0);
+    const scopeAbortController = useRef<AbortController | null>(null);
+    const scopeRequestInFlight = useRef(false);
+    const analysisStarting = useRef(false);
+    const mounted = useRef(true);
 
     useEffect(() => {
         let active = true;
@@ -44,6 +59,9 @@ export function App() {
             });
         return () => {
             active = false;
+            mounted.current = false;
+            scopeGeneration.current += 1;
+            scopeAbortController.current?.abort();
             pollGeneration.current += 1;
         };
     }, []);
@@ -63,6 +81,7 @@ export function App() {
     };
 
     const openRecentRepository = async (repositoryId: string) => {
+        invalidatePendingScope();
         setError(null);
         try {
             const snapshotResult = await getComparisonSnapshots(repositoryId);
@@ -81,15 +100,17 @@ export function App() {
         }
     };
 
-    const scanRepository = async () => {
-        if (!repositoryPath.trim()) return;
+    const beginAnalysis = async (analysisRoot: string) => {
+        if (analysisStarting.current) return;
+        analysisStarting.current = true;
         setError(null);
         setOverview(null);
         setSnapshots([]);
         pollGeneration.current += 1;
         const generation = pollGeneration.current;
         try {
-            let nextJob = await startAnalysis({ repository_path: repositoryPath.trim() });
+            let nextJob = await startAnalysis({ repository_path: analysisRoot });
+            analysisStarting.current = false;
             setJob(nextJob);
             while (nextJob.state === "started" && generation === pollGeneration.current) {
                 await wait(300);
@@ -112,7 +133,63 @@ export function App() {
             }
         } catch (caught) {
             setError(messageFrom(caught, "The repository scan could not be started."));
+        } finally {
+            analysisStarting.current = false;
         }
+    };
+
+    const invalidatePendingScope = () => {
+        scopeGeneration.current += 1;
+        scopeAbortController.current?.abort();
+        scopeAbortController.current = null;
+        scopeRequestInFlight.current = false;
+        setScopeResolving(false);
+        setPendingScope(null);
+    };
+
+    const changeRepositoryPath = (value: string) => {
+        setRepositoryPath(value);
+        invalidatePendingScope();
+    };
+
+    const scanRepository = async () => {
+        const submittedPath = repositoryPath;
+        if (!submittedPath.trim() || scopeRequestInFlight.current || analysisStarting.current)
+            return;
+        invalidatePendingScope();
+        const generation = scopeGeneration.current;
+        const controller = new AbortController();
+        scopeAbortController.current = controller;
+        scopeRequestInFlight.current = true;
+        setScopeResolving(true);
+        setError(null);
+        setJob(null);
+        try {
+            const scope = await resolveRepositoryScope(submittedPath, controller.signal);
+            if (generation !== scopeGeneration.current || !mounted.current) return;
+            scopeRequestInFlight.current = false;
+            setScopeResolving(false);
+            scopeAbortController.current = null;
+            if (scope.confirmation_required) {
+                setPendingScope(scope);
+                return;
+            }
+            await beginAnalysis(scope.analysis_root);
+        } catch (caught) {
+            if (generation !== scopeGeneration.current || !mounted.current || isAbortError(caught))
+                return;
+            scopeRequestInFlight.current = false;
+            setScopeResolving(false);
+            scopeAbortController.current = null;
+            setError(messageFrom(caught, "The repository path could not be resolved."));
+        }
+    };
+
+    const confirmScope = async () => {
+        const scope = pendingScope;
+        if (!scope || analysisStarting.current) return;
+        setPendingScope(null);
+        await beginAnalysis(scope.analysis_root);
     };
 
     const cancelScan = async () => {
@@ -144,10 +221,14 @@ export function App() {
                     repositoryPath={repositoryPath}
                     repositories={repositories}
                     job={job}
-                    onPathChange={setRepositoryPath}
+                    pendingScope={pendingScope}
+                    scopeResolving={scopeResolving}
+                    onPathChange={changeRepositoryPath}
                     onRecentRepository={openRecentRepository}
                     onScan={scanRepository}
                     onCancel={cancelScan}
+                    onScopeConfirm={confirmScope}
+                    onScopeCancel={invalidatePendingScope}
                 />
                 {error ? (
                     <p className="global-error" role="alert">
@@ -230,6 +311,10 @@ function EmptyState({ hasJob }: { hasJob: boolean }) {
 
 function messageFrom(error: unknown, fallback: string): string {
     return error instanceof ApiError ? error.message : fallback;
+}
+
+function isAbortError(error: unknown): boolean {
+    return error instanceof DOMException && error.name === "AbortError";
 }
 
 function wait(milliseconds: number): Promise<void> {

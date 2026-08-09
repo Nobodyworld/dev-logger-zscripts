@@ -1,5 +1,459 @@
 # Repository Review Dogfood Report
 
+## Post-polish rerun
+
+### Decision
+
+**FOCUSED POLISH CONFIRMED**
+
+The complete sanitized `Scan → Explore → Review → Compare → Handoff` workflow
+was rerun after #100–#104 merged. The five changes are observable end to end:
+Handoff budgets are exact, the default Findings queue is materially smaller,
+evidence limitations persist across views, snapshot choices are
+distinguishable, and nested Git scope requires confirmation before analysis.
+
+The workflow is clearer and more trustworthy than the historical measured
+build. No product-code correction was needed in this evaluation branch. The
+original report below remains the historical baseline and was not rewritten.
+
+### Evaluated build and contracts
+
+| Build or contract | Post-polish value |
+| --- | --- |
+| Exact polished `main` and evaluation starting SHA | `741a86c4a62fceb9e6e4c28584ffebfa32080d9d` |
+| Prepared branch | `chore/repository-review-post-polish-dogfood` |
+| Evaluation-branch final SHA | Recorded in the draft PR and final handoff after the commit exists; a commit cannot truthfully contain its own resulting SHA |
+| Analyzer version | `3` |
+| Evidence schema version | `4` |
+| Rule-set version | `4` |
+| SQLite schema version | `6` |
+| Comparison format version | `2` |
+| Handoff format version | `2` |
+| Evaluation-harness output format | `1` |
+| Evidence-status presentation contract | `1` |
+| Snapshot-label presentation contract | `1` |
+| Repository-scope presentation contract | `1` |
+| Exact-main push run | `31293287366` |
+| Exact-main `quality` job | `93194128205` |
+
+The exact-main run used event `push`, workflow `CI`, and exact head
+`741a86c4a62fceb9e6e4c28584ffebfa32080d9d`. Every substantive step completed
+successfully before evaluation began. Exact-final-head hosted evidence is
+recorded in the draft PR because it does not exist until this report is
+committed and pushed.
+
+### Environment, subjects, and sanitization
+
+| Environment fact | Post-polish value |
+| --- | --- |
+| Operating system | Windows 11 Home, build 10.0.26200 |
+| Python | 3.14.0 in an external disposable virtual environment |
+| Python executable | External disposable environment; absolute path omitted |
+| Node | 24.12.0 |
+| pnpm | 10.18.1 |
+| Git | 2.51.2.windows.1 |
+| Logical processors | 12 |
+| Visible memory | 15.8 GiB |
+| Free memory before evaluation | 2.0 GiB |
+
+The same ten public subject classes were evaluated: a clean exact-SHA clone of
+Zscripts, the ordinary, relationship, and finding fixtures, generated medium,
+large, and multipackage repositories, parse-gap and file-count-limited
+subjects, and the generated cycle/repeated-name repository. A clean external
+clone was used for the Zscripts subject because the harness integrity digest
+intentionally walks every non-`.git` byte; running it against the developer
+checkout spent unbounded time hashing ignored owner-local environments that
+the analyzer itself excludes. The clean clone preserved the exact tracked
+source, branch, Git SHA, configuration, scan limits, and application-service
+path while removing owner-local ignored bytes from the public subject.
+
+All raw JSON, SQLite data, fixture copies, browser images, and logs remained
+under an external temporary evidence root. The committed evidence contains no
+absolute path, username, machine name, private repository name, private SHA,
+source excerpt, secret, or raw local output. Both result files independently
+reported `sanitized: true`; neither contained a Windows absolute-path marker or
+the local username. The public Zscripts SHA and public logical finding keys are
+intentional reproducibility evidence.
+
+The effective harness commands were:
+
+```powershell
+$run = Join-Path $env:TEMP 'zscripts-post-polish-dogfood\run-20260808-issue112'
+$py = Join-Path $run 'venv\Scripts\python.exe'
+
+& $py scripts/evaluate_repository_review.py generate `
+  --root (Join-Path $run 'generated-fixtures')
+
+& $py scripts/evaluate_repository_review.py evaluate `
+  --subject "zscripts-public=$(Join-Path $run 'subjects\zscripts-public')" `
+  --subject "existing-ordinary=$(Join-Path $run 'existing-fixtures\ordinary')" `
+  --subject "existing-relationships=$(Join-Path $run 'existing-fixtures\relationships')" `
+  --subject "existing-findings=$(Join-Path $run 'existing-fixtures\findings')" `
+  --subject "public-medium=$(Join-Path $run 'generated-fixtures\public-medium')" `
+  --subject "public-large=$(Join-Path $run 'generated-fixtures\public-large')" `
+  --subject "public-multipackage=$(Join-Path $run 'generated-fixtures\public-multipackage')" `
+  --subject "public-partial-parse-gap=$(Join-Path $run 'generated-fixtures\public-partial')" `
+  --subject "public-cycles-repeated=$(Join-Path $run 'generated-fixtures\public-cycles-repeated')" `
+  --output (Join-Path $run 'results\clean-default-subjects.json') `
+  --data-directory (Join-Path $run 'data\clean-default-subjects') `
+  --repeat 2 --max-files 5000 `
+  --max-file-size-bytes 1000000 --max-total-bytes 100000000
+
+& $py scripts/evaluate_repository_review.py evaluate `
+  --subject "public-partial-truncated=$(Join-Path $run 'generated-fixtures\public-partial')" `
+  --output (Join-Path $run 'results\truncated-subject.json') `
+  --data-directory (Join-Path $run 'data\truncated-subject') `
+  --repeat 2 --max-files 3 `
+  --max-file-size-bytes 1000000 --max-total-bytes 100000000
+```
+
+### Determinism and repository integrity
+
+All ten subjects passed all four harness invariants:
+
+- repeated unchanged scans reused one snapshot identity;
+- repeated canonical evidence was byte-identical;
+- repository byte digests before and after analysis were equal; and
+- saved Handoffs reopened with exact Markdown, normalized JSON, and digest.
+
+Every scan emitted the stable phase sequence
+`discovery → analysis → relationships → findings → storage → completed`.
+Complete subjects reconciled finding lifecycle state. The Zscripts and
+parse-gap subjects reported `parse-gaps`; the file-count-limited subject
+reported `truncated-scan`; neither used incomplete absence as evidence of
+resolution.
+
+### Scan performance before and after
+
+Each post-polish subject was scanned twice with Python `tracemalloc`. The
+reported peak is Python allocation tracking only, not total process or native
+memory. The historical run used Python 3.13.7; this run used Python 3.14.0 and
+shared a host with other test workloads. Wall-clock values are therefore an
+observed regression signal, not an attributable product benchmark.
+
+| Subject | Before median ms | After median ms | Change | Before / after `tracemalloc` MiB | After files analyzed / discovered |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `zscripts-public` | 27,297 | 88,012 | +222.4% | 19.80 / 19.75 | 332 / 551 |
+| `existing-ordinary` | 156 | 291 | +86.8% | 0.12 / 0.11 | 2 / 2 |
+| `existing-relationships` | 247 | 513 | +107.9% | 0.61 / 0.15 | 8 / 8 |
+| `existing-findings` | 277 | 554 | +100.0% | 0.17 / 0.17 | 9 / 9 |
+| `public-medium` | 2,785 | 4,411 | +58.4% | 2.51 / 2.50 | 31 / 31 |
+| `public-large` | 9,052 | 20,766 | +129.4% | 9.92 / 9.86 | 121 / 322 |
+| `public-multipackage` | 2,868 | 3,370 | +17.5% | 1.67 / 1.63 | 39 / 39 |
+| `public-partial-parse-gap` | 949 | 602 | -36.6% | 0.14 / 0.14 | 13 / 13 |
+| `public-cycles-repeated` | 319 | 359 | +12.4% | 0.07 / 0.07 | 6 / 6 |
+| `public-partial-truncated` | 250 | 273 | +9.3% | 0.04 / 0.04 | 3 / 13 |
+
+The generated-subject evidence counts remained stable. Zscripts grew from 330
+to 331 modules, 1,973 to 2,032 symbols, 9,710 to 9,969 relationships, and 996
+to 1,036 findings as the focused-polish implementation and its regressions
+entered the evaluated tree. Python allocation peaks stayed close to the
+historical run. A quiet Python 3.13 rerun is needed before assigning the
+wall-clock change to product code.
+
+### Relationship resolution before and after
+
+| Subject | Before resolved / unresolved-or-ambiguous | After resolved / probable / ambiguous / unresolved | Before / after unresolved ratio |
+| --- | ---: | ---: | ---: |
+| `zscripts-public` | 3,805 / 5,905 | 3,909 / 0 / 0 / 6,060 | 60.8% / 60.788% |
+| `public-large` | 1,441 / 2,400 | 1,441 / 0 / 0 / 2,400 | 62.5% / 62.484% |
+| `public-medium` | 781 / 0 | 781 / 0 / 0 / 0 | 0% / 0% |
+| `public-multipackage` | 507 / 0 | 507 / 0 / 0 / 0 | 0% / 0% |
+
+Across all post-polish subjects there were 6,754 resolved-static, zero
+probable-static, one ambiguous, and 8,480 unresolved-dynamic relationships.
+Zscripts' largest dependency cycle contained 11 modules. The largest sampled
+bounded graph payload was 9,680 bytes with 19 relationships; its contended
+query latency was 559 ms. The resolution ratio is effectively unchanged, as
+expected because no analyzer contract changed.
+
+### Finding families and high-signal queue
+
+| Family | Before observed | After observed | Current sample | Useful / actionable | Valid low priority | Intentional design | False positive | Unsupported / ambiguous |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Dependency cycle | 26 | 26 | 5 | 5 | 0 | 0 | 0 | 0 |
+| Inheritance cycle | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Duplicate-name candidate | 90 | 90 | 5 | 3 | 1 | 1 | 0 | 0 |
+| Oversized | 28 | 32 | 5 | 3 | 2 | 0 | 0 | 0 |
+| Complexity | 13 | 13 | 5 | 4 | 1 | 0 | 0 | 0 |
+| Nesting | 7 | 7 | 5 | 4 | 1 | 0 | 0 | 0 |
+| Parameters | 14 | 14 | 5 | 2 | 3 | 0 | 0 | 0 |
+| Coupling | 29 | 30 | 5 | 1 | 1 | 3 | 0 | 0 |
+| Inheritance depth | 2 | 2 | 1 | 0 | 0 | 1 | 0 | 0 |
+| Documentation | 2,351 | 2,384 | 5 | 0 | 2 | 3 | 0 | 0 |
+| Test-evidence candidate | 4 | 4 | 4 | 0 | 0 | 0 | 0 | 4 |
+| Orphan candidate | 1,532 | 1,534 | 5 | 0 | 0 | 0 | 0 | 5 |
+
+The post-polish deterministic sample contains 50 entries: 22 useful or
+actionable, 11 valid low priority, 8 intentional design, zero false positives,
+and 9 unsupported or ambiguous. Rule IDs and rule versions are unchanged, but
+the historical first-five selection cannot be reused as exact parity evidence:
+47 of 50 historical logical keys remain, only 17 are also in the current
+first-five selection, and three old logical structures no longer exist. The
+historical manifest remains untouched. The separate sanitized
+[post-polish finding manifest](REPOSITORY_REVIEW_POST_POLISH_FINDING_SAMPLE.json)
+records the current selection and compatibility result.
+
+For Zscripts, **Focused showed 70 of 1,036 findings**, a reduction of 966 or
+**93.243%** relative to All. The complete summary still showed all 12 families,
+including 570 documentation, 299 orphan, 60 duplicate-name, and 4 test-evidence
+candidates. Browser acceptance proved one-action **Show all findings** and
+**Restore focused queue**, explicit family/severity/confidence filters, and
+review saves under both presets. Focused Python and frontend tests covered
+optimistic conflict refresh under both policies without changing finding IDs,
+rules, thresholds, lifecycle, or review state.
+
+### #100 — Exact Handoff JSON budget
+
+The selected public regression fixture produced these exact results:
+
+- the mandatory Unicode envelope was 3,838 UTF-8 bytes and larger than its
+  character count;
+- a 3,838-byte cap succeeded exactly and a 3,837-byte cap returned the bounded
+  mandatory-envelope error;
+- the requested 4,000-byte constrained selection returned
+  `The Handoff JSON budget is too small for required metadata.` rather than an
+  oversized success;
+- a 5,000-byte constrained selection rendered 4,035 bytes, deterministically
+  omitted 96 JSON-budget items and 6 metrics, and produced digest
+  `b27604e9cde1e51a6e67b16fcb0bafc91a352e12c038488c5ebc3178850dea39`;
+- the default selected fixture rendered 66,229 JSON bytes and 14,805 Markdown
+  characters; its truncation reflected selection-count limits, not a budget
+  overflow; and
+- two renders were equal and the digest covered the exact final Markdown and
+  normalized JSON.
+
+The packaged browser saved a 1,397-character Markdown / 5,004-byte JSON
+Handoff. Reopen returned immutable output. Clipboard text was exactly 1,397
+characters. Direct same-origin Markdown and JSON downloads were 1,397 and
+5,004 bytes and matched the reopened strings byte for byte.
+
+### #101 — High-signal Findings queue
+
+Focused is now the understandable default: high/medium measured findings and
+cycles are prominent, while the four conservative candidate families remain
+counted and one action away. The queue banner explains the policy, active
+constraints expose it, explicit filters clear it, and Restore Focused returns
+to the same policy. The 93.243% reduction materially improves scan-to-review
+flow without deleting or relabeling evidence.
+
+### #102 — Persistent evidence status
+
+The exact selected Zscripts snapshot had one parse gap. Overview, Symbols,
+Relationships, Findings, Compare, and Handoff all displayed the limitation and
+the lifecycle consequence. Compare and Handoff separately identified baseline
+and target limitations and retained section compatibility wording.
+
+Focused service/API regressions also covered complete evidence, truncation,
+parse gaps, combined truncation plus gaps, superseded analysis, historical
+observation unknown, unsupported historical schema, surface-specific support,
+baseline-only limitations, target-only limitations, and per-section
+compatibility. No partial absence was presented as proof of removal or
+nonexistence.
+
+### #103 — Distinguishable snapshot labels
+
+Presentation version 1 remained consistent in the current-snapshot, Compare,
+Handoff, and saved-Handoff contexts. The rendered label included UTC seconds,
+branch, short Git SHA, snapshot suffix, parse-gap state, and clean worktree
+state. Frontend regressions covered same-minute and equal-second snapshots,
+same content on different branches, clean/dirty/staged/untracked observations,
+historical observation unknown, truncation, parse gaps, and reopening a saved
+B→C Handoff while A→B was active.
+
+### #104 — Resolved Git-root confirmation
+
+Rendered acceptance used whitespace-padded nested input and a deeply nested
+directory. Before work began, the modal truthfully showed entered path,
+canonical directory, and resolved Git root. Cancelling the modal created no
+analysis. Confirming started one analysis of the root. A second confirmed scan
+was cancelled after work began and was recorded as cancelled without a new
+snapshot.
+
+The final external browser database contained one repository identity, one
+snapshot, three completed attempts (the two harness repeats plus one confirmed
+browser scan), and one cancelled attempt. Root and nested scans therefore
+deduplicated to one recent repository and one snapshot. Focused regressions
+also covered direct root, relative and `..` input, non-Git directories, linked
+worktree `.git` files, directory symlinks when supported, cancellation before
+confirmation, and unchanged one-action API/CLI semantics.
+
+### Workflow observations by view
+
+- **Scan and Overview:** nested scope is explicit before work, cancellation is
+  announced, the resolved repository is deduplicated, and partial evidence is
+  now prominent rather than one metric cell.
+- **Symbols:** the persistent banner remained visible; search returned bounded
+  rows and the source drawer showed repository-relative, hash-verified evidence
+  with line numbers and symbol metadata.
+- **Relationships:** the banner, bounded SVG, keyboard-addressable node list,
+  incoming/outgoing evidence, resolution statuses, and cycle selector remained
+  mutually consistent. The textual equivalent carried exact evidence.
+- **Findings:** Focused made measured findings reviewable without hiding the
+  full family counts. Show All, Restore Focused, filters, source evidence, save,
+  and review history were understandable.
+- **Compare:** equal-snapshot behavior said no changes were expected, returned
+  zero changes, and still preserved baseline/target parse-gap wording and all
+  six section compatibility states.
+- **Handoff:** limitations were visible before preview and carried into the
+  output. Preview, save, reopen, clipboard, and exact same-origin download bytes
+  worked. Follow-up context is still required for intent, ownership, runtime
+  behavior, and priority.
+
+### Persistence, Compare, and Handoff measurements
+
+Review-decision reuse, optimistic conflicts, resolution/reactivation,
+partial-scan resolution suppression, concurrent-analysis authority, and
+migration/startup against disposable databases passed focused regressions.
+The browser saved reviews from Focused and All and observed the same current
+lifecycle summary.
+
+The harness equal-snapshot comparison produced zero deltas for all subjects.
+Zscripts' contended summary latency was 5,495.7 ms and response size 2,344
+bytes; the largest generated-subject summary latency was 3,138.6 ms. These
+latencies track the same non-equivalent environment slowdown as scan time and
+should not be compared directly with the historical 19–27 ms focused
+two-snapshot section queries.
+
+The default harness Handoffs selected three sections and up to five findings.
+Zscripts rendered 2,295 Markdown characters and 8,117 JSON bytes; save/reopen
+integrity passed. The packaged browser's curated Handoff rendered in format 2,
+kept all partial-evidence warnings, and reopened with exact digest and labels.
+
+### Accessibility, responsive layout, and browser acceptance
+
+The packaged application was exercised in the Codex in-app browser at desktop,
+375 px, and a 200%-equivalent 640 px CSS viewport. Desktop document width was
+1,265/1,265 px. The 375 px layout was 360/360 px and the 200%-equivalent layout
+was 625/625 px: no horizontal page overflow occurred. The open mobile Handoff
+was long (4,370 px), but usable. A 137-character nested path used
+`overflow-wrap: anywhere`; all three scope values fit a 320 px dialog without
+page overflow.
+
+Rendered headings, labels, tab roles, status regions, alerts, graph text
+equivalents, and selected/pressed states were present. App-authored inline
+style attributes were zero. No animated or transitioning app element was
+observed, and the reduced-motion-safe state therefore had no motion to remove.
+Focus styling was a visible 2.4 px solid outline.
+
+Two delivery checks are explicitly **inconclusive**, not passed. The in-app
+browser's synthetic Tab command did not advance the active element, so a full
+rendered keyboard traversal could not be proven. Its blob-download event also
+did not surface even though exact same-origin download bytes passed through the
+HTTP/API path. Frontend interaction tests cover both implementations, but this
+report does not substitute those tests for rendered delivery evidence.
+
+Page identity, nonblank content, framework-overlay absence, screenshot checks,
+and target-flow interactions passed. The browser console had no warning or
+error. Scripts and styles loaded only from the loopback origin. The packaged
+CSP was `default-src 'self'; script-src 'self'; style-src 'self'; ...`;
+`/api/docs` and `/redoc` returned 404, and `/api/openapi.json` returned 200.
+
+### Local validation
+
+The standalone focused Repository Review selection passed with **109 passed,
+2 skipped**. The standalone full Python suite passed with **368 passed,
+2 skipped, 13 warnings**. The `quality` profile passed all 26 operations in
+315.769 seconds with **90.8015%** measured coverage against the 85% gate. It
+also passed Ruff format and lint, mypy, Bandit, dependency audit, frozen
+frontend install, frontend format/lint/typecheck, **88 frontend tests**, the
+production build, repository-safety, snapshot-store and workspace-API tests,
+packaged-workspace CSP smoke, helper boundaries, editable install, isolated
+wheel/workspace smoke, zipapp, binary, documentation, and diagnostics checks.
+The redaction check separately confirmed both removal of the fixture secret
+and presence of the redaction marker.
+
+Documentation validation passed **101 links across 110 Markdown files** (82
+internal and 19 external), and `git diff --check` passed. Both explicit
+Gitleaks commands passed with no leaks after scanning 144 commits.
+
+Both required `pre-commit run --all-files` executions exited 1. In each pass,
+every hook except `detect-secrets` passed; the only findings were the unchanged
+fixture false positives at
+`workspace-ui/src/test/RepositoryHeader.test.tsx:16` and
+`workspace-ui/src/test/snapshotLabels.test.ts:18`, which remain tracked by
+#111. Neither pass is represented as successful, and no fixture or scanner
+configuration was changed.
+
+The exact starting-main push gate was CI run `31293287366`, quality job
+`93194128205`, for exact head
+`741a86c4a62fceb9e6e4c28584ffebfa32080d9d`; every substantive step completed
+successfully. The evaluation branch's exact-final-head hosted run and artifact
+are necessarily recorded in the draft PR and handoff after this report commit
+defines that final SHA.
+
+### Safety and privacy
+
+Repository bytes were unchanged for all ten subjects. Analysis remained
+static and did not import target code. Output and SQLite writes were external.
+The server bound only to `127.0.0.1`; rendered runtime assets were same-origin;
+the console contained no CSP error; app-authored inline styles were absent; and
+saved/downloaded output remained inert Markdown and JSON.
+
+No private evidence, raw screenshot, raw harness result, absolute local path,
+owner-local identifier, dependency change, advanced heuristic, architecture
+classification, generic export, second language, desktop package, cloud/LLM
+behavior, helper/Torch change, release, tag, publication, or repository-setting
+change is part of this branch.
+
+### Regressions, remaining defects, and proposed work
+
+No focused-polish product regression was confirmed. The historical 4,087-byte
+Handoff overflow is fixed. The two unchanged `detect-secrets` fixture findings
+remain separately tracked by #111 and were not modified or folded into this
+evaluation.
+
+One evaluation-tooling proposal is warranted but does not block #81:
+
+- **Title:** Document or bound public-clone integrity evaluation
+- **Priority:** P2
+- **Affected surface:** `scripts/evaluate_repository_review.py`
+- **Evidence:** integrity hashing against a developer checkout traversed ignored
+  owner-local environments after analysis, while a clean exact-SHA public clone
+  completed reproducibly and retained all analyzer evidence counts.
+- **Acceptance:** either require/document a clean public clone for repository
+  subjects or bound integrity hashing to an explicit public manifest while
+  retaining before/after byte equality and path sanitization.
+- **Sequence:** evaluation tooling only; do not mix with product heuristics.
+
+A quiet Python 3.13 performance confirmation is also recommended before using
+the observed timing change as a release benchmark. It is measurement follow-up,
+not evidence that one of #100–#104 failed.
+
+### Product recommendations
+
+- **#81:** close as completed after exact-final-head hosted quality succeeds.
+  The focused-polish gate is satisfied.
+- **#83 proposed confirmation:** “Post-polish dogfood is complete on the exact
+  polished build. Focused polish is confirmed: Handoff budgets are exact,
+  Focused reduces the default Zscripts queue by 93.243%, evidence status and
+  snapshot labels persist across the workflow, and nested Git scope is
+  confirmed before analysis. No new product regression was confirmed; #111
+  remains separate.”
+- **#94:** keep deferred. The existing factual workflow is now clearer, but
+  unresolved evidence remains about 60.8% on Zscripts and another heuristic
+  layer would add interpretation before a comparable performance baseline and
+  stronger intent context exist.
+- **#96:** keep generic exports deferred. Exact bounded Markdown/JSON already
+  support preview, save, reopen, clipboard, and byte-identical download. Add a
+  format only for a named downstream consumer.
+- **Desktop packaging:** keep deferred. The packaged localhost application is
+  functional, local-only, responsive, and CSP-clean; packaging would not solve
+  the remaining evidence/intent and measurement questions.
+- **#98:** keep a second language deferred from implementation. The completed
+  Python harness can now be used to scope an acceptance template, but language
+  expansion should begin only after a comparable quiet performance run and an
+  explicit next-language decision.
+
+### Final product decision
+
+**FOCUSED POLISH CONFIRMED**
+
+The polished product is materially clearer, more trustworthy, and more useful
+than the original measured build. #81 may close after hosted validation. The
+result does not justify silently starting #94, #96, desktop packaging, #98, or
+any other deferred expansion.
+
 ## Executive Decision
 
 **PROCEED TO FOCUSED POLISH**

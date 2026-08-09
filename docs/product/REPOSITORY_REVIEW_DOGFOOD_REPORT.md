@@ -192,7 +192,13 @@ the historical first-five selection cannot be reused as exact parity evidence:
 first-five selection, and three old logical structures no longer exist. The
 historical manifest remains untouched. The separate sanitized
 [post-polish finding manifest](REPOSITORY_REVIEW_POST_POLISH_FINDING_SAMPLE.json)
-records the current selection and compatibility result.
+uses the validated format-1 finding-sample contract: its effective scan limits
+are machine-readable, stored occurrence subject types are retained for
+auditability, and the post-polish classification table and aggregate statement
+are regression-checked against its 50 entries. Its
+`historical_sample_compatibility` block is additive audit metadata; it records
+the current selection and compatibility result without rewriting the
+historical sample.
 
 For Zscripts, **Focused showed 70 of 1,036 findings**, a reduction of 966 or
 **93.243%** relative to All. The complete summary still showed all 12 families,

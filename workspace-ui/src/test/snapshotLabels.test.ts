@@ -15,7 +15,7 @@ const choice: SnapshotChoice = {
     completed_at: "2026-08-01T18:42:04.987-05:00",
     observed_state_known: true,
     branch: "main",
-    git_sha: "55f20e0c17d1ea0f",
+    git_sha: "fixture1-not-a-secret",
     dirty: false,
     staged: false,
     untracked: false,
@@ -29,7 +29,7 @@ describe("snapshot labels", () => {
     it("uses presentation version 1 and stable UTC second precision", () => {
         expect(SNAPSHOT_LABEL_PRESENTATION_VERSION).toBe("1");
         expect(formatSnapshotChoiceLabel(choice)).toBe(
-            "2026-08-01 23:42:04Z · main @ 55f20e0c · snapshot …55f20e0c · complete · clean",
+            "2026-08-01 23:42:04Z · main @ fixture1 · snapshot …55f20e0c · complete · clean",
         );
         expect(formatSnapshotChoiceLabel(choice)).toBe(formatSnapshotChoiceLabel(choice));
     });
@@ -49,7 +49,7 @@ describe("snapshot labels", () => {
 
     it("uses branch, detached, missing-SHA, and observation-unknown facts truthfully", () => {
         expect(formatSnapshotChoiceLabel({ ...choice, branch: null })).toContain(
-            "detached @ 55f20e0c",
+            "detached @ fixture1",
         );
         expect(formatSnapshotChoiceLabel({ ...choice, git_sha: null })).toContain(
             "main · no Git SHA",
@@ -111,7 +111,7 @@ describe("snapshot labels", () => {
     it("keeps missing or invalid completion time distinguishable by suffix", () => {
         for (const completed_at of [null, "not-a-time"]) {
             expect(formatSnapshotChoiceLabel({ ...choice, completed_at })).toContain(
-                "Completion time unavailable · main @ 55f20e0c · snapshot …55f20e0c",
+                "Completion time unavailable · main @ fixture1 · snapshot …55f20e0c",
             );
         }
         expect(formatSnapshotReference("snapshot-missing-12345678")).toBe("Snapshot …12345678");

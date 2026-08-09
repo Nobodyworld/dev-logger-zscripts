@@ -296,6 +296,65 @@ select {
     font-size: 12px;
 }
 
+.scope-confirmation {
+    grid-column: 1 / -1;
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid #e3c47b;
+    border-left: 4px solid #9c701d;
+    border-radius: var(--radius);
+    color: #4f3907;
+    background: #fff8e6;
+    overflow-wrap: anywhere;
+}
+
+.scope-confirmation h2 {
+    margin: 0;
+    color: #493500;
+    font-size: 17px;
+}
+
+.scope-confirmation__announcement {
+    margin: 0 0 8px;
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.scope-confirmation dl {
+    display: grid;
+    gap: 10px;
+    margin: 14px 0;
+}
+
+.scope-confirmation dl > div {
+    display: grid;
+    gap: 3px;
+}
+
+.scope-confirmation dt {
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.scope-confirmation dd {
+    margin: 0;
+    color: #654800;
+    font-size: 12px;
+}
+
+.scope-confirmation > p:not(.scope-confirmation__announcement) {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.scope-confirmation__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 15px;
+}
+
 .scan-progress progress {
     width: 100%;
     height: 3px;

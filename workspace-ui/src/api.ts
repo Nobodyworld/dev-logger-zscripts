@@ -1,5 +1,6 @@
 import type {
     AnalysisJob,
+    RepositoryScopeResolution,
     Overview,
     CycleList,
     Finding,
@@ -72,6 +73,17 @@ export async function startAnalysis(input: {
     return request<AnalysisJob>("/api/repositories/analyze", {
         method: "POST",
         body: JSON.stringify(input),
+    });
+}
+
+export function resolveRepositoryScope(
+    repositoryPath: string,
+    signal?: AbortSignal,
+): Promise<RepositoryScopeResolution> {
+    return request<RepositoryScopeResolution>("/api/repositories/resolve-scope", {
+        method: "POST",
+        signal,
+        body: JSON.stringify({ repository_path: repositoryPath }),
     });
 }
 

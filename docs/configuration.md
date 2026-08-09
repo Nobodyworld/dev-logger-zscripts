@@ -127,6 +127,12 @@ Repeat `--set` for each key you want to change.
 Repository review intentionally does not consume or mutate the analyzed
 repository's application configuration.
 
+The local workspace repository-scope presentation is fixed at version `1` and
+is not a configuration setting. A nested directory inside a Git worktree shows
+the enclosing resolved root and requires local confirmation before scanning;
+Git-root and non-Git directories remain one-action scans. This has no effect on
+CLI or direct API analysis and creates no durable state before confirmation.
+
 ```sh
 zscripts experimental analyze PATH \
   --app-data-dir LOCAL_DATA \

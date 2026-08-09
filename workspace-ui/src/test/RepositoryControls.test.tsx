@@ -22,10 +22,14 @@ function renderControls(job: AnalysisJob) {
             repositoryPath=""
             repositories={[]}
             job={job}
+            pendingScope={null}
+            scopeResolving={false}
             onPathChange={vi.fn()}
             onRecentRepository={vi.fn()}
             onScan={vi.fn()}
             onCancel={vi.fn()}
+            onScopeConfirm={vi.fn()}
+            onScopeCancel={vi.fn()}
         />,
     );
     return screen.getByRole("progressbar", { name: "Repository scan progress" });

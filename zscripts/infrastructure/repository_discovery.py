@@ -70,6 +70,19 @@ class DiscoveryResult:
     truncated: bool
 
 
+@dataclass(frozen=True, slots=True)
+class RepositoryScopeResolution:
+    """Presentation-only resolved scope for an entered repository directory."""
+
+    presentation_version: str
+    entered_path: str
+    resolved_input_path: str
+    analysis_root: str
+    git_root_detected: bool
+    confirmation_required: bool
+    reason: str
+
+
 class RepositoryDiscovery:
     """Discover files without importing source or executing repository commands."""
 
@@ -109,9 +122,9 @@ class RepositoryDiscovery:
         """Return deterministic discovery evidence for ``repository_path``."""
 
         cancellation = cancelled or (lambda: False)
-        root = self._validate_root(repository_path)
-        git_root = self._locate_git_root(root)
-        analysis_root = git_root or root
+        scope = self.resolve_scope(repository_path)
+        git_root = Path(scope.analysis_root) if scope.git_root_detected else None
+        analysis_root = Path(scope.analysis_root)
         directory_diagnostics: tuple[DiagnosticRecord, ...] = ()
         if git_root is not None:
             candidates = self._git_candidates(analysis_root)
@@ -177,6 +190,28 @@ class RepositoryDiscovery:
             diagnostics=tuple(sorted(diagnostics, key=lambda item: item.diagnostic_id)),
             source_fingerprint=source_fingerprint,
             truncated=truncated,
+        )
+
+    def resolve_scope(self, repository_path: Path) -> RepositoryScopeResolution:
+        """Resolve only the presentation scope without reading or enumerating source."""
+
+        root = self._validate_root(repository_path)
+        git_root = self._locate_git_root(root)
+        analysis_root = git_root or root
+        if git_root is None:
+            reason = "non-git-directory"
+        elif root == git_root:
+            reason = "same-directory"
+        else:
+            reason = "enclosing-git-root"
+        return RepositoryScopeResolution(
+            presentation_version="1",
+            entered_path=str(repository_path),
+            resolved_input_path=str(root),
+            analysis_root=str(analysis_root),
+            git_root_detected=git_root is not None,
+            confirmation_required=git_root is not None and root != git_root,
+            reason=reason,
         )
 
     @staticmethod

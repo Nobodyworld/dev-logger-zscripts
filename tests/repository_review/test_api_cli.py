@@ -100,6 +100,100 @@ def test_validation_is_generic_and_does_not_reflect_input(tmp_path: Path) -> Non
     assert secret_path not in response.text
 
 
+def test_resolve_scope_api_is_strict_read_only_and_path_safe(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    nested = repository / "src" / "feature"
+    nested.mkdir(parents=True)
+    (repository / ".git").mkdir()
+    ordinary = tmp_path / "ordinary"
+    ordinary.mkdir()
+    service = RepositoryReviewService(data_directory=tmp_path / "data")
+    app = create_workspace_app(service=service)
+
+    def persistence_counts() -> dict[str, int]:
+        tables = (
+            "analysis_sequence",
+            "repositories",
+            "analyses",
+            "snapshots",
+            "findings",
+            "finding_review_events",
+            "saved_handoffs",
+        )
+        with sqlite3.connect(service.store.database_path) as connection:
+            return {
+                table: int(connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+                for table in tables
+            }
+
+    with TestClient(app) as client:
+        before = client.get("/api/repositories").json()
+        before_persistence = persistence_counts()
+        nested_response = client.post(
+            "/api/repositories/resolve-scope",
+            json={"repository_path": str(nested)},
+        )
+        same_response = client.post(
+            "/api/repositories/resolve-scope",
+            json={"repository_path": str(repository)},
+        )
+        ordinary_response = client.post(
+            "/api/repositories/resolve-scope",
+            json={"repository_path": str(ordinary)},
+        )
+        after = client.get("/api/repositories").json()
+        after_persistence = persistence_counts()
+        invalid = client.post(
+            "/api/repositories/resolve-scope",
+            json={"repository_path": str(tmp_path / "private-missing")},
+        )
+        unknown = client.post(
+            "/api/repositories/resolve-scope",
+            json={"repository_path": str(ordinary), "unexpected": True},
+        )
+        oversized = client.post(
+            "/api/repositories/resolve-scope",
+            json={"repository_path": "x" * 1_025},
+        )
+
+    assert nested_response.status_code == 200
+    assert nested_response.json() == {
+        "presentation_version": "1",
+        "entered_path": str(nested),
+        "resolved_input_path": str(nested.resolve()),
+        "analysis_root": str(repository.resolve()),
+        "git_root_detected": True,
+        "confirmation_required": True,
+        "reason": "enclosing-git-root",
+    }
+    assert same_response.json()["reason"] == "same-directory"
+    assert same_response.json()["confirmation_required"] is False
+    assert ordinary_response.json()["reason"] == "non-git-directory"
+    assert ordinary_response.json()["git_root_detected"] is False
+    assert before == after == {"repositories": []}
+    assert (
+        before_persistence
+        == after_persistence
+        == {
+            "analysis_sequence": 0,
+            "repositories": 0,
+            "analyses": 0,
+            "snapshots": 0,
+            "findings": 0,
+            "finding_review_events": 0,
+            "saved_handoffs": 0,
+        }
+    )
+    for response in (invalid, unknown, oversized):
+        assert response.status_code in {400, 422}
+        assert response.json() == {
+            "detail": "Repository path is invalid."
+            if response.status_code == 400
+            else "Request validation failed."
+        }
+        assert "private-missing" not in response.text
+
+
 def test_snapshot_evidence_status_api_is_strict_bounded_and_allowlisted(tmp_path: Path) -> None:
     repository = tmp_path / "private-status-repository"
     shutil.copytree(FIXTURES / "ordinary", repository)

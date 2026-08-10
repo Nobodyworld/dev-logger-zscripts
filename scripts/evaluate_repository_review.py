@@ -13,6 +13,7 @@ import statistics
 import subprocess  # nosec B404 - fixed Git metadata command only
 import sys
 import tempfile
+import threading
 import time
 import tracemalloc
 from collections import Counter
@@ -50,6 +51,7 @@ class IntegrityLimits:
     """Independent bounds for repository-integrity evidence."""
 
     maximum_files: int = 50_000
+    maximum_path_entries: int = 50_000
     maximum_file_size_bytes: int = 256 * 1024 * 1024
     maximum_total_bytes: int = 2 * 1024 * 1024 * 1024
     maximum_path_listing_bytes: int = 64 * 1024 * 1024
@@ -58,6 +60,7 @@ class IntegrityLimits:
         if (
             min(
                 self.maximum_files,
+                self.maximum_path_entries,
                 self.maximum_file_size_bytes,
                 self.maximum_total_bytes,
                 self.maximum_path_listing_bytes,
@@ -69,6 +72,7 @@ class IntegrityLimits:
     def sanitized(self) -> dict[str, int]:
         return {
             "maximum_files": self.maximum_files,
+            "maximum_path_entries": self.maximum_path_entries,
             "maximum_file_size_bytes": self.maximum_file_size_bytes,
             "maximum_total_bytes": self.maximum_total_bytes,
             "maximum_path_listing_bytes": self.maximum_path_listing_bytes,
@@ -157,13 +161,22 @@ class _ManifestBuilder:
             self.fail("maximum-total-bytes-exceeded")
             return
         try:
-            with absolute.open("rb") as stream:
+            descriptor = _open_regular_file_without_following(absolute, metadata)
+        except OSError:
+            self.fail("symlink-follow-blocked")
+            return
+        except ValueError as exc:
+            self.fail(str(exc))
+            return
+        try:
+            with os.fdopen(descriptor, "rb", closefd=True) as stream:
                 content_digest, observed_size = _stream_digest(stream, size)
+                final_metadata = os.fstat(stream.fileno())
         except OSError:
             self.fail("file-content-unreadable")
             return
-        if observed_size != size:
-            self.fail("file-size-changed-during-manifest")
+        if observed_size != size or not _same_regular_file(metadata, final_metadata):
+            self.fail("filesystem-entry-changed")
             return
         self.entries.append(IntegrityManifestEntry(relative, "regular", size, content_digest))
         self.included_bytes += size
@@ -215,6 +228,38 @@ def _stream_digest(stream: BinaryIO, expected_size: int) -> tuple[str, int]:
     return digest.hexdigest(), observed_size
 
 
+def _open_regular_file_without_following(absolute: Path, expected: os.stat_result) -> int:
+    flags = os.O_RDONLY
+    for optional_flag in ("O_NOFOLLOW", "O_CLOEXEC", "O_BINARY"):
+        flags |= int(getattr(os, optional_flag, 0))
+    descriptor = os.open(absolute, flags)
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode):
+            raise ValueError("opened-entry-not-regular")
+        if not _same_regular_file(expected, opened):
+            raise ValueError("filesystem-entry-changed")
+    except BaseException:
+        os.close(descriptor)
+        raise
+    return descriptor
+
+
+def _same_regular_file(
+    expected: os.stat_result,
+    observed: os.stat_result,
+) -> bool:
+    if not stat.S_ISREG(expected.st_mode) or not stat.S_ISREG(observed.st_mode):
+        return False
+    if expected.st_size != observed.st_size:
+        return False
+    expected_identity = (expected.st_dev, expected.st_ino)
+    observed_identity = (observed.st_dev, observed.st_ino)
+    if all(expected_identity) and expected_identity != observed_identity:
+        return False
+    return True
+
+
 def _canonical_manifest_bytes(
     mode: str,
     entries: Sequence[IntegrityManifestEntry],
@@ -247,7 +292,13 @@ def _build_integrity_manifest(
     scope = discovery.resolve_scope(repository_path)
     root = Path(scope.analysis_root)
     excludes = tuple(
-        sorted({item.strip().replace("\\", "/") for item in configured_excludes if item.strip()})
+        sorted(
+            {
+                item.strip().replace("\\", "/") if os.name == "nt" else item.strip()
+                for item in configured_excludes
+                if item.strip()
+            }
+        )
     )
     if scope.git_root_detected:
         return _build_git_integrity_manifest(root, selected_limits, excludes)
@@ -308,6 +359,7 @@ def _build_git_integrity_manifest(
             builder.exclude("gitignored")
 
     candidates: list[str] = []
+    seen_candidates: set[str] = set()
     for raw_relative in raw_candidates:
         try:
             relative = _validated_relative_path(raw_relative)
@@ -320,11 +372,15 @@ def _build_git_integrity_manifest(
         if _matches_configured_integrity_exclude(relative, configured_excludes):
             builder.exclude("configured-integrity-exclude")
             continue
+        if relative in seen_candidates:
+            builder.fail("duplicate-integrity-path")
+            return builder.result()
         if len(candidates) >= limits.maximum_files:
             builder.fail("maximum-files-exceeded")
             return builder.result()
         candidates.append(relative)
-    for relative in sorted(set(candidates), key=lambda item: item.encode("utf-8")):
+        seen_candidates.add(relative)
+    for relative in sorted(candidates, key=lambda item: item.encode("utf-8")):
         builder.add_path(root, relative)
         if not builder.complete:
             break
@@ -339,30 +395,25 @@ def _build_filesystem_integrity_manifest(
     builder = _ManifestBuilder(mode="filesystem", limits=limits)
     ignore_patterns = RepositoryDiscovery._load_gitignore_patterns(root)
     candidates: list[str] = []
+    encountered_entries = 0
+    directories: list[tuple[Path, str]] = [(root, "")]
     try:
-        for directory, dirnames, filenames in os.walk(root, followlinks=False):
-            directory_path = Path(directory)
-            retained_directories: list[str] = []
-            for name in sorted(dirnames):
-                candidate = directory_path / name
-                relative = _validated_relative_path(candidate.relative_to(root).as_posix())
-                if _has_default_excluded_part(relative):
-                    builder.exclude("default-environment-or-cache")
-                elif _matches_configured_integrity_exclude(relative, configured_excludes):
-                    builder.exclude("configured-integrity-exclude")
-                elif RepositoryDiscovery._matches_gitignore(relative, ignore_patterns):
-                    builder.exclude("gitignored")
-                elif candidate.is_symlink():
-                    if len(candidates) >= limits.maximum_files:
-                        builder.fail("maximum-files-exceeded")
+        while directories:
+            directory_path, relative_directory = directories.pop()
+            bounded_names: list[str] = []
+            with os.scandir(directory_path) as entries:
+                for entry in entries:
+                    encountered_entries += 1
+                    if encountered_entries > limits.maximum_path_entries:
+                        builder.fail("maximum-path-entries-exceeded")
                         return builder.result()
-                    candidates.append(relative)
-                else:
-                    retained_directories.append(name)
-            dirnames[:] = retained_directories
-            for name in sorted(filenames):
+                    bounded_names.append(entry.name)
+            child_directories: list[tuple[Path, str]] = []
+            for name in sorted(bounded_names, key=lambda item: item.encode("utf-8")):
                 candidate = directory_path / name
-                relative = _validated_relative_path(candidate.relative_to(root).as_posix())
+                relative = _validated_relative_path(
+                    f"{relative_directory}/{name}" if relative_directory else name
+                )
                 if _has_default_excluded_part(relative):
                     builder.exclude("default-environment-or-cache")
                 elif _matches_configured_integrity_exclude(relative, configured_excludes):
@@ -370,14 +421,19 @@ def _build_filesystem_integrity_manifest(
                 elif RepositoryDiscovery._matches_gitignore(relative, ignore_patterns):
                     builder.exclude("gitignored")
                 else:
+                    metadata = candidate.lstat()
+                    if stat.S_ISDIR(metadata.st_mode):
+                        child_directories.append((candidate, relative))
+                        continue
                     if len(candidates) >= limits.maximum_files:
                         builder.fail("maximum-files-exceeded")
                         return builder.result()
                     candidates.append(relative)
+            directories.extend(reversed(child_directories))
     except (OSError, ValueError):
         builder.fail("filesystem-walk-unavailable")
         return builder.result()
-    for relative in sorted(set(candidates), key=lambda item: item.encode("utf-8")):
+    for relative in sorted(candidates, key=lambda item: item.encode("utf-8")):
         builder.add_path(root, relative)
         if not builder.complete:
             break
@@ -404,23 +460,83 @@ def _run_fixed_git_listing(
     ]
     environment = os.environ.copy()
     environment.update({"GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_NOSYSTEM": "1", "LC_ALL": "C"})
-    with tempfile.TemporaryFile() as output:
-        result = subprocess.run(  # nosec B603 - executable and argument contract are fixed
-            command,
-            check=False,
-            stdout=output,
-            stderr=subprocess.DEVNULL,
-            timeout=_GIT_COMMAND_TIMEOUT_SECONDS,
-            env=environment,
-            shell=False,
-        )
-        if result.returncode:
-            raise ValueError("Git integrity paths could not be listed safely.")
-        output_size = output.tell()
-        if output_size > maximum_output_bytes:
-            raise ValueError("Git integrity path listing exceeded its bounded output limit.")
-        output.seek(0)
-        return output.read(maximum_output_bytes + 1)
+    process = subprocess.Popen(  # nosec B603 - executable and argument contract are fixed
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        env=environment,
+        shell=False,
+    )
+    stdout = process.stdout
+    if stdout is None:  # pragma: no cover - PIPE guarantees stdout
+        _terminate_and_reap(process)
+        raise ValueError("Git integrity paths could not be listed safely.")
+    output = bytearray()
+    output_exceeded = threading.Event()
+    reader_failed = threading.Event()
+
+    def read_bounded_output() -> None:
+        try:
+            while len(output) <= maximum_output_bytes:
+                remaining = maximum_output_bytes + 1 - len(output)
+                chunk = stdout.read(min(_HASH_CHUNK_BYTES, remaining))
+                if not chunk:
+                    return
+                output.extend(chunk)
+                if len(output) > maximum_output_bytes:
+                    output_exceeded.set()
+                    try:
+                        process.terminate()
+                    except OSError:
+                        pass
+                    return
+        except OSError:
+            reader_failed.set()
+            return
+
+    reader = threading.Thread(target=read_bounded_output, daemon=True)
+    reader.start()
+    deadline = time.monotonic() + _GIT_COMMAND_TIMEOUT_SECONDS
+    timed_out = False
+    while process.poll() is None and not output_exceeded.is_set() and not reader_failed.is_set():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            timed_out = True
+            break
+        try:
+            process.wait(timeout=min(0.05, remaining))
+        except subprocess.TimeoutExpired:
+            continue
+    if timed_out or output_exceeded.is_set() or reader_failed.is_set():
+        _terminate_and_reap(process)
+    else:
+        process.wait()
+    reader.join(timeout=1.0)
+    stdout.close()
+    if reader.is_alive():
+        _terminate_and_reap(process)
+        raise ValueError("Git integrity paths could not be listed safely.")
+    if timed_out:
+        raise subprocess.TimeoutExpired(command, _GIT_COMMAND_TIMEOUT_SECONDS)
+    if output_exceeded.is_set():
+        raise ValueError("Git integrity path listing exceeded its bounded output limit.")
+    if reader_failed.is_set():
+        raise ValueError("Git integrity paths could not be listed safely.")
+    if process.returncode:
+        raise ValueError("Git integrity paths could not be listed safely.")
+    return bytes(output)
+
+
+def _terminate_and_reap(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is not None:
+        process.wait()
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=1.0)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
 
 
 def _decode_nul_paths(payload: bytes) -> tuple[str, ...]:
@@ -435,14 +551,10 @@ def _decode_nul_paths(payload: bytes) -> tuple[str, ...]:
 def _validated_relative_path(path: str) -> str:
     if not path or "\0" in path:
         raise ValueError("Integrity paths must be non-empty and NUL-free.")
-    replaced = path.replace("\\", "/")
-    pure = PurePosixPath(replaced)
-    if (
-        pure.is_absolute()
-        or pure.as_posix() == "."
-        or ".." in pure.parts
-        or re.match(r"^[A-Za-z]:", replaced)
-    ):
+    if os.name == "nt" and "\\" in path:
+        raise ValueError("Integrity paths must use safe Git repository-relative separators.")
+    pure = PurePosixPath(path)
+    if pure.is_absolute() or pure.as_posix() == "." or ".." in pure.parts or re.match(r"^[A-Za-z]:", path):
         raise ValueError("Integrity paths must be safe repository-relative paths.")
     normalized = pure.as_posix()
     if normalized.startswith("../") or normalized.startswith("//"):
@@ -943,6 +1055,7 @@ def _parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--max-file-size-bytes", type=int, default=1_000_000)
     evaluate.add_argument("--max-total-bytes", type=int, default=100_000_000)
     evaluate.add_argument("--integrity-max-files", type=int, default=50_000)
+    evaluate.add_argument("--integrity-max-path-entries", type=int, default=50_000)
     evaluate.add_argument(
         "--integrity-max-file-size-bytes",
         type=int,
@@ -986,6 +1099,7 @@ def main(argv: list[str] | None = None) -> int:
         ),
         integrity_limits=IntegrityLimits(
             maximum_files=args.integrity_max_files,
+            maximum_path_entries=args.integrity_max_path_entries,
             maximum_file_size_bytes=args.integrity_max_file_size_bytes,
             maximum_total_bytes=args.integrity_max_total_bytes,
             maximum_path_listing_bytes=args.integrity_max_path_listing_bytes,

@@ -9,6 +9,10 @@
   streamed manifests, analyzer-aligned roots and default-directory exclusions,
   aggregate sanitized evidence, explicit limits, and fail-closed incomplete
   results instead of recursively hashing every non-`.git` checkout byte.
+  Non-Git traversal now bounds every encountered entry, Git listing output is
+  stopped at its producer-time cap, regular-file descriptors are validated
+  without following replacements, and literal POSIX backslashes plus duplicate
+  paths retain fail-closed semantics. Format versions remain `2` and `1`.
 - Replace Git-SHA-shaped snapshot-label test fixtures with explicit non-secret
   fixture text, preserving short-label, ordering, same-minute, equal-time, and
   accessible-option coverage while restoring a clean Detect Secrets gate.

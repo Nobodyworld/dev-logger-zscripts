@@ -31,6 +31,7 @@ python scripts/evaluate_repository_review.py evaluate `
   --output C:\tmp\repository-review-results\medium.json `
   --data-directory C:\tmp\repository-review-results\data `
   --integrity-max-files 50000 `
+  --integrity-max-path-entries 50000 `
   --integrity-max-file-size-bytes 268435456 `
   --integrity-max-total-bytes 2147483648
 ```
@@ -51,16 +52,27 @@ excluded before file content is opened. Fixed Git exclude patterns prevent an
 unignored `.venv`, `node_modules`, cache, coverage, `dist`, or `build` tree from
 forcing recursive owner-local enumeration. A second fixed, directory-collapsed
 Git query supplies aggregate exclusion counts without reading ignored files.
+Each query streams through a bounded pipe, retains at most the configured
+64 MiB plus one sentinel byte, and terminates, kills if necessary, and reaps
+Git on overflow or the 30-second timeout.
 
-Non-Git mode performs a sorted `os.walk(..., followlinks=False)`, prunes the
-same default directories and `.git` markers, and applies the discovery layer's
-documented bounded `.gitignore` subset. Negated ignore rules are not interpreted
-in this fallback mode. Regular files of every type, including binary files, are
+Non-Git mode performs an iterative, sorted `os.scandir` traversal, counts every
+encountered directory entry against a separate bound, prunes the same default
+directories and `.git` markers, and applies the discovery layer's documented
+bounded `.gitignore` subset. Excluded directories count once; their descendants
+are neither enumerated nor opened. Empty directories count during traversal but
+do not create manifest entries. Negated ignore rules are not interpreted in
+this fallback mode. Regular files of every type, including binary files, are
 hashed in 1 MiB streaming chunks without decoding. Directory and file symlinks
 are never followed; the UTF-8 link-target text is hashed as a `symlink` entry.
 Unsupported filesystem entry types are counted and excluded.
 
-Format `1` sorts normalized POSIX repository-relative paths by UTF-8 bytes. Its
+Before reading a regular file, the harness opens a descriptor with no-follow,
+close-on-exec, and binary flags where available, validates its type, identity,
+and size with `fstat`, and repeats descriptor validation after streaming.
+Format `1` sorts POSIX repository-relative paths by UTF-8 bytes. Literal POSIX
+backslashes remain filename characters, and duplicate parsed paths fail closed
+instead of being silently deduplicated. Its
 canonical entry sequence is path, NUL, entry type, NUL, decimal size, NUL,
 SHA-256 content or link-target digest, NUL. Absolute paths, timestamps, inode
 data, owners, durations, and database values are never included. Public JSON
@@ -68,8 +80,10 @@ contains only aggregate file/byte counts, limits, exclusion reasons/counts,
 before/after digests, completion state, and equality; it never emits the
 in-memory relative-path list.
 
-Defaults are 50,000 candidate entries, 256 MiB per entry, 2 GiB total included
-bytes, and 64 MiB of Git path-list output. All are explicit CLI options. A
+Defaults are 50,000 included files/symlinks, 50,000 encountered non-Git path
+entries, 256 MiB per entry, 2 GiB total included bytes, and 64 MiB per Git
+path-list query; the fixed Git timeout is 30 seconds. Every size/count bound is
+an explicit CLI option. A
 breach produces a path-free incomplete reason and no digest; evaluation fails
 closed before analysis (or after analysis for an after-manifest failure).
 `persistence.repository_bytes_unchanged` remains as a compatibility field, but

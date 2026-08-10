@@ -18,15 +18,20 @@ explicit integrity exclusions, and the default environment/cache directories
 a directory-collapsed aggregate query mean ignored owner-local environments
 are summarized rather than recursively read.
 
-For a non-Git public fixture, the harness uses a sorted non-following walk,
-prunes the same default directories, excludes `.git` markers, and applies the
-repository-discovery `.gitignore` subset. All regular files, including binary
-files, are streamed into SHA-256 without decoding. File and directory symlinks
-are not followed; their UTF-8 target text is hashed. Unsupported entry types
-are reported only as aggregate exclusions.
+For a non-Git public fixture, the harness uses a bounded iterative `os.scandir`
+walk and counts every encountered entry, including exclusions. It prunes the
+same default directories, excludes `.git` markers, and applies the
+repository-discovery `.gitignore` subset. Pruned directories count once; their
+descendants are not enumerated, and empty directories produce no manifest
+entry. All regular files, including binary files, are streamed into SHA-256
+without decoding. File and directory symlinks are not followed; their UTF-8
+target text is hashed. Unsupported entry types are aggregate exclusions.
 
-The default integrity bounds are 50,000 candidate entries, 256 MiB per entry,
-2 GiB total included bytes, and 64 MiB of Git path-list output. A breach or
+The default integrity bounds are 50,000 included files/symlinks, 50,000
+encountered non-Git entries, 256 MiB per entry, 2 GiB total included bytes, and
+64 MiB per Git path-list query. Git output is capped while it is produced; an
+overflowing or 30-second timed-out child is terminated, killed if needed, and
+reaped. A breach or
 unreadable/unsafe path returns an incomplete, path-free result with no digest;
 evaluation fails closed and never reports equality as proven. Successful
 sanitized output contains only manifest version/mode/completion, limits,
@@ -34,7 +39,11 @@ aggregate included file/byte counts, aggregate exclusion reasons/counts,
 before/after digests, and equality. It contains no absolute path or included
 relative-path list.
 
-The canonical digest sorts normalized POSIX relative paths by UTF-8 bytes and
+Regular files are opened through a descriptor with no-follow and close-on-exec
+flags where supported, then validated with `fstat` before any content read and
+again afterward. The canonical digest sorts POSIX relative paths by UTF-8 bytes,
+preserves literal backslashes in POSIX filenames, rejects duplicate parsed paths,
+and
 encodes, for every entry, path, NUL, type, NUL, decimal size, NUL, exact content
 or link-target digest, NUL. Before/after equality requires both manifests to be
 complete and equal in version, mode, digest, included counts/bytes, and
@@ -54,6 +63,7 @@ python scripts/evaluate_repository_review.py evaluate `
   --repeat 2 --max-files 5000 `
   --max-file-size-bytes 1000000 --max-total-bytes 100000000 `
   --integrity-max-files 50000 `
+  --integrity-max-path-entries 50000 `
   --integrity-max-file-size-bytes 268435456 `
   --integrity-max-total-bytes 2147483648 `
   --integrity-max-path-listing-bytes 67108864

@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
@@ -96,6 +97,7 @@ def test_evaluation_is_sanitized_deterministic_and_bounded(tmp_path: Path) -> No
     assert subject["integrity"]["equal"] is True
     assert subject["integrity"]["inclusion_metadata_equal"] is True
     assert subject["integrity"]["failure_reason"] is None
+    assert subject["integrity"]["limits"]["maximum_path_entries"] == 50_000
     assert subject["relationships"]["largest_bounded_graph"]["nodes"] <= 40
     assert subject["relationships"]["largest_bounded_graph"]["relationships"] <= 80
     assert subject["findings"]["bounded_review_sample_size"] <= 20
@@ -246,13 +248,13 @@ def test_git_integrity_nested_input_uses_root_and_fixed_no_shell_command(
     (repository / "root.txt").write_text("root\n", encoding="utf-8")
     _git(repository, "add", "root.txt")
     observed: list[tuple[list[str], bool]] = []
-    original_run = evaluation_harness.subprocess.run
+    original_popen = evaluation_harness.subprocess.Popen
 
-    def recording_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+    def recording_popen(command: list[str], **kwargs: object) -> subprocess.Popen[bytes]:
         observed.append((command, bool(kwargs.get("shell"))))
-        return original_run(command, **kwargs)  # type: ignore[arg-type]
+        return original_popen(command, **kwargs)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(evaluation_harness.subprocess, "run", recording_run)
+    monkeypatch.setattr(evaluation_harness.subprocess, "Popen", recording_popen)
     manifest = _build_integrity_manifest(nested)
 
     assert manifest.complete is True
@@ -341,6 +343,77 @@ def test_excluded_directories_are_pruned_without_opening_contents(
     assert elapsed_ms >= 0
 
 
+def test_non_git_ignored_root_entries_obey_encountered_entry_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "plain"
+    repository.mkdir()
+    (repository / ".gitignore").write_text("ignored-*.bin\n", encoding="utf-8")
+    for index in range(8):
+        (repository / f"ignored-{index}.bin").write_bytes(b"owner local")
+    opened: list[Path] = []
+
+    original_open = evaluation_harness._open_regular_file_without_following
+
+    def bounded_open(absolute: Path, metadata: os.stat_result) -> int:
+        opened.append(absolute)
+        return original_open(absolute, metadata)
+
+    monkeypatch.setattr(evaluation_harness, "_open_regular_file_without_following", bounded_open)
+    manifest = _build_integrity_manifest(
+        repository,
+        limits=IntegrityLimits(maximum_path_entries=5),
+    )
+
+    assert manifest.complete is False
+    assert manifest.digest is None
+    assert manifest.failure_reason == "maximum-path-entries-exceeded"
+    assert opened == []
+
+
+def test_non_git_default_excluded_entries_count_without_opening(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "plain"
+    repository.mkdir()
+    excluded_names = sorted(
+        name for name in evaluation_harness.DEFAULT_EXCLUDED_DIRECTORIES if name != ".git"
+    )[:4]
+    for name in excluded_names:
+        excluded = repository / name
+        excluded.mkdir()
+        (excluded / "not-opened.bin").write_bytes(b"owner local")
+    opened: list[Path] = []
+    original_open = evaluation_harness._open_regular_file_without_following
+
+    def bounded_open(absolute: Path, metadata: os.stat_result) -> int:
+        opened.append(absolute)
+        return original_open(absolute, metadata)
+
+    monkeypatch.setattr(evaluation_harness, "_open_regular_file_without_following", bounded_open)
+    manifest = _build_integrity_manifest(
+        repository,
+        limits=IntegrityLimits(maximum_path_entries=3),
+    )
+
+    assert manifest.complete is False
+    assert manifest.failure_reason == "maximum-path-entries-exceeded"
+    assert opened == []
+
+
+def test_empty_directories_do_not_create_manifest_entries(tmp_path: Path) -> None:
+    repository = tmp_path / "plain"
+    repository.mkdir()
+    (repository / "empty").mkdir()
+
+    manifest = _build_integrity_manifest(repository)
+
+    assert manifest.complete is True
+    assert manifest.entries == ()
+
+
 @pytest.mark.parametrize(
     ("limits", "expected_reason"),
     (
@@ -375,8 +448,244 @@ def test_integrity_path_validation_rejects_unsafe_paths(unsafe: str) -> None:
         _validated_relative_path(unsafe)
 
 
-def test_integrity_path_validation_normalizes_separators() -> None:
-    assert _validated_relative_path("nested\\file.bin") == "nested/file.bin"
+def test_integrity_path_validation_preserves_posix_backslashes() -> None:
+    if os.name == "nt":
+        with pytest.raises(ValueError, match="separators"):
+            _validated_relative_path("nested\\file.bin")
+    else:
+        assert _validated_relative_path("nested\\file.bin") == "nested\\file.bin"
+
+
+def test_regular_file_replaced_by_symlink_fails_before_reading(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "plain"
+    repository.mkdir()
+    victim = repository / "victim.bin"
+    victim.write_bytes(b"inside")
+    outside = tmp_path / "outside.bin"
+    outside.write_bytes(b"secret")
+    original_open = evaluation_harness.os.open
+    digest_calls = 0
+    original_digest = evaluation_harness._stream_digest
+
+    def replacing_open(path: object, flags: int, *args: object) -> int:
+        if Path(path) == victim and not victim.is_symlink():
+            victim.unlink()
+            try:
+                victim.symlink_to(outside)
+            except OSError:
+                pytest.skip("This host does not permit the symlink race fixture.")
+        return original_open(path, flags, *args)
+
+    def recording_digest(stream: object, expected_size: int) -> tuple[str, int]:
+        nonlocal digest_calls
+        digest_calls += 1
+        return original_digest(stream, expected_size)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(evaluation_harness.os, "open", replacing_open)
+    monkeypatch.setattr(evaluation_harness, "_stream_digest", recording_digest)
+    manifest = _build_integrity_manifest(repository)
+
+    assert manifest.complete is False
+    assert manifest.digest is None
+    assert manifest.failure_reason in {"symlink-follow-blocked", "filesystem-entry-changed"}
+    assert digest_calls == 0
+
+
+def test_regular_file_replaced_by_different_regular_file_fails_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "plain"
+    repository.mkdir()
+    victim = repository / "victim.bin"
+    victim.write_bytes(b"first!")
+    replacement = repository / "replacement.tmp"
+    replacement.write_bytes(b"second")
+    original_open = evaluation_harness.os.open
+    replaced = False
+
+    def replacing_open(path: object, flags: int, *args: object) -> int:
+        nonlocal replaced
+        if Path(path) == victim and not replaced:
+            replaced = True
+            replacement.replace(victim)
+        return original_open(path, flags, *args)
+
+    monkeypatch.setattr(evaluation_harness.os, "open", replacing_open)
+    manifest = _build_integrity_manifest(repository)
+
+    assert manifest.complete is False
+    assert manifest.digest is None
+    assert manifest.failure_reason == "filesystem-entry-changed"
+
+
+def test_regular_file_size_change_before_open_fails_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "plain"
+    repository.mkdir()
+    victim = repository / "victim.bin"
+    victim.write_bytes(b"first")
+    original_open = evaluation_harness.os.open
+    mutated = False
+
+    def mutating_open(path: object, flags: int, *args: object) -> int:
+        nonlocal mutated
+        if Path(path) == victim and not mutated:
+            mutated = True
+            with victim.open("ab") as stream:
+                stream.write(b"!")
+        return original_open(path, flags, *args)
+
+    monkeypatch.setattr(evaluation_harness.os, "open", mutating_open)
+    manifest = _build_integrity_manifest(repository)
+
+    assert manifest.complete is False
+    assert manifest.failure_reason == "filesystem-entry-changed"
+
+
+def test_duplicate_git_integrity_path_fails_explicitly(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "git-subject"
+    repository.mkdir()
+    (repository / "same.txt").write_text("same\n", encoding="utf-8")
+    listings = iter((b"same.txt\0same.txt\0", b""))
+    monkeypatch.setattr(
+        evaluation_harness,
+        "_run_fixed_git_listing",
+        lambda *args, **kwargs: next(listings),
+    )
+
+    manifest = evaluation_harness._build_git_integrity_manifest(
+        repository,
+        IntegrityLimits(),
+        (),
+    )
+
+    assert manifest.complete is False
+    assert manifest.digest is None
+    assert manifest.failure_reason == "duplicate-integrity-path"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Windows filenames cannot contain literal backslashes")
+def test_git_manifest_preserves_distinct_posix_backslash_paths(tmp_path: Path) -> None:
+    repository = tmp_path / "git-subject"
+    repository.mkdir()
+    _git(repository, "init")
+    literal = repository / "a\\b"
+    nested = repository / "a" / "b"
+    nested.parent.mkdir()
+    literal.write_text("literal\n", encoding="utf-8")
+    nested.write_text("nested\n", encoding="utf-8")
+    _git(repository, "add", "--", "a\\b", "a/b")
+
+    baseline = _build_integrity_manifest(repository)
+    assert {entry.relative_path for entry in baseline.entries} == {"a\\b", "a/b"}
+    literal.write_text("changed literal\n", encoding="utf-8")
+    literal_changed = _build_integrity_manifest(repository)
+    assert literal_changed.digest != baseline.digest
+    literal.write_text("literal\n", encoding="utf-8")
+    nested.write_text("changed nested\n", encoding="utf-8")
+    assert _build_integrity_manifest(repository).digest != baseline.digest
+
+
+@pytest.mark.parametrize(
+    ("size", "limit"),
+    ((7, 8), (8, 8)),
+)
+def test_git_listing_accepts_output_at_or_below_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    size: int,
+    limit: int,
+) -> None:
+    processes = _replace_git_with_python_producer(
+        monkeypatch, f"import sys;sys.stdout.buffer.write(b'x'*{size})"
+    )
+
+    payload = evaluation_harness._run_fixed_git_listing(
+        tmp_path,
+        ("ls-files", "-z"),
+        maximum_output_bytes=limit,
+    )
+
+    assert payload == b"x" * size
+    assert processes[0].poll() is not None
+
+
+def test_git_listing_terminates_producer_one_byte_over_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    processes = _replace_git_with_python_producer(
+        monkeypatch,
+        "import sys,time;sys.stdout.buffer.write(b'x'*9);sys.stdout.buffer.flush();time.sleep(10)",
+    )
+
+    with pytest.raises(ValueError, match="bounded output limit"):
+        evaluation_harness._run_fixed_git_listing(
+            tmp_path,
+            ("ls-files", "-z"),
+            maximum_output_bytes=8,
+        )
+
+    assert processes[0].poll() is not None
+
+
+def test_git_listing_terminates_continuing_producer_at_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    script = "import sys,time\nwhile True:\n sys.stdout.buffer.write(b'x'*1024);sys.stdout.buffer.flush();time.sleep(.001)"
+    processes = _replace_git_with_python_producer(monkeypatch, script)
+
+    with pytest.raises(ValueError, match="bounded output limit"):
+        evaluation_harness._run_fixed_git_listing(
+            tmp_path,
+            ("ls-files", "-z"),
+            maximum_output_bytes=8,
+        )
+
+    assert processes[0].poll() is not None
+
+
+def test_git_listing_timeout_terminates_and_reaps_process(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    processes = _replace_git_with_python_producer(monkeypatch, "import time;time.sleep(10)")
+    monkeypatch.setattr(evaluation_harness, "_GIT_COMMAND_TIMEOUT_SECONDS", 0.05)
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        evaluation_harness._run_fixed_git_listing(
+            tmp_path,
+            ("ls-files", "-z"),
+            maximum_output_bytes=8,
+        )
+
+    assert processes[0].poll() is not None
+
+
+def test_git_listing_nonzero_exit_is_bounded_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    processes = _replace_git_with_python_producer(monkeypatch, "raise SystemExit(3)")
+
+    with pytest.raises(ValueError, match="listed safely"):
+        evaluation_harness._run_fixed_git_listing(
+            tmp_path,
+            ("ls-files", "-z"),
+            maximum_output_bytes=8,
+        )
+
+    assert processes[0].poll() is not None
 
 
 def test_public_fixtures_have_reproducible_manifest_evidence(tmp_path: Path) -> None:
@@ -749,6 +1058,27 @@ def _fixture_digest(subjects: tuple[tuple[str, Path], ...]) -> str:
             digest.update(path.relative_to(root).as_posix().encode())
             digest.update(path.read_bytes())
     return digest.hexdigest()
+
+
+def _replace_git_with_python_producer(
+    monkeypatch: pytest.MonkeyPatch,
+    script: str,
+) -> list[subprocess.Popen[bytes]]:
+    original_popen = evaluation_harness.subprocess.Popen
+    processes: list[subprocess.Popen[bytes]] = []
+
+    def producer_popen(command: list[str], **kwargs: object) -> subprocess.Popen[bytes]:
+        assert command[0] == "git"
+        assert kwargs.get("shell") is False
+        process = original_popen(
+            [sys.executable, "-c", script],
+            **kwargs,  # type: ignore[arg-type]
+        )
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(evaluation_harness.subprocess, "Popen", producer_popen)
+    return processes
 
 
 def _git(repository: Path, *arguments: str) -> None:

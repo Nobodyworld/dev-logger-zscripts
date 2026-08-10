@@ -1,5 +1,70 @@
 # Repository Review Dogfood Report
 
+## Integrity methodology correction (#114)
+
+Evaluation output format `2` replaces the unbounded non-`.git` tree digest
+with integrity-manifest format `1`. This is an evaluation-contract correction,
+not a change to the analyzer, evidence schema, finding rules, discovery
+configuration, repository or snapshot identity, SQLite, comparison, or Handoff
+contracts.
+
+For a Git subject, the harness resolves the same enclosing analysis root as
+`RepositoryDiscovery.resolve_scope()` and hashes tracked files plus untracked
+nonignored files returned by a fixed, no-shell Git command. A tracked file is
+still included when an ignore rule matches it. Git-ignored content, `.git`,
+explicit integrity exclusions, and the default environment/cache directories
+(`.venv`, `venv`, `node_modules`, Python/tool caches, `dist`, `build`, and
+`coverage`) are excluded before content reads. Fixed Git exclude patterns and
+a directory-collapsed aggregate query mean ignored owner-local environments
+are summarized rather than recursively read.
+
+For a non-Git public fixture, the harness uses a sorted non-following walk,
+prunes the same default directories, excludes `.git` markers, and applies the
+repository-discovery `.gitignore` subset. All regular files, including binary
+files, are streamed into SHA-256 without decoding. File and directory symlinks
+are not followed; their UTF-8 target text is hashed. Unsupported entry types
+are reported only as aggregate exclusions.
+
+The default integrity bounds are 50,000 candidate entries, 256 MiB per entry,
+2 GiB total included bytes, and 64 MiB of Git path-list output. A breach or
+unreadable/unsafe path returns an incomplete, path-free result with no digest;
+evaluation fails closed and never reports equality as proven. Successful
+sanitized output contains only manifest version/mode/completion, limits,
+aggregate included file/byte counts, aggregate exclusion reasons/counts,
+before/after digests, and equality. It contains no absolute path or included
+relative-path list.
+
+The canonical digest sorts normalized POSIX relative paths by UTF-8 bytes and
+encodes, for every entry, path, NUL, type, NUL, decimal size, NUL, exact content
+or link-target digest, NUL. Before/after equality requires both manifests to be
+complete and equal in version, mode, digest, included counts/bytes, and
+exclusion counts. In output format `2`, the compatibility field
+`persistence.repository_bytes_unchanged` has exactly that format-`1` meaning.
+
+Public evaluation commands remain external-root commands; the new independent
+integrity limits may be stated explicitly:
+
+```powershell
+python scripts/evaluate_repository_review.py generate `
+  --root $externalRoot\fixtures
+python scripts/evaluate_repository_review.py evaluate `
+  --subject public-medium=$externalRoot\fixtures\public-medium `
+  --output $externalRoot\results\public-medium.json `
+  --data-directory $externalRoot\data\public-medium `
+  --repeat 2 --max-files 5000 `
+  --max-file-size-bytes 1000000 --max-total-bytes 100000000 `
+  --integrity-max-files 50000 `
+  --integrity-max-file-size-bytes 268435456 `
+  --integrity-max-total-bytes 2147483648 `
+  --integrity-max-path-listing-bytes 67108864
+```
+
+This addendum does not rewrite the historical or post-polish measurements
+below. Those measurements used evaluation output format `1` and the old
+unbounded non-`.git` digest; they were not produced with integrity-manifest
+format `1`. Issue #114 corrects future methodology only. The separate quiet
+Python 3.13 timing confirmation remains owned by open issue #115.
+
 ## Post-polish rerun
 
 ### Decision

@@ -4,6 +4,17 @@
 
 ### Fixed
 
+- Bound Repository Review evaluation integrity with output format `2` and
+  integrity-manifest format `1`: Git and non-Git subjects now use deterministic
+  streamed manifests, analyzer-aligned roots and default-directory exclusions,
+  aggregate sanitized evidence, explicit limits, and fail-closed incomplete
+  results instead of recursively hashing every non-`.git` checkout byte.
+- Replace Git-SHA-shaped snapshot-label test fixtures with explicit non-secret
+  fixture text, preserving short-label, ordering, same-minute, equal-time, and
+  accessible-option coverage while restoring a clean Detect Secrets gate.
+- Pin `actions/upload-artifact` v7.0.1 to official commit
+  `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a`, using its native Node 24
+  runtime while preserving the `quality-reports` artifact contract.
 - Make snapshot evidence-status schema support surface-aware so readable schema
   versions are not labeled globally unsupported, and announce asynchronous
   status-load failures through one stable polite live region.

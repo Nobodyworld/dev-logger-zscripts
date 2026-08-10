@@ -2,14 +2,24 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import subprocess
 from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
 
 import pytest
 
+from scripts import evaluate_repository_review as evaluation_harness
 from scripts.evaluate_repository_review import (
+    EVALUATION_OUTPUT_FORMAT_VERSION,
+    INTEGRITY_MANIFEST_FORMAT_VERSION,
+    IntegrityLimits,
+    _build_integrity_manifest,
+    _canonical_manifest_bytes,
+    _integrity_manifests_equal,
+    _validated_relative_path,
     evaluate_subjects,
     generate_public_fixtures,
     main,
@@ -73,11 +83,19 @@ def test_evaluation_is_sanitized_deterministic_and_bounded(tmp_path: Path) -> No
 
     serialized = output.read_text(encoding="utf-8")
     subject = payload["subjects"][0]
+    assert payload["format_version"] == EVALUATION_OUTPUT_FORMAT_VERSION == 2
+    assert payload["integrity_manifest_format_version"] == INTEGRITY_MANIFEST_FORMAT_VERSION == 1
     assert str(repository.resolve()) not in serialized
     assert subject["label"] == "public-sample"
     assert subject["persistence"]["repeated_snapshot_identity_equal"] is True
     assert subject["persistence"]["repeated_canonical_bytes_equal"] is True
     assert subject["persistence"]["repository_bytes_unchanged"] is True
+    assert subject["integrity"]["format_version"] == 1
+    assert subject["integrity"]["mode"] == "filesystem"
+    assert subject["integrity"]["complete"] is True
+    assert subject["integrity"]["equal"] is True
+    assert subject["integrity"]["inclusion_metadata_equal"] is True
+    assert subject["integrity"]["failure_reason"] is None
     assert subject["relationships"]["largest_bounded_graph"]["nodes"] <= 40
     assert subject["relationships"]["largest_bounded_graph"]["relationships"] <= 80
     assert subject["findings"]["bounded_review_sample_size"] <= 20
@@ -162,6 +180,302 @@ def test_cli_requires_explicit_output_and_uses_anonymous_label(tmp_path: Path) -
     assert result == 0
     assert output.exists()
     assert json.loads(output.read_text(encoding="utf-8"))["sanitized"] is True
+
+
+def test_git_integrity_manifest_includes_public_bytes_and_excludes_local_state(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "git-subject"
+    repository.mkdir()
+    _git(repository, "init")
+    (repository / ".gitignore").write_text("ignored/\ntracked-ignored.bin\n", encoding="utf-8")
+    (repository / "tracked.txt").write_text("tracked\n", encoding="utf-8")
+    (repository / "tracked.bin").write_bytes(b"\x00\xff\x10")
+    (repository / "tracked-ignored.bin").write_bytes(b"tracked despite ignore")
+    _git(repository, "add", ".gitignore", "tracked.txt", "tracked.bin")
+    _git(repository, "add", "-f", "tracked-ignored.bin")
+    (repository / "untracked.txt").write_text("untracked\n", encoding="utf-8")
+    ignored = repository / "ignored"
+    ignored.mkdir()
+    (ignored / "owner.txt").write_text("owner local\n", encoding="utf-8")
+    environment = repository / ".venv"
+    environment.mkdir()
+    (environment / "unignored.bin").write_bytes(b"owner environment")
+
+    baseline = _build_integrity_manifest(repository)
+    included = {entry.relative_path for entry in baseline.entries}
+    assert baseline.complete is True
+    assert baseline.mode == "git"
+    assert {
+        ".gitignore",
+        "tracked.txt",
+        "tracked.bin",
+        "tracked-ignored.bin",
+        "untracked.txt",
+    } <= included
+    assert "ignored/owner.txt" not in included
+    assert ".venv/unignored.bin" not in included
+    assert baseline.exclusion_counts_dict()["gitignored"] >= 1
+    assert baseline.exclusion_counts_dict()["default-environment-or-cache"] >= 1
+
+    (repository / "tracked.bin").write_bytes(b"\x00\xff\x11")
+    changed = _build_integrity_manifest(repository)
+    assert changed.digest != baseline.digest
+    (repository / "tracked.bin").write_bytes(b"\x00\xff\x10")
+    assert _build_integrity_manifest(repository).digest == baseline.digest
+
+    (ignored / "owner.txt").write_text("changed ignored bytes\n", encoding="utf-8")
+    (environment / "unignored.bin").write_bytes(b"changed owner environment")
+    assert _build_integrity_manifest(repository).digest == baseline.digest
+
+    added = repository / "added.txt"
+    added.write_text("new included file\n", encoding="utf-8")
+    assert _build_integrity_manifest(repository).digest != baseline.digest
+    added.unlink()
+    assert _build_integrity_manifest(repository).digest == baseline.digest
+
+
+def test_git_integrity_nested_input_uses_root_and_fixed_no_shell_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "git-subject"
+    nested = repository / "nested" / "deeper"
+    nested.mkdir(parents=True)
+    _git(repository, "init")
+    (repository / "root.txt").write_text("root\n", encoding="utf-8")
+    _git(repository, "add", "root.txt")
+    observed: list[tuple[list[str], bool]] = []
+    original_run = evaluation_harness.subprocess.run
+
+    def recording_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        observed.append((command, bool(kwargs.get("shell"))))
+        return original_run(command, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(evaluation_harness.subprocess, "run", recording_run)
+    manifest = _build_integrity_manifest(nested)
+
+    assert manifest.complete is True
+    assert manifest.mode == "git"
+    assert {entry.relative_path for entry in manifest.entries} == {"root.txt"}
+    assert len(observed) == 2
+    assert all(shell is False for _, shell in observed)
+    assert all(command[0] == "git" and "ls-files" in command for command, _ in observed)
+    assert all(str(repository.resolve()) in command for command, _ in observed)
+    assert all("--cached" in command or "--ignored" in command for command, _ in observed)
+
+
+def test_non_git_manifest_is_deterministic_binary_and_symlink_safe(tmp_path: Path) -> None:
+    repository = tmp_path / "plain"
+    repository.mkdir()
+    (repository / "z.txt").write_text("last\n", encoding="utf-8")
+    (repository / "a.bin").write_bytes(b"\x00\xfe\x80")
+    cache = repository / ".pytest_cache"
+    cache.mkdir()
+    (cache / "not-read.bin").write_bytes(b"cache")
+    generated = repository / "build"
+    generated.mkdir()
+    (generated / "not-read.bin").write_bytes(b"build")
+    outside = tmp_path / "outside.txt"
+    outside.write_text("outside secret\n", encoding="utf-8")
+    try:
+        os.symlink(outside, repository / "outside-link")
+        os.symlink(cache, repository / "directory-link", target_is_directory=True)
+    except OSError:
+        pytest.skip("This host does not permit test symlink creation.")
+
+    first = _build_integrity_manifest(repository)
+    second = _build_integrity_manifest(repository)
+    entries = {entry.relative_path: entry for entry in first.entries}
+
+    assert first.complete is True
+    assert first.mode == "filesystem"
+    assert first.digest == second.digest
+    assert _canonical_manifest_bytes(first.mode, first.entries) == _canonical_manifest_bytes(
+        second.mode, second.entries
+    )
+    assert list(entries) == sorted(entries, key=lambda item: item.encode("utf-8"))
+    assert entries["a.bin"].entry_type == "regular"
+    assert entries["outside-link"].entry_type == "symlink"
+    assert (
+        entries["outside-link"].content_digest
+        == hashlib.sha256(os.readlink(repository / "outside-link").encode("utf-8")).hexdigest()
+    )
+    assert entries["directory-link"].entry_type == "symlink"
+    assert all("\\" not in entry.relative_path for entry in first.entries)
+    assert first.exclusion_counts_dict()["default-environment-or-cache"] == 2
+
+
+def test_excluded_directories_are_pruned_without_opening_contents(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "plain"
+    repository.mkdir()
+    (repository / ".gitignore").write_text("ignored-cache/\n", encoding="utf-8")
+    (repository / "included.txt").write_text("included\n", encoding="utf-8")
+    excluded_roots = [repository / ".venv", repository / "ignored-cache"]
+    for excluded_root in excluded_roots:
+        excluded_root.mkdir()
+        for index in range(200):
+            (excluded_root / f"owner-{index:03d}.bin").write_bytes(b"owner local")
+    opened: list[Path] = []
+    original_open = Path.open
+
+    def recording_open(path: Path, *args: object, **kwargs: object):
+        opened.append(path)
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", recording_open)
+    started = evaluation_harness.time.perf_counter()
+    manifest = _build_integrity_manifest(repository)
+    elapsed_ms = (evaluation_harness.time.perf_counter() - started) * 1_000
+
+    assert manifest.complete is True
+    assert {entry.relative_path for entry in manifest.entries} == {".gitignore", "included.txt"}
+    assert not any(path.is_relative_to(excluded_root) for path in opened for excluded_root in excluded_roots)
+    assert manifest.exclusion_counts_dict() == {
+        "default-environment-or-cache": 1,
+        "gitignored": 1,
+    }
+    assert elapsed_ms >= 0
+
+
+@pytest.mark.parametrize(
+    ("limits", "expected_reason"),
+    (
+        (IntegrityLimits(maximum_files=1), "maximum-files-exceeded"),
+        (IntegrityLimits(maximum_file_size_bytes=2), "maximum-file-size-exceeded"),
+        (IntegrityLimits(maximum_total_bytes=3), "maximum-total-bytes-exceeded"),
+    ),
+)
+def test_integrity_limits_fail_closed(
+    tmp_path: Path,
+    limits: IntegrityLimits,
+    expected_reason: str,
+) -> None:
+    repository = tmp_path / "plain"
+    repository.mkdir()
+    (repository / "a.bin").write_bytes(b"abc")
+    (repository / "b.bin").write_bytes(b"def")
+
+    incomplete = _build_integrity_manifest(repository, limits=limits)
+    complete = _build_integrity_manifest(repository)
+
+    assert incomplete.complete is False
+    assert incomplete.digest is None
+    assert incomplete.failure_reason == expected_reason
+    assert _integrity_manifests_equal(incomplete, incomplete) is False
+    assert _integrity_manifests_equal(incomplete, complete) is False
+
+
+@pytest.mark.parametrize("unsafe", ("../escape", "/absolute", "C:/absolute", "safe/../../escape"))
+def test_integrity_path_validation_rejects_unsafe_paths(unsafe: str) -> None:
+    with pytest.raises(ValueError, match="repository-relative|inside"):
+        _validated_relative_path(unsafe)
+
+
+def test_integrity_path_validation_normalizes_separators() -> None:
+    assert _validated_relative_path("nested\\file.bin") == "nested/file.bin"
+
+
+def test_public_fixtures_have_reproducible_manifest_evidence(tmp_path: Path) -> None:
+    first = generate_public_fixtures(tmp_path / "first")
+    second = generate_public_fixtures(tmp_path / "second")
+
+    first_evidence = {
+        label: (
+            manifest.digest,
+            manifest.included_file_count,
+            manifest.included_byte_count,
+            manifest.excluded_counts,
+        )
+        for label, root in first
+        for manifest in (_build_integrity_manifest(root),)
+    }
+    second_evidence = {
+        label: (
+            manifest.digest,
+            manifest.included_file_count,
+            manifest.included_byte_count,
+            manifest.excluded_counts,
+        )
+        for label, root in second
+        for manifest in (_build_integrity_manifest(root),)
+    }
+
+    assert first_evidence == second_evidence
+    assert dict(first_evidence)["public-large"][3] == (("gitignored", 1),)
+
+
+def test_evaluation_detects_repository_mutation_without_path_leakage(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "subject"
+    repository.mkdir()
+    included = repository / "sample.py"
+    included.write_text("value = 1\n", encoding="utf-8")
+    original_analyze = evaluation_harness.RepositoryReviewService.analyze
+    calls = 0
+
+    def mutating_analyze(service: object, path: Path, **kwargs: object):
+        nonlocal calls
+        evidence = original_analyze(service, path, **kwargs)  # type: ignore[arg-type]
+        calls += 1
+        if calls == 1:
+            included.write_text("value = 2\n", encoding="utf-8")
+        return evidence
+
+    monkeypatch.setattr(evaluation_harness.RepositoryReviewService, "analyze", mutating_analyze)
+    output = tmp_path / "result.json"
+    payload = evaluate_subjects(
+        (("public-mutation", repository),),
+        output_path=output,
+        data_directory=tmp_path / "data",
+        repeats=2,
+        limits=ScanLimits(),
+    )
+
+    subject = payload["subjects"][0]
+    serialized = output.read_text(encoding="utf-8")
+    assert subject["integrity"]["complete"] is True
+    assert subject["integrity"]["equal"] is False
+    assert subject["persistence"]["repository_bytes_unchanged"] is False
+    assert str(repository.resolve()) not in serialized
+    assert "sample.py" not in serialized
+    assert os.environ.get("USERNAME", "__missing_username__") not in serialized
+
+
+def test_nested_git_output_and_data_paths_are_rejected(tmp_path: Path) -> None:
+    repository = tmp_path / "git-subject"
+    nested = repository / "nested"
+    nested.mkdir(parents=True)
+    _git(repository, "init")
+    (nested / "sample.py").write_text("value = 1\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="outside every analyzed repository"):
+        evaluate_subjects(
+            (("public-nested", nested),),
+            output_path=repository / "sibling-result.json",
+            data_directory=tmp_path / "data",
+            repeats=2,
+            limits=ScanLimits(),
+        )
+
+
+def test_dogfood_report_preserves_history_and_documents_new_integrity_contract() -> None:
+    report = (
+        Path(__file__).resolve().parents[2] / "docs" / "product" / "REPOSITORY_REVIEW_DOGFOOD_REPORT.md"
+    ).read_text(encoding="utf-8")
+
+    assert "## Integrity methodology correction (#114)" in report
+    assert "evaluation output format `2`" in report.casefold()
+    assert "integrity-manifest format `1`" in report
+    assert "were not produced with integrity-manifest" in report
+    assert "Exact measured dogfood build SHA" in report
+    assert "Post-polish rerun" in report
+    assert "#115" in report
 
 
 def test_finding_sample_manifest_is_reproducible_sanitized_and_matches_report() -> None:
@@ -435,3 +749,13 @@ def _fixture_digest(subjects: tuple[tuple[str, Path], ...]) -> str:
             digest.update(path.relative_to(root).as_posix().encode())
             digest.update(path.read_bytes())
     return digest.hexdigest()
+
+
+def _git(repository: Path, *arguments: str) -> None:
+    subprocess.run(
+        ["git", "-C", str(repository), *arguments],
+        check=True,
+        capture_output=True,
+        text=True,
+        shell=False,
+    )

@@ -45,8 +45,10 @@ schemas. It resolves each entered subject through
 the same enclosing Git root that analysis uses.
 
 Git mode runs a fixed, no-shell `git ls-files` contract for tracked files plus
-untracked nonignored files. Tracked files remain included even when a later
-ignore rule matches them. Git-ignored content, `.git`, the analyzer's default
+untracked files filtered only by repository `.gitignore` files. Tracked files
+remain included even when a later ignore rule matches them. User-global and
+XDG ignore files, global Git configuration, and local `.git/info/exclude` are
+not authoritative and are neutralized. Git-ignored content, `.git`, the analyzer's default
 environment/cache directories, and optional `--integrity-exclude` patterns are
 excluded before file content is opened. Fixed Git exclude patterns prevent an
 unignored `.venv`, `node_modules`, cache, coverage, `dist`, or `build` tree from
@@ -55,8 +57,13 @@ Git query supplies aggregate exclusion counts without reading ignored files.
 Each query streams through a bounded pipe, retains at most the configured
 64 MiB plus one sentinel byte, and terminates, kills if necessary, and reaps
 Git on overflow or the 30-second timeout.
+The two NUL streams are parsed one record at a time under one combined 50,000
+encountered-path budget. Candidate paths are retained only within the included
+file bound; excluded paths are counted immediately and are never retained as a
+second list.
 
-Non-Git mode performs an iterative, sorted `os.scandir` traversal, counts every
+Non-Git mode performs an iterative, sorted `os.scandir` traversal rooted in a
+trusted directory handle, counts every
 encountered directory entry against a separate bound, prunes the same default
 directories and `.git` markers, and applies the discovery layer's documented
 bounded `.gitignore` subset. Excluded directories count once; their descendants
@@ -67,9 +74,16 @@ hashed in 1 MiB streaming chunks without decoding. Directory and file symlinks
 are never followed; the UTF-8 link-target text is hashed as a `symlink` entry.
 Unsupported filesystem entry types are counted and excluded.
 
-Before reading a regular file, the harness opens a descriptor with no-follow,
-close-on-exec, and binary flags where available, validates its type, identity,
-and size with `fstat`, and repeats descriptor validation after streaming.
+On POSIX, every ancestor is opened relative to the trusted root descriptor with
+directory/no-follow flags; final files and symlinks use descriptor-relative
+open or readlink operations. Queued directories retain expected identity and
+are reopened without following before enumeration. On Windows, held directory
+handles reject reparse points and prevent replacement during pathname-based
+`scandir`, while regular-file handles must resolve canonically beneath the
+trusted root before reading. Because Python exposes no descriptor-relative
+Windows `readlink`, a Windows symlink entry fails closed rather than weakening
+containment. Regular descriptors are validated for type, identity, and size
+before and after streaming.
 Format `1` sorts POSIX repository-relative paths by UTF-8 bytes. Literal POSIX
 backslashes remain filename characters, and duplicate parsed paths fail closed
 instead of being silently deduplicated. Its
@@ -81,7 +95,7 @@ before/after digests, completion state, and equality; it never emits the
 in-memory relative-path list.
 
 Defaults are 50,000 included files/symlinks, 50,000 encountered non-Git path
-entries, 256 MiB per entry, 2 GiB total included bytes, and 64 MiB per Git
+entries or combined Git NUL records, 256 MiB per entry, 2 GiB total included bytes, and 64 MiB per Git
 path-list query; the fixed Git timeout is 30 seconds. Every size/count bound is
 an explicit CLI option. A
 breach produces a path-free incomplete reason and no digest; evaluation fails

@@ -10,16 +10,23 @@ contracts.
 
 For a Git subject, the harness resolves the same enclosing analysis root as
 `RepositoryDiscovery.resolve_scope()` and hashes tracked files plus untracked
-nonignored files returned by a fixed, no-shell Git command. A tracked file is
-still included when an ignore rule matches it. Git-ignored content, `.git`,
+files filtered by repository `.gitignore` files returned by a fixed, no-shell
+Git command. A tracked file is still included when an ignore rule matches it.
+Global Git configuration, user-global/XDG ignore files, and `.git/info/exclude`
+are deliberately non-authoritative. Git-ignored content, `.git`,
 explicit integrity exclusions, and the default environment/cache directories
 (`.venv`, `venv`, `node_modules`, Python/tool caches, `dist`, `build`, and
 `coverage`) are excluded before content reads. Fixed Git exclude patterns and
 a directory-collapsed aggregate query mean ignored owner-local environments
 are summarized rather than recursively read.
+Both Git NUL payloads are decoded incrementally under one combined 50,000-record
+budget. Candidate storage remains bounded and excluded records are aggregated
+without retaining a second path list.
 
 For a non-Git public fixture, the harness uses a bounded iterative `os.scandir`
-walk and counts every encountered entry, including exclusions. It prunes the
+walk anchored to a trusted root handle and counts every encountered entry,
+including exclusions. Queued directories retain identity and are reopened
+without following before enumeration. It prunes the
 same default directories, excludes `.git` markers, and applies the
 repository-discovery `.gitignore` subset. Pruned directories count once; their
 descendants are not enumerated, and empty directories produce no manifest
@@ -28,7 +35,7 @@ without decoding. File and directory symlinks are not followed; their UTF-8
 target text is hashed. Unsupported entry types are aggregate exclusions.
 
 The default integrity bounds are 50,000 included files/symlinks, 50,000
-encountered non-Git entries, 256 MiB per entry, 2 GiB total included bytes, and
+encountered non-Git entries or combined Git path records, 256 MiB per entry, 2 GiB total included bytes, and
 64 MiB per Git path-list query. Git output is capped while it is produced; an
 overflowing or 30-second timed-out child is terminated, killed if needed, and
 reaped. A breach or
@@ -39,9 +46,13 @@ aggregate included file/byte counts, aggregate exclusion reasons/counts,
 before/after digests, and equality. It contains no absolute path or included
 relative-path list.
 
-Regular files are opened through a descriptor with no-follow and close-on-exec
-flags where supported, then validated with `fstat` before any content read and
-again afterward. The canonical digest sorts POSIX relative paths by UTF-8 bytes,
+On POSIX every ancestor, final regular file, final symlink, and traversed
+directory is accessed relative to the trusted root descriptor without following
+components. Windows holds non-reparse directory handles during traversal and
+requires opened regular-file handles to resolve beneath the canonical root;
+Windows symlink entries fail closed because descriptor-relative `readlink` is
+unavailable. Regular descriptors are validated with `fstat` before any content
+read and again afterward. The canonical digest sorts POSIX relative paths by UTF-8 bytes,
 preserves literal backslashes in POSIX filenames, rejects duplicate parsed paths,
 and
 encodes, for every entry, path, NUL, type, NUL, decimal size, NUL, exact content

@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 from collections import Counter
+from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
 
@@ -267,6 +268,10 @@ def test_git_integrity_nested_input_uses_root_and_fixed_no_shell_command(
     assert all("--cached" in command or "--ignored" in command for command, _ in observed)
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows lacks descriptor-relative readlink; the manifest fails closed instead",
+)
 def test_non_git_manifest_is_deterministic_binary_and_symlink_safe(tmp_path: Path) -> None:
     repository = tmp_path / "plain"
     repository.mkdir()
@@ -306,6 +311,29 @@ def test_non_git_manifest_is_deterministic_binary_and_symlink_safe(tmp_path: Pat
     assert entries["directory-link"].entry_type == "symlink"
     assert all("\\" not in entry.relative_path for entry in first.entries)
     assert first.exclusion_counts_dict()["default-environment-or-cache"] == 2
+
+
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows lacks descriptor-relative readlink; the manifest fails closed instead",
+)
+def test_stable_nested_symlink_hashes_target_text_without_following(tmp_path: Path) -> None:
+    repository = tmp_path / "plain"
+    nested = repository / "nested"
+    nested.mkdir(parents=True)
+    outside = tmp_path / "outside.txt"
+    outside.write_text("outside secret\n", encoding="utf-8")
+    link = nested / "link"
+    link.symlink_to(outside)
+
+    manifest = _build_integrity_manifest(repository)
+    entries = {entry.relative_path: entry for entry in manifest.entries}
+
+    assert manifest.complete is True
+    assert entries["nested/link"].entry_type == "symlink"
+    assert (
+        entries["nested/link"].content_digest == hashlib.sha256(os.readlink(link).encode("utf-8")).hexdigest()
+    )
 
 
 def test_excluded_directories_are_pruned_without_opening_contents(
@@ -356,9 +384,13 @@ def test_non_git_ignored_root_entries_obey_encountered_entry_limit(
 
     original_open = evaluation_harness._open_regular_file_without_following
 
-    def bounded_open(absolute: Path, metadata: os.stat_result) -> int:
-        opened.append(absolute)
-        return original_open(absolute, metadata)
+    def bounded_open(
+        trusted_root: object,
+        relative: str,
+        metadata: os.stat_result,
+    ) -> int:
+        opened.append(repository / relative)
+        return original_open(trusted_root, relative, metadata)  # type: ignore[arg-type]
 
     monkeypatch.setattr(evaluation_harness, "_open_regular_file_without_following", bounded_open)
     manifest = _build_integrity_manifest(
@@ -388,9 +420,13 @@ def test_non_git_default_excluded_entries_count_without_opening(
     opened: list[Path] = []
     original_open = evaluation_harness._open_regular_file_without_following
 
-    def bounded_open(absolute: Path, metadata: os.stat_result) -> int:
-        opened.append(absolute)
-        return original_open(absolute, metadata)
+    def bounded_open(
+        trusted_root: object,
+        relative: str,
+        metadata: os.stat_result,
+    ) -> int:
+        opened.append(repository / relative)
+        return original_open(trusted_root, relative, metadata)  # type: ignore[arg-type]
 
     monkeypatch.setattr(evaluation_harness, "_open_regular_file_without_following", bounded_open)
     manifest = _build_integrity_manifest(
@@ -412,6 +448,181 @@ def test_empty_directories_do_not_create_manifest_entries(tmp_path: Path) -> Non
 
     assert manifest.complete is True
     assert manifest.entries == ()
+
+
+def test_ancestor_symlink_replacement_before_regular_open_fails_without_reading(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "plain"
+    nested = repository / "dir"
+    nested.mkdir(parents=True)
+    (nested / "file.py").write_text("inside\n", encoding="utf-8")
+    external = tmp_path / "external"
+    external.mkdir()
+    (external / "file.py").write_text("outside secret\n", encoding="utf-8")
+    original_open = evaluation_harness._open_regular_file_without_following
+    digest_calls = 0
+    original_digest = evaluation_harness._stream_digest
+
+    def replacing_open(
+        trusted_root: object,
+        relative: str,
+        metadata: os.stat_result,
+    ) -> int:
+        if relative == "dir/file.py" and not nested.is_symlink():
+            backup = repository / "dir-backup"
+            nested.rename(backup)
+            try:
+                nested.symlink_to(external, target_is_directory=True)
+            except OSError:
+                backup.rename(nested)
+                pytest.skip("This host does not permit the ancestor-symlink race fixture.")
+        return original_open(trusted_root, relative, metadata)  # type: ignore[arg-type]
+
+    def recording_digest(stream: object, expected_size: int) -> tuple[str, int]:
+        nonlocal digest_calls
+        digest_calls += 1
+        return original_digest(stream, expected_size)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(
+        evaluation_harness,
+        "_open_regular_file_without_following",
+        replacing_open,
+    )
+    monkeypatch.setattr(evaluation_harness, "_stream_digest", recording_digest)
+    manifest = _build_integrity_manifest(repository)
+
+    assert manifest.complete is False
+    assert manifest.digest is None
+    assert digest_calls == 0
+
+
+def test_ancestor_symlink_replacement_before_metadata_cannot_read_external_link(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "plain"
+    nested = repository / "dir"
+    nested.mkdir(parents=True)
+    (nested / "file.py").write_text("inside\n", encoding="utf-8")
+    external = tmp_path / "external"
+    external.mkdir()
+    target = tmp_path / "outside-secret.txt"
+    target.write_text("outside secret\n", encoding="utf-8")
+    try:
+        (external / "file.py").symlink_to(target)
+    except OSError:
+        pytest.skip("This host does not permit the ancestor-symlink race fixture.")
+    original_lstat = evaluation_harness._TrustedRoot.lstat
+    original_readlink = evaluation_harness._TrustedRoot.readlink
+    readlink_calls = 0
+
+    def replacing_lstat(trusted_root: object, relative: str) -> os.stat_result:
+        if relative == "dir/file.py" and not nested.is_symlink():
+            nested.rename(repository / "dir-backup")
+            nested.symlink_to(external, target_is_directory=True)
+        return original_lstat(trusted_root, relative)  # type: ignore[arg-type]
+
+    def recording_readlink(trusted_root: object, relative: str) -> str:
+        nonlocal readlink_calls
+        readlink_calls += 1
+        return original_readlink(trusted_root, relative)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(evaluation_harness._TrustedRoot, "lstat", replacing_lstat)
+    monkeypatch.setattr(evaluation_harness._TrustedRoot, "readlink", recording_readlink)
+    manifest = _build_integrity_manifest(repository)
+
+    assert manifest.complete is False
+    assert manifest.digest is None
+    assert readlink_calls == 0
+
+
+def test_queued_directory_symlink_replacement_is_not_enumerated(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "plain"
+    queued = repository / "queued"
+    queued.mkdir(parents=True)
+    (queued / "inside.txt").write_text("inside\n", encoding="utf-8")
+    external = tmp_path / "external"
+    external.mkdir()
+    (external / "outside.txt").write_text("outside secret\n", encoding="utf-8")
+    original_scandir = evaluation_harness._TrustedRoot.scandir
+    original_os_scandir = evaluation_harness.os.scandir
+    scandir_calls: list[object] = []
+
+    def recording_os_scandir(path: object):
+        scandir_calls.append(path)
+        return original_os_scandir(path)  # type: ignore[arg-type]
+
+    @contextmanager
+    def replacing_scandir(
+        trusted_root: object,
+        relative: str,
+        expected: os.stat_result | None = None,
+    ):
+        if relative == "queued" and not queued.is_symlink():
+            backup = repository / "queued-backup"
+            queued.rename(backup)
+            try:
+                queued.symlink_to(external, target_is_directory=True)
+            except OSError:
+                backup.rename(queued)
+                pytest.skip("This host does not permit the queued-symlink race fixture.")
+        with original_scandir(trusted_root, relative, expected) as entries:  # type: ignore[arg-type]
+            yield entries
+
+    monkeypatch.setattr(evaluation_harness._TrustedRoot, "scandir", replacing_scandir)
+    monkeypatch.setattr(evaluation_harness.os, "scandir", recording_os_scandir)
+    manifest = _build_integrity_manifest(repository)
+
+    assert manifest.complete is False
+    assert manifest.digest is None
+    assert "outside.txt" not in {entry.relative_path for entry in manifest.entries}
+    assert len(scandir_calls) == 1
+
+
+def test_queued_directory_regular_replacement_fails_identity_check(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "plain"
+    queued = repository / "queued"
+    queued.mkdir(parents=True)
+    (queued / "inside.txt").write_text("inside\n", encoding="utf-8")
+    replacement = repository / "replacement"
+    replacement.mkdir()
+    (replacement / "replacement.txt").write_text("replacement\n", encoding="utf-8")
+    original_scandir = evaluation_harness._TrustedRoot.scandir
+    original_os_scandir = evaluation_harness.os.scandir
+    scandir_calls: list[object] = []
+
+    def recording_os_scandir(path: object):
+        scandir_calls.append(path)
+        return original_os_scandir(path)  # type: ignore[arg-type]
+
+    @contextmanager
+    def replacing_scandir(
+        trusted_root: object,
+        relative: str,
+        expected: os.stat_result | None = None,
+    ):
+        if relative == "queued" and queued.exists():
+            queued.rename(repository / "queued-backup")
+            replacement.rename(queued)
+        with original_scandir(trusted_root, relative, expected) as entries:  # type: ignore[arg-type]
+            yield entries
+
+    monkeypatch.setattr(evaluation_harness._TrustedRoot, "scandir", replacing_scandir)
+    monkeypatch.setattr(evaluation_harness.os, "scandir", recording_os_scandir)
+    manifest = _build_integrity_manifest(repository)
+
+    assert manifest.complete is False
+    assert manifest.digest is None
+    assert "replacement.txt" not in {entry.relative_path for entry in manifest.entries}
+    assert len(scandir_calls) == 1
 
 
 @pytest.mark.parametrize(
@@ -466,25 +677,29 @@ def test_regular_file_replaced_by_symlink_fails_before_reading(
     victim.write_bytes(b"inside")
     outside = tmp_path / "outside.bin"
     outside.write_bytes(b"secret")
-    original_open = evaluation_harness.os.open
+    original_open = evaluation_harness._open_regular_file_without_following
     digest_calls = 0
     original_digest = evaluation_harness._stream_digest
 
-    def replacing_open(path: object, flags: int, *args: object) -> int:
-        if Path(path) == victim and not victim.is_symlink():
+    def replacing_open(
+        trusted_root: object,
+        relative: str,
+        metadata: os.stat_result,
+    ) -> int:
+        if relative == "victim.bin" and not victim.is_symlink():
             victim.unlink()
             try:
                 victim.symlink_to(outside)
             except OSError:
                 pytest.skip("This host does not permit the symlink race fixture.")
-        return original_open(path, flags, *args)
+        return original_open(trusted_root, relative, metadata)  # type: ignore[arg-type]
 
     def recording_digest(stream: object, expected_size: int) -> tuple[str, int]:
         nonlocal digest_calls
         digest_calls += 1
         return original_digest(stream, expected_size)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(evaluation_harness.os, "open", replacing_open)
+    monkeypatch.setattr(evaluation_harness, "_open_regular_file_without_following", replacing_open)
     monkeypatch.setattr(evaluation_harness, "_stream_digest", recording_digest)
     manifest = _build_integrity_manifest(repository)
 
@@ -504,17 +719,21 @@ def test_regular_file_replaced_by_different_regular_file_fails_closed(
     victim.write_bytes(b"first!")
     replacement = repository / "replacement.tmp"
     replacement.write_bytes(b"second")
-    original_open = evaluation_harness.os.open
+    original_open = evaluation_harness._open_regular_file_without_following
     replaced = False
 
-    def replacing_open(path: object, flags: int, *args: object) -> int:
+    def replacing_open(
+        trusted_root: object,
+        relative: str,
+        metadata: os.stat_result,
+    ) -> int:
         nonlocal replaced
-        if Path(path) == victim and not replaced:
+        if relative == "victim.bin" and not replaced:
             replaced = True
             replacement.replace(victim)
-        return original_open(path, flags, *args)
+        return original_open(trusted_root, relative, metadata)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(evaluation_harness.os, "open", replacing_open)
+    monkeypatch.setattr(evaluation_harness, "_open_regular_file_without_following", replacing_open)
     manifest = _build_integrity_manifest(repository)
 
     assert manifest.complete is False
@@ -530,18 +749,22 @@ def test_regular_file_size_change_before_open_fails_closed(
     repository.mkdir()
     victim = repository / "victim.bin"
     victim.write_bytes(b"first")
-    original_open = evaluation_harness.os.open
+    original_open = evaluation_harness._open_regular_file_without_following
     mutated = False
 
-    def mutating_open(path: object, flags: int, *args: object) -> int:
+    def mutating_open(
+        trusted_root: object,
+        relative: str,
+        metadata: os.stat_result,
+    ) -> int:
         nonlocal mutated
-        if Path(path) == victim and not mutated:
+        if relative == "victim.bin" and not mutated:
             mutated = True
             with victim.open("ab") as stream:
                 stream.write(b"!")
-        return original_open(path, flags, *args)
+        return original_open(trusted_root, relative, metadata)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(evaluation_harness.os, "open", mutating_open)
+    monkeypatch.setattr(evaluation_harness, "_open_regular_file_without_following", mutating_open)
     manifest = _build_integrity_manifest(repository)
 
     assert manifest.complete is False
@@ -571,6 +794,167 @@ def test_duplicate_git_integrity_path_fails_explicitly(
     assert manifest.complete is False
     assert manifest.digest is None
     assert manifest.failure_reason == "duplicate-integrity-path"
+
+
+@pytest.mark.parametrize(
+    ("candidate_payload", "excluded_payload"),
+    (
+        (b"a\0b\0c\0", b""),
+        (b"", b"ignored-a\0ignored-b\0ignored-c\0"),
+        (b"a\0", b"ignored-a\0ignored-b\0"),
+    ),
+)
+def test_git_path_records_share_one_incremental_entry_budget(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    candidate_payload: bytes,
+    excluded_payload: bytes,
+) -> None:
+    repository = tmp_path / "git-subject"
+    repository.mkdir()
+    for name in ("a", "b", "c"):
+        (repository / name).write_text(name, encoding="utf-8")
+    listings = iter((candidate_payload, excluded_payload))
+    monkeypatch.setattr(
+        evaluation_harness,
+        "_run_fixed_git_listing",
+        lambda *args, **kwargs: next(listings),
+    )
+
+    manifest = evaluation_harness._build_git_integrity_manifest(
+        repository,
+        IntegrityLimits(maximum_path_entries=2),
+        (),
+    )
+
+    assert manifest.complete is False
+    assert manifest.digest is None
+    assert manifest.failure_reason == "maximum-path-entries-exceeded"
+
+
+def test_git_incremental_path_budget_accepts_exact_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "git-subject"
+    repository.mkdir()
+    (repository / "a").write_text("a", encoding="utf-8")
+    listings = iter((b"a\0", b"ignored\0"))
+    monkeypatch.setattr(
+        evaluation_harness,
+        "_run_fixed_git_listing",
+        lambda *args, **kwargs: next(listings),
+    )
+
+    manifest = evaluation_harness._build_git_integrity_manifest(
+        repository,
+        IntegrityLimits(maximum_path_entries=2),
+        (),
+    )
+
+    assert manifest.complete is True
+    assert {entry.relative_path for entry in manifest.entries} == {"a"}
+    assert manifest.exclusion_counts_dict() == {"gitignored": 1}
+
+
+@pytest.mark.parametrize("payload", (b"missing-nul", b"\xff\0"))
+def test_git_incremental_path_parser_rejects_bounded_invalid_payloads(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    payload: bytes,
+) -> None:
+    repository = tmp_path / "git-subject"
+    repository.mkdir()
+    listings = iter((payload, b""))
+    monkeypatch.setattr(
+        evaluation_harness,
+        "_run_fixed_git_listing",
+        lambda *args, **kwargs: next(listings),
+    )
+
+    manifest = evaluation_harness._build_git_integrity_manifest(
+        repository,
+        IntegrityLimits(maximum_path_entries=2),
+        (),
+    )
+
+    assert manifest.complete is False
+    assert manifest.failure_reason == "unsafe-git-path-list"
+
+
+def test_git_incremental_parser_does_not_split_whole_payload() -> None:
+    class NoSplitBytes(bytes):
+        def split(self, *args: object, **kwargs: object):
+            raise AssertionError("whole-payload split must not be used")
+
+    budget = evaluation_harness._PathEntryBudget(2)
+    records = tuple(evaluation_harness._iter_bounded_nul_paths(NoSplitBytes(b"a\0b\0"), budget))
+
+    assert records == ("a", "b")
+    assert budget.count == 2
+
+
+def test_git_manifest_ignores_global_xdg_and_info_excludes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "git-subject"
+    repository.mkdir()
+    _git(repository, "init")
+    (repository / ".gitignore").write_text(
+        "repo-ignored.txt\ntracked-ignored.txt\n",
+        encoding="utf-8",
+    )
+    for name in (
+        "global.txt",
+        "xdg.txt",
+        "info.txt",
+        "repo-ignored.txt",
+        "tracked-ignored.txt",
+    ):
+        (repository / name).write_text(name, encoding="utf-8")
+    _git(repository, "add", ".gitignore")
+    _git(repository, "add", "-f", "tracked-ignored.txt")
+    with (repository / ".git" / "info" / "exclude").open("a", encoding="utf-8") as stream:
+        stream.write("\ninfo.txt\n")
+
+    global_ignore = tmp_path / "global-ignore"
+    global_ignore.write_text("global.txt\n", encoding="utf-8")
+    global_config = tmp_path / "global.gitconfig"
+    subprocess.run(
+        [
+            "git",
+            "config",
+            "--file",
+            str(global_config),
+            "core.excludesFile",
+            str(global_ignore),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        shell=False,
+    )
+    xdg = tmp_path / "xdg"
+    (xdg / "git").mkdir(parents=True)
+    (xdg / "git" / "ignore").write_text("xdg.txt\n", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(global_config))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
+
+    baseline = _build_integrity_manifest(repository)
+    included = {entry.relative_path for entry in baseline.entries}
+    assert baseline.complete is True
+    assert {"global.txt", "xdg.txt", "info.txt", "tracked-ignored.txt"} <= included
+    assert "repo-ignored.txt" not in included
+    assert baseline.exclusion_counts_dict()["gitignored"] >= 1
+
+    alternate = tmp_path / "alternate"
+    alternate.mkdir()
+    monkeypatch.setenv("HOME", str(alternate))
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(alternate / "missing-config"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(alternate / "missing-xdg"))
+    assert _build_integrity_manifest(repository).digest == baseline.digest
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Windows filenames cannot contain literal backslashes")

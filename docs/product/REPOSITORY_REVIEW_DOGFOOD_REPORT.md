@@ -546,6 +546,196 @@ than the original measured build. #81 may close after hosted validation. The
 result does not justify silently starting #94, #96, desktop packaging, #98, or
 any other deferred expansion.
 
+## Comparable Python 3.13 performance addendum
+
+### Decision
+
+No comparable Python 3.13 product regression was confirmed. The historical
+measured build `678356bf4e23730886abaffd84186d0c5d3627f7` and exact post-PR-118
+main `6509939e486bb6380a8906125381696ff392179b` were measured on the same host
+with CPython 3.13.7, matched dependencies, identical instrumentation, and nine
+byte-identical fixture subjects. Current median analysis time ranged from
+1.553% faster to 9.108% slower on those subjects; none reached the 25%
+regression threshold. Zscripts itself was 1,558.696 ms slower at the median,
+but that comparison is repository-growth-related and intentionally has no
+percentage regression because the two repository trees differ.
+
+The sanitized raw evidence and calculations are in
+[`REPOSITORY_REVIEW_COMPARABLE_PERFORMANCE.json`](REPOSITORY_REVIEW_COMPARABLE_PERFORMANCE.json).
+No analyzer optimization or separate defect is warranted from this evidence.
+
+### Preflight, environment, and quiet-host procedure
+
+PR #118 was verified merged from exact head
+`9765c47c096b54b672c1acd427388f353f556fe5` into exact squash SHA
+`6509939e486bb6380a8906125381696ff392179b`, without auto-merge state. The
+push-triggered CI run `31471316577` and quality job `93715048889` completed
+successfully. Its substantive steps passed checkout, Python and Node setup,
+pinned pnpm activation, dependency installation, lint, type checking, all
+frontend checks, repository safety and persistence contracts, workspace API
+and packaged smoke checks, legacy-helper contracts, Bandit, dependency audit,
+binary scan, coverage tests, documentation links, editable installation,
+wheel/workspace smoke, zipapp, diagnostics, and quality-summary upload.
+
+| Environment fact | Comparable value |
+| --- | --- |
+| Operating system | Registry-reported Windows 10 Home 25H2, build 10.0.26200.8894 |
+| Python | CPython 3.13.7, 64-bit, in two matched external disposable virtual environments |
+| pip | 26.2.1 in both environments; both `pip check` runs passed |
+| Git / Node / pnpm / Gitleaks | 2.51.2.windows.1 / 24.12.0 / 10.18.1 / 8.30.1 |
+| CPU | 11th Gen Intel Core i5-11400H at 2.70 GHz; 6 physical / 12 logical processors |
+| Visible memory | 16,948,453,376 bytes |
+| Accepted-batch free memory | 3,037,155,328 to 4,983,885,824 bytes |
+| Power plan | Balanced throughout |
+
+Before each supported two-scan batch, three one-second total-CPU samples and
+free physical memory were recorded. A batch started only when the sample mean
+was at or below 35%. No unrelated process was terminated. Two batches were
+preserved but excluded after unrelated Rust compilation appeared: round-1
+current `public-medium` and round-3 historical `zscripts-public`. Each was
+rerun once after the compiler exited and the quiet gate passed.
+
+All raw JSON, SQLite databases, virtual environments, subject copies, and logs
+remained in one new timestamped temporary evidence root outside the repository.
+Neither exact-SHA checkout changed: the historical tracked tree remained
+`bfdb9bbdb686174ecd53d88868e2cf2c96976b71` and the current tree remained
+`e7640b98b4bb9197efc4339f3a35b6bd244dc53c`. The committed JSON omits the
+evidence-root path, executable paths, username, machine name, private
+identifiers, source excerpts, logs, and SQLite locations.
+
+### Subject bytes, contracts, limits, and repetition order
+
+The historical harness generated the five public fixture families. Historical
+ordinary, relationship, and finding fixtures were then copied into one
+canonical external set. Exact bytes from that set were copied independently to
+the two subject roots. The paired digests below were equal before measurement
+and remained equal afterward. The partial fixture supplies both the parse-gap
+and file-count-truncated subjects.
+
+| Subject | Files | Bytes | Paired SHA-256 tree digest |
+| --- | ---: | ---: | --- |
+| `existing-ordinary` | 2 | 980 | `77949fc03a8cf60a19d620c3dcab5192cc66435ffcc14c62b27e13740fbd8fd2` |
+| `existing-relationships` | 8 | 1,508 | `75aa6e307355c0e283ce908b1a6301166b36985ee7fd6a83489d428cb1d83011` |
+| `existing-findings` | 9 | 1,839 | `c2f0f968e53ef4ff7343cea8fc7a1583db65422ff66bab722628d50f32faf699` |
+| `public-medium` | 31 | 21,750 | `2cac7ecdab9935f30208a2efaa7097cc38bf79fd6b609c0658cf5373b5377431` |
+| `public-large` | 322 | 87,801 | `95d3089b8c8f69a281bffd51ce27653e5cde184b6d4288fc5119bcc4d75f06a2` |
+| `public-multipackage` | 39 | 16,539 | `de221bdd774b4a9545d6650fac647c6a68749fae04a4c7dc42f3d0f08454b2a5` |
+| `public-partial-parse-gap` | 13 | 400 | `51ecae9ca5f92bb11e6bf225f45ac07d70c95cb9b29ab2950233ca1597817366` |
+| `public-cycles-repeated` | 6 | 345 | `4252df7c25faa7554238501f0a2af2fa5445b6d49789a6a2c2187d6bc581df1d` |
+| `public-partial-truncated` | 13 | 400 | `51ecae9ca5f92bb11e6bf225f45ac07d70c95cb9b29ab2950233ca1597817366` |
+
+Historical Zscripts analyzed its exact detached checkout; current Zscripts
+analyzed its own exact detached checkout. Those bytes are deliberately not
+classified as identical. Normal scan limits were 5,000 files, 1,000,000 bytes
+per file, and 100,000,000 total bytes. The truncated subject used three files
+with the same byte limits. Current integrity limits were 50,000 files, 50,000
+path entries, 268,435,456 bytes per file, 2,147,483,648 total bytes, and a fixed
+67,108,864-byte Git path-list cap; the Git command timeout was 30 seconds.
+
+Both harnesses require `--repeat` between 2 and 5. One supported two-scan
+warm-up batch preceded three measured two-scan batches for every build and
+subject. Alternation therefore occurred at the closest supported boundary:
+historical/current, current/historical, historical/current. Each build/subject
+has six accepted analysis repetitions. `time.perf_counter` and `tracemalloc`
+were used consistently. The analysis values time only `service.analyze`; CLI
+batch wall includes interpreter startup, before/after integrity work,
+persistence, comparison, and Handoff follow-up.
+
+Historical format 1 exposes an unversioned, unbounded before/after tree digest.
+Current output format 2 exposes integrity-manifest format 1 with bounded,
+complete inclusion metadata. These integrity contracts are not treated as
+equivalent. Format 2 does not expose standalone before/after manifest timing,
+so the table reports median non-analysis batch overhead without attributing all
+of it to integrity.
+
+### Raw analysis timings and statistics
+
+Statistics are median / minimum / maximum / median absolute deviation in
+milliseconds. Raw values preserve harness order. The last column is historical
+/ current median non-analysis CLI-batch overhead; it is not a standalone
+integrity measurement.
+
+| Subject | Historical raw ms | Current raw ms | Historical stats ms | Current stats ms | Median change | Non-analysis overhead ms |
+| --- | --- | --- | --- | --- | ---: | ---: |
+| `zscripts-public` | 15090.906, 14312.944, 14617.857, 14302.324, 15359.309, 15314.132 | 17172.598, 16732.919, 16501.782, 15281.287, 16324.372, 15740.000 | 14854.381 / 14302.324 / 15359.309 / 482.339 | 16413.077 / 15281.287 / 17172.598 / 496.460 | not comparable | 4921.259 / 6387.228 |
+| `existing-ordinary` | 75.302, 63.738, 66.715, 59.365, 66.836, 57.338 | 66.175, 55.688, 69.439, 63.235, 82.577, 84.630 | 65.227 / 57.338 / 75.302 / 3.735 | 67.807 / 55.688 / 84.630 / 8.345 | +3.955% | 416.200 / 461.213 |
+| `existing-relationships` | 116.118, 102.091, 114.628, 102.009, 114.537, 101.042 | 121.503, 100.718, 112.909, 118.754, 114.965, 100.085 | 108.314 / 101.042 / 116.118 / 6.309 | 113.937 / 100.085 / 121.503 / 6.191 | +5.191% | 453.192 / 495.094 |
+| `existing-findings` | 128.030, 112.114, 150.382, 115.169, 137.772, 109.896 | 121.178, 105.423, 118.246, 106.489, 140.710, 146.508 | 121.600 / 109.896 / 150.382 / 10.595 | 119.712 / 105.423 / 146.508 / 13.756 | -1.553% | 473.669 / 512.146 |
+| `public-medium` | 787.154, 659.550, 1014.114, 695.186, 854.243, 669.821 | 823.259, 750.653, 852.861, 1313.038, 794.097, 635.217 | 741.170 / 659.550 / 1014.114 / 76.485 | 808.678 / 635.217 / 1313.038 / 51.104 | +9.108% | 1129.156 / 1056.590 |
+| `public-large` | 3740.856, 3216.012, 3581.503, 3006.907, 3510.445, 3137.120 | 3476.954, 2998.459, 3723.511, 3086.295, 3622.252, 3396.694 | 3363.229 / 3006.907 / 3740.856 / 222.192 | 3436.824 / 2998.459 / 3723.511 / 236.057 | +2.188% | 2860.090 / 3287.235 |
+| `public-multipackage` | 635.796, 536.665, 623.983, 522.761, 621.525, 513.263 | 618.333, 520.415, 598.999, 519.052, 632.999, 575.472 | 579.095 / 513.263 / 635.796 / 50.611 | 587.236 / 519.052 / 632.999 / 38.430 | +1.406% | 714.290 / 937.524 |
+| `public-partial-parse-gap` | 131.954, 112.066, 135.903, 116.110, 136.282, 117.086 | 135.095, 115.092, 132.116, 129.952, 133.194, 141.447 | 124.520 / 112.066 / 136.282 / 9.896 | 132.655 / 115.092 / 141.447 / 2.572 | +6.533% | 456.264 / 492.493 |
+| `public-cycles-repeated` | 86.887, 75.993, 87.062, 74.183, 82.429, 75.946 | 91.482, 74.776, 85.943, 74.354, 82.715, 70.527 | 79.211 / 74.183 / 87.062 / 4.146 | 78.745 / 70.527 / 91.482 / 5.794 | -0.588% | 423.766 / 474.942 |
+| `public-partial-truncated` | 61.269, 53.838, 65.562, 57.752, 64.288, 56.162 | 68.428, 60.257, 60.556, 56.174, 64.931, 57.835 | 59.511 / 53.838 / 65.562 / 4.063 | 60.406 / 56.174 / 68.428 / 3.402 | +1.504% | 410.624 / 464.309 |
+
+Three measurements are insufficient for statistical-significance claims; six
+per build reduce the harness minimum-repeat mismatch but do not change that
+constraint. The largest comparable median increase, `public-medium`, was only
+67.508 ms and remained far below 25%. Its spread also overlaps substantially.
+No direction satisfying the acceptance rule appeared across nontrivial
+identical-byte subjects, and no isolated product phase was implicated.
+
+### Evidence counts, growth, integrity, and determinism
+
+All nine identical-byte fixtures produced identical aggregate evidence counts
+between builds. The compact tuple below is files analyzed/discovered, modules,
+symbols, relationships as resolved/probable/ambiguous/unresolved, cycles,
+metrics, findings, parse gaps, and truncation.
+
+| Subject/build | Files | Modules | Symbols | Relationships (R/P/A/U) | Cycles | Metrics | Findings | Gaps | Truncated |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `zscripts-public` historical | 331 / 541 | 330 | 1,973 | 9,710 (3,805 / 0 / 0 / 5,905) | 8 | 22,789 | 996 | 1 | No |
+| `zscripts-public` current | 332 / 552 | 331 | 2,142 | 10,386 (4,052 / 0 / 0 / 6,334) | 8 | 24,492 | 1,078 | 1 | No |
+| `existing-ordinary` | 2 / 2 | 2 | 5 | 25 (9 / 0 / 0 / 16) | 0 | 68 | 3 | 0 | No |
+| `existing-relationships` | 8 / 8 | 8 | 13 | 42 (39 / 0 / 1 / 2) | 1 | 207 | 19 | 0 | No |
+| `existing-findings` | 9 / 9 | 9 | 16 | 36 (34 / 0 / 0 / 2) | 1 | 247 | 21 | 0 | No |
+| `public-medium` | 31 / 31 | 31 | 360 | 781 (781 / 0 / 0 / 0) | 1 | 3,879 | 373 | 0 | No |
+| `public-large` | 121 / 322 | 121 | 1,200 | 3,841 (1,441 / 0 / 0 / 2,400) | 1 | 13,089 | 2,411 | 0 | No |
+| `public-multipackage` | 39 / 39 | 39 | 216 | 507 (507 / 0 / 0 / 0) | 12 | 2,511 | 234 | 0 | No |
+| `public-partial-parse-gap` | 13 / 13 | 12 | 12 | 12 (12 / 0 / 0 / 0) | 0 | 228 | 24 | 1 | No |
+| `public-cycles-repeated` | 6 / 6 | 6 | 4 | 20 (20 / 0 / 0 / 0) | 2 | 94 | 11 | 0 | No |
+| `public-partial-truncated` | 3 / 13 | 2 | 2 | 2 (2 / 0 / 0 / 0) | 0 | 38 | 4 | 1 | Yes |
+
+The current Zscripts tree added 11 discovered files, one analyzed file/module,
+169 symbols, 676 relationships, 1,703 metrics, and 82 findings. That growth,
+plus its different tracked bytes, explains why its 1,558.696 ms median absolute
+observation is not a direct product regression comparison.
+
+Every current format-2 manifest was complete, equal before/after, and stable
+across accepted batches. Current included file/byte totals were: Zscripts
+552/3,421,151; ordinary 2/980; relationships 8/1,508; findings 9/1,839;
+medium 31/21,750; large 122/77,801; multipackage 39/16,539; partial 13/400;
+cycles 6/345; and truncated 13/400. Current Zscripts excluded 17 default
+environment/cache entries and one gitignored entry; `public-large` excluded
+one gitignored entry; other current exclusion counts were empty. Historical
+unbounded tree hashing reported unchanged bytes but no bounded inclusion count,
+so it is recorded separately rather than equated with manifest format 1.
+
+All accepted batches retained repeated snapshot identity, repeated canonical
+evidence, unchanged subject bytes, exact saved/reopened Handoff output, stable
+phase order, and the expected lifecycle state. Parse-gap and truncated subjects
+remained intentionally incomplete; no incomplete absence was used as evidence
+of resolution. One untimed recovery scan per build/subject recorded the exact
+deterministic snapshot ID and canonical evidence digest that both harness JSON
+formats omit; those identifiers matched the measured SQLite snapshots and are
+included in the sanitized JSON.
+
+### Diagnosis and product implications
+
+The diagnosis is **mixed** only in the descriptive sense: small comparable
+analysis variation is inconclusive, Zscripts is repository-growth-related, and
+format-2 CLI wall includes bounded integrity work absent from the historical
+contract. There is no confirmed product-path regression and no basis for an
+optimization issue. A separate defect proposal was therefore not prepared.
+
+This closes the Python 3.13 comparability question without changing the earlier
+scope decisions. #94 still needs an explicit product decision before adding
+heuristics; #96 still needs a named downstream consumer before another export
+format; desktop packaging remains an explicit packaging decision rather than a
+performance fix; and #98 now has a comparable Python acceptance baseline but
+does not gain automatic authorization for a second language. The repository
+classification remains **PUBLIC BETA — ACTIVE DEVELOPMENT**.
+
 ## Executive Decision
 
 **PROCEED TO FOCUSED POLISH**

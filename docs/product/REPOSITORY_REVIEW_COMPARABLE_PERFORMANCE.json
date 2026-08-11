@@ -1,0 +1,3443 @@
+{
+  "builds": {
+    "current_sha": "git-sha1:6509939e-486bb638-0a890612-5381696f-f392179b",
+    "current_tree": "git-sha1:e7640b98-b4bb9197-efc4339f-3a35b6bd-244dc53c",
+    "historical_sha": "git-sha1:678356bf-4e237308-86abaffd-84186d0c-5d3627f7",
+    "historical_tree": "git-sha1:bfdb9bbd-b686174e-cd53d888-68e2cf2c-96976b71"
+  },
+  "classification": "PUBLIC BETA \u2014 ACTIVE DEVELOPMENT",
+  "diagnosis": "mixed",
+  "environment": {
+    "accepted_batch_free_memory_max_bytes": 4983885824,
+    "accepted_batch_free_memory_min_bytes": 3037155328,
+    "cpu": "11th Gen Intel Core i5-11400H at 2.70 GHz",
+    "git": "2.51.2.windows.1",
+    "gitleaks": "8.30.1",
+    "logical_processors": 12,
+    "node": "24.12.0",
+    "operating_system": "Windows registry-reported Windows 10 Home 25H2",
+    "os_build": "10.0.26200.8894",
+    "physical_cores": 6,
+    "pip": "26.2.1",
+    "pnpm": "10.18.1",
+    "power_plan": "Balanced",
+    "python": "CPython 3.13.7 64-bit",
+    "python_executable_category": "matched external disposable virtual environments created from the installed Python 3.13 launcher",
+    "quiet_cpu_threshold_percent": 35.0,
+    "total_visible_memory_bytes": 16948453376
+  },
+  "exact_main_ci": {
+    "conclusion": "success",
+    "quality_job_id": 93715048889,
+    "run_id": 31471316577,
+    "substantive_steps": [
+      "checkout",
+      "set up Python",
+      "set up Node",
+      "activate pinned pnpm",
+      "install dependencies",
+      "lint",
+      "type check",
+      "frontend install contract",
+      "frontend format and lint",
+      "frontend typecheck",
+      "frontend unit tests",
+      "frontend build",
+      "repository read-only safety contracts",
+      "snapshot persistence contracts",
+      "workspace API contracts",
+      "packaged workspace smoke",
+      "legacy helper Phase 2A contracts",
+      "Bandit",
+      "dependency audit",
+      "binary scan",
+      "tests with coverage",
+      "documentation links",
+      "editable package installation",
+      "wheel smoke",
+      "zipapp smoke",
+      "diagnostics snapshot",
+      "quality summary"
+    ]
+  },
+  "format_version": 1,
+  "governing_issue": 115,
+  "instrumentation": {
+    "analysis_timing": "service analyze call only",
+    "clock": "monotonic high-resolution perf_counter",
+    "integrity_manifest_timing_ms": null,
+    "integrity_timing_note": "format-2 does not expose standalone before/after manifest duration; reported non-analysis batch overhead also contains process startup, persistence, comparison, and Handoff work",
+    "total_timing": "external CLI process wall time per supported two-scan batch",
+    "tracemalloc": "enabled for every historical and current analysis repetition"
+  },
+  "limits": {
+    "current_integrity": {
+      "git_command_timeout_seconds": 30,
+      "max_file_size_bytes": 268435456,
+      "max_files": 50000,
+      "max_path_entries": 50000,
+      "max_path_listing_bytes": 67108864,
+      "max_total_bytes": 2147483648
+    },
+    "normal_scan": {
+      "max_file_size_bytes": 1000000,
+      "max_files": 5000,
+      "max_total_bytes": 100000000
+    },
+    "truncated_scan": {
+      "max_file_size_bytes": 1000000,
+      "max_files": 3,
+      "max_total_bytes": 100000000
+    }
+  },
+  "regression_confidence": "No comparable Python 3.13 product regression was confirmed.",
+  "repetition_design": {
+    "accepted_analysis_repetitions_per_build_subject": 6,
+    "analysis_repetitions_per_batch": 2,
+    "contaminated_batches_excluded": 2,
+    "contaminated_batches_preserved": 2,
+    "contamination_reasons": [
+      "unrelated Rust compilation began during round-1 current public-medium",
+      "unrelated Rust compilation active at round-3 historical zscripts-public completion"
+    ],
+    "contract_mismatch": "Both harnesses require repeat 2..5, so alternation occurred between supported two-scan batches rather than between individual internal scans.",
+    "measured_batches_per_build_subject": 3,
+    "round_order": [
+      "historical-current",
+      "current-historical",
+      "historical-current"
+    ],
+    "warmup_batches_per_build_subject": 1,
+    "warmup_scans_per_batch": 2
+  },
+  "repository": "Nobodyworld/dev-logger-zscripts",
+  "sanitized": true,
+  "separate_defect_warranted": false,
+  "subjects": [
+    {
+      "builds": {
+        "current": {
+          "analysis_elapsed_ms": [
+            17172.598,
+            16732.919,
+            16501.782,
+            15281.287,
+            16324.372,
+            15740.0
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 17172.598,
+            "median_absolute_deviation_ms": 496.46,
+            "median_ms": 16413.077,
+            "minimum_ms": 15281.287
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 17172.598,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 21370432
+                },
+                {
+                  "analysis_elapsed_ms": 16732.919,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 23478138
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 5.88,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4952461312,
+              "integrity_comparison_and_handoff_overhead_ms": 9776.767,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {
+                  "default-environment-or-cache": 17,
+                  "gitignored": 1
+                },
+                "format_version": 1,
+                "included_byte_count": 3421151,
+                "included_file_count": 552,
+                "mode": "git"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 43682.284
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 16501.782,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 21370537
+                },
+                {
+                  "analysis_elapsed_ms": 15281.287,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 23478184
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 1.631,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4889915392,
+              "integrity_comparison_and_handoff_overhead_ms": 6175.485,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {
+                  "default-environment-or-cache": 17,
+                  "gitignored": 1
+                },
+                "format_version": 1,
+                "included_byte_count": 3421151,
+                "included_file_count": 552,
+                "mode": "git"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 37958.554
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 16324.372,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 21369397
+                },
+                {
+                  "analysis_elapsed_ms": 15740.0,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 23477164
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 3.054,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4866957312,
+              "integrity_comparison_and_handoff_overhead_ms": 6387.228,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {
+                  "default-environment-or-cache": 17,
+                  "gitignored": 1
+                },
+                "format_version": 1,
+                "included_byte_count": 3421151,
+                "included_file_count": 552,
+                "mode": "git"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 38451.6
+            }
+          ],
+          "canonical_evidence_digest": "sha256:75434b99-7ec26bf8-7be2b5f4-e3ed3a5e-ae2a6152-198241ad-6ae67188-6e2c247b",
+          "evidence_counts": {
+            "ambiguous_relationships": 0,
+            "cycles": 8,
+            "files_analyzed": 332,
+            "files_discovered": 552,
+            "files_excluded": 220,
+            "findings": 1078,
+            "lifecycle_reconciled": true,
+            "metrics": 24492,
+            "modules": 331,
+            "parse_gaps": 1,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": false,
+            "reconciliation_skip_reason": "parse-gaps",
+            "relationships": 10386,
+            "resolved_static_relationships": 4052,
+            "symbols": 2142,
+            "truncated": false,
+            "unresolved_dynamic_relationships": 6334
+          },
+          "harness_output_format_version": 2,
+          "sha": "git-sha1:6509939e-486bb638-0a890612-5381696f-f392179b",
+          "snapshot_id": "sha256:6b945013-4093606c-a23d75ff-113f2796-8e66c14b-045337da-11bbd6b9-cb0dbf9d",
+          "tracemalloc_peak_bytes": [
+            21370432,
+            23478138,
+            21370537,
+            23478184,
+            21369397,
+            23477164
+          ]
+        },
+        "historical": {
+          "analysis_elapsed_ms": [
+            15090.906,
+            14312.944,
+            14617.857,
+            14302.324,
+            15359.309,
+            15314.132
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 15359.309,
+            "median_absolute_deviation_ms": 482.339,
+            "median_ms": 14854.381,
+            "minimum_ms": 14302.324
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 15090.906,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 19882788
+                },
+                {
+                  "analysis_elapsed_ms": 14312.944,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 21643453
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 13.857,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4882059264,
+              "integrity_comparison_and_handoff_overhead_ms": 6544.763,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 35948.613
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 14617.857,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 19882330
+                },
+                {
+                  "analysis_elapsed_ms": 14302.324,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 21642220
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 2.506,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4898971648,
+              "integrity_comparison_and_handoff_overhead_ms": 4821.387,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 33741.568
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 15359.309,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 19882817
+                },
+                {
+                  "analysis_elapsed_ms": 15314.132,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 21643133
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 12.066,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4717731840,
+              "integrity_comparison_and_handoff_overhead_ms": 4921.259,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 35594.7
+            }
+          ],
+          "canonical_evidence_digest": "sha256:07cd0375-03105811-cdfc5258-be803e22-4ee921b6-1b519fd2-08527a7f-75096184",
+          "evidence_counts": {
+            "ambiguous_relationships": 0,
+            "cycles": 8,
+            "files_analyzed": 331,
+            "files_discovered": 541,
+            "files_excluded": 210,
+            "findings": 996,
+            "lifecycle_reconciled": true,
+            "metrics": 22789,
+            "modules": 330,
+            "parse_gaps": 1,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": false,
+            "reconciliation_skip_reason": "parse-gaps",
+            "relationships": 9710,
+            "resolved_static_relationships": 3805,
+            "symbols": 1973,
+            "truncated": false,
+            "unresolved_dynamic_relationships": 5905
+          },
+          "harness_output_format_version": 1,
+          "sha": "git-sha1:678356bf-4e237308-86abaffd-84186d0c-5d3627f7",
+          "snapshot_id": "sha256:4572d6e8-fd073d60-a3a7d534-283364eb-ca206e51-39107615-958282fe-bb42f502",
+          "tracemalloc_peak_bytes": [
+            19882788,
+            21643453,
+            19882330,
+            21642220,
+            19882817,
+            21643133
+          ]
+        }
+      },
+      "comparability_reason": "exact historical and current repository trees differ; repository growth is reported without a percentage regression",
+      "comparable": false,
+      "comparison": {
+        "absolute_median_difference_ms": 1558.696,
+        "confirmed_product_regression": false,
+        "current_median_ms": 16413.077,
+        "diagnosis": "repository-growth-related",
+        "historical_median_ms": 14854.381,
+        "percentage_median_difference": null
+      },
+      "fixture": {
+        "byte_count": null,
+        "byte_identical": false,
+        "file_count": null,
+        "tree_digest": null
+      },
+      "label": "zscripts-public"
+    },
+    {
+      "builds": {
+        "current": {
+          "analysis_elapsed_ms": [
+            66.175,
+            55.688,
+            69.439,
+            63.235,
+            82.577,
+            84.63
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 84.63,
+            "median_absolute_deviation_ms": 8.345,
+            "median_ms": 67.807,
+            "minimum_ms": 55.688
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 66.175,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 133583
+                },
+                {
+                  "analysis_elapsed_ms": 55.688,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 115377
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 7.342,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 3095957504,
+              "integrity_comparison_and_handoff_overhead_ms": 461.213,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 980,
+                "included_file_count": 2,
+                "mode": "filesystem"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 583.076
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 69.439,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 133276
+                },
+                {
+                  "analysis_elapsed_ms": 63.235,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 116074
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 1.772,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4920864768,
+              "integrity_comparison_and_handoff_overhead_ms": 444.922,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 980,
+                "included_file_count": 2,
+                "mode": "filesystem"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 577.596
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 82.577,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 133704
+                },
+                {
+                  "analysis_elapsed_ms": 84.63,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 116252
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 13.156,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4329189376,
+              "integrity_comparison_and_handoff_overhead_ms": 594.138,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 980,
+                "included_file_count": 2,
+                "mode": "filesystem"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 761.345
+            }
+          ],
+          "canonical_evidence_digest": "sha256:cc2b4792-2e4ac66f-d38f3fe2-596381a2-71a2195f-075d836b-9f5c0987-e19082c5",
+          "evidence_counts": {
+            "ambiguous_relationships": 0,
+            "cycles": 0,
+            "files_analyzed": 2,
+            "files_discovered": 2,
+            "files_excluded": 0,
+            "findings": 3,
+            "lifecycle_reconciled": true,
+            "metrics": 68,
+            "modules": 2,
+            "parse_gaps": 0,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": true,
+            "reconciliation_skip_reason": null,
+            "relationships": 25,
+            "resolved_static_relationships": 9,
+            "symbols": 5,
+            "truncated": false,
+            "unresolved_dynamic_relationships": 16
+          },
+          "harness_output_format_version": 2,
+          "sha": "git-sha1:6509939e-486bb638-0a890612-5381696f-f392179b",
+          "snapshot_id": "sha256:d18e7852-79f00c61-144015d1-093588b4-962a3aaf-fdc7db5d-a3e13c85-1ad16c3c",
+          "tracemalloc_peak_bytes": [
+            133583,
+            115377,
+            133276,
+            116074,
+            133704,
+            116252
+          ]
+        },
+        "historical": {
+          "analysis_elapsed_ms": [
+            75.302,
+            63.738,
+            66.715,
+            59.365,
+            66.836,
+            57.338
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 75.302,
+            "median_absolute_deviation_ms": 3.735,
+            "median_ms": 65.227,
+            "minimum_ms": 57.338
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 75.302,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 130692
+                },
+                {
+                  "analysis_elapsed_ms": 63.738,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 116595
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 3.919,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 3104854016,
+              "integrity_comparison_and_handoff_overhead_ms": 478.311,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 617.351
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 66.715,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 132202
+                },
+                {
+                  "analysis_elapsed_ms": 59.365,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 117490
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 4.077,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4920446976,
+              "integrity_comparison_and_handoff_overhead_ms": 416.2,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 542.28
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 66.836,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 132595
+                },
+                {
+                  "analysis_elapsed_ms": 57.338,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 117849
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 10.838,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4820525056,
+              "integrity_comparison_and_handoff_overhead_ms": 410.448,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 534.622
+            }
+          ],
+          "canonical_evidence_digest": "sha256:ca6aeb70-4a4f69fe-3376982d-18a8a606-e4b697d3-dffc0bd9-8b66a5d3-53194e82",
+          "evidence_counts": {
+            "ambiguous_relationships": 0,
+            "cycles": 0,
+            "files_analyzed": 2,
+            "files_discovered": 2,
+            "files_excluded": 0,
+            "findings": 3,
+            "lifecycle_reconciled": true,
+            "metrics": 68,
+            "modules": 2,
+            "parse_gaps": 0,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": true,
+            "reconciliation_skip_reason": null,
+            "relationships": 25,
+            "resolved_static_relationships": 9,
+            "symbols": 5,
+            "truncated": false,
+            "unresolved_dynamic_relationships": 16
+          },
+          "harness_output_format_version": 1,
+          "sha": "git-sha1:678356bf-4e237308-86abaffd-84186d0c-5d3627f7",
+          "snapshot_id": "sha256:b9d203aa-40dd3505-e604d9e1-e1c8c720-9ae53cf5-9c0e1adf-ccb8cbdf-2a98bdf0",
+          "tracemalloc_peak_bytes": [
+            130692,
+            116595,
+            132202,
+            117490,
+            132595,
+            117849
+          ]
+        }
+      },
+      "comparability_reason": "exact paired fixture bytes",
+      "comparable": true,
+      "comparison": {
+        "absolute_median_difference_ms": 2.58,
+        "confirmed_product_regression": false,
+        "current_median_ms": 67.807,
+        "diagnosis": "inconclusive",
+        "historical_median_ms": 65.227,
+        "percentage_median_difference": 3.955
+      },
+      "fixture": {
+        "byte_count": 980,
+        "byte_identical": true,
+        "file_count": 2,
+        "tree_digest": "sha256:77949fc0-3a8cf60a-19d620c3-dcab5192-cc66435f-fcc14c62-b27e1374-0fbd8fd2"
+      },
+      "label": "existing-ordinary"
+    },
+    {
+      "builds": {
+        "current": {
+          "analysis_elapsed_ms": [
+            121.503,
+            100.718,
+            112.909,
+            118.754,
+            114.965,
+            100.085
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 121.503,
+            "median_absolute_deviation_ms": 6.191,
+            "median_ms": 113.937,
+            "minimum_ms": 100.085
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 121.503,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 180978
+                },
+                {
+                  "analysis_elapsed_ms": 100.718,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 157846
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 10.645,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 3037155328,
+              "integrity_comparison_and_handoff_overhead_ms": 501.816,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 1508,
+                "included_file_count": 8,
+                "mode": "filesystem"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 724.037
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 112.909,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 180470
+                },
+                {
+                  "analysis_elapsed_ms": 118.754,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 155876
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 6.849,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4908503040,
+              "integrity_comparison_and_handoff_overhead_ms": 495.094,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 1508,
+                "included_file_count": 8,
+                "mode": "filesystem"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 726.757
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 114.965,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 179534
+                },
+                {
+                  "analysis_elapsed_ms": 100.085,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 156088
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 10.963,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4518551552,
+              "integrity_comparison_and_handoff_overhead_ms": 487.765,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 1508,
+                "included_file_count": 8,
+                "mode": "filesystem"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 702.815
+            }
+          ],
+          "canonical_evidence_digest": "sha256:0d1f97fc-c7b5b0ec-7d51ee8a-e7035646-49e5ec73-593fdc2c-6513afe9-b2933a81",
+          "evidence_counts": {
+            "ambiguous_relationships": 1,
+            "cycles": 1,
+            "files_analyzed": 8,
+            "files_discovered": 8,
+            "files_excluded": 0,
+            "findings": 19,
+            "lifecycle_reconciled": true,
+            "metrics": 207,
+            "modules": 8,
+            "parse_gaps": 0,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": true,
+            "reconciliation_skip_reason": null,
+            "relationships": 42,
+            "resolved_static_relationships": 39,
+            "symbols": 13,
+            "truncated": false,
+            "unresolved_dynamic_relationships": 2
+          },
+          "harness_output_format_version": 2,
+          "sha": "git-sha1:6509939e-486bb638-0a890612-5381696f-f392179b",
+          "snapshot_id": "sha256:9f246a39-d13c5dd7-b09f83ea-d93bcc2c-008e7b73-1ece6a29-bf60786e-4f119b2d",
+          "tracemalloc_peak_bytes": [
+            180978,
+            157846,
+            180470,
+            155876,
+            179534,
+            156088
+          ]
+        },
+        "historical": {
+          "analysis_elapsed_ms": [
+            116.118,
+            102.091,
+            114.628,
+            102.009,
+            114.537,
+            101.042
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 116.118,
+            "median_absolute_deviation_ms": 6.309,
+            "median_ms": 108.314,
+            "minimum_ms": 101.042
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 116.118,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 192185
+                },
+                {
+                  "analysis_elapsed_ms": 102.091,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 159903
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 6.299,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 3087486976,
+              "integrity_comparison_and_handoff_overhead_ms": 472.168,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 690.377
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 114.628,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 192450
+                },
+                {
+                  "analysis_elapsed_ms": 102.009,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 160504
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 2.666,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4886089728,
+              "integrity_comparison_and_handoff_overhead_ms": 451.776,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 668.413
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 114.537,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 191714
+                },
+                {
+                  "analysis_elapsed_ms": 101.042,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 159708
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 14.211,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4523843584,
+              "integrity_comparison_and_handoff_overhead_ms": 453.192,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 668.771
+            }
+          ],
+          "canonical_evidence_digest": "sha256:5962bb4a-8b57c7fd-4154bd30-1353c59b-69390a6d-05e7ca6e-c26bb676-87b4848e",
+          "evidence_counts": {
+            "ambiguous_relationships": 1,
+            "cycles": 1,
+            "files_analyzed": 8,
+            "files_discovered": 8,
+            "files_excluded": 0,
+            "findings": 19,
+            "lifecycle_reconciled": true,
+            "metrics": 207,
+            "modules": 8,
+            "parse_gaps": 0,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": true,
+            "reconciliation_skip_reason": null,
+            "relationships": 42,
+            "resolved_static_relationships": 39,
+            "symbols": 13,
+            "truncated": false,
+            "unresolved_dynamic_relationships": 2
+          },
+          "harness_output_format_version": 1,
+          "sha": "git-sha1:678356bf-4e237308-86abaffd-84186d0c-5d3627f7",
+          "snapshot_id": "sha256:75038643-2a2a6abe-0903b22f-f7996e69-b197bc16-5676ee3b-77321651-1e0ccdf3",
+          "tracemalloc_peak_bytes": [
+            192185,
+            159903,
+            192450,
+            160504,
+            191714,
+            159708
+          ]
+        }
+      },
+      "comparability_reason": "exact paired fixture bytes",
+      "comparable": true,
+      "comparison": {
+        "absolute_median_difference_ms": 5.623,
+        "confirmed_product_regression": false,
+        "current_median_ms": 113.937,
+        "diagnosis": "inconclusive",
+        "historical_median_ms": 108.314,
+        "percentage_median_difference": 5.191
+      },
+      "fixture": {
+        "byte_count": 1508,
+        "byte_identical": true,
+        "file_count": 8,
+        "tree_digest": "sha256:75aa6e30-7355c0e2-83ce908b-1a630116-6b36985e-e7fd6a83-489d428c-b1d83011"
+      },
+      "label": "existing-relationships"
+    },
+    {
+      "builds": {
+        "current": {
+          "analysis_elapsed_ms": [
+            121.178,
+            105.423,
+            118.246,
+            106.489,
+            140.71,
+            146.508
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 146.508,
+            "median_absolute_deviation_ms": 13.756,
+            "median_ms": 119.712,
+            "minimum_ms": 105.423
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 121.178,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 204887
+                },
+                {
+                  "analysis_elapsed_ms": 105.423,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 187255
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 7.557,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 3789017088,
+              "integrity_comparison_and_handoff_overhead_ms": 486.793,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 1839,
+                "included_file_count": 9,
+                "mode": "filesystem"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 713.394
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 118.246,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 204788
+                },
+                {
+                  "analysis_elapsed_ms": 106.489,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 186515
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 2.271,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4883587072,
+              "integrity_comparison_and_handoff_overhead_ms": 512.146,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 1839,
+                "included_file_count": 9,
+                "mode": "filesystem"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 736.881
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 140.71,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 205540
+                },
+                {
+                  "analysis_elapsed_ms": 146.508,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 186145
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 23.28,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 3878776832,
+              "integrity_comparison_and_handoff_overhead_ms": 642.256,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 1839,
+                "included_file_count": 9,
+                "mode": "filesystem"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 929.474
+            }
+          ],
+          "canonical_evidence_digest": "sha256:69792e54-4adcaf98-7dfce7c5-fc163f5e-a09c84af-0e9732c1-f423132b-eec162b3",
+          "evidence_counts": {
+            "ambiguous_relationships": 0,
+            "cycles": 1,
+            "files_analyzed": 9,
+            "files_discovered": 9,
+            "files_excluded": 0,
+            "findings": 21,
+            "lifecycle_reconciled": true,
+            "metrics": 247,
+            "modules": 9,
+            "parse_gaps": 0,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": true,
+            "reconciliation_skip_reason": null,
+            "relationships": 36,
+            "resolved_static_relationships": 34,
+            "symbols": 16,
+            "truncated": false,
+            "unresolved_dynamic_relationships": 2
+          },
+          "harness_output_format_version": 2,
+          "sha": "git-sha1:6509939e-486bb638-0a890612-5381696f-f392179b",
+          "snapshot_id": "sha256:5bd2779e-ba6b0432-e9f7432b-521995ca-655f093d-297a0c05-24ae30a6-bacee8e3",
+          "tracemalloc_peak_bytes": [
+            204887,
+            187255,
+            204788,
+            186515,
+            205540,
+            186145
+          ]
+        },
+        "historical": {
+          "analysis_elapsed_ms": [
+            128.03,
+            112.114,
+            150.382,
+            115.169,
+            137.772,
+            109.896
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 150.382,
+            "median_absolute_deviation_ms": 10.595,
+            "median_ms": 121.6,
+            "minimum_ms": 109.896
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 128.03,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 219943
+                },
+                {
+                  "analysis_elapsed_ms": 112.114,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 186687
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 12.364,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 3791278080,
+              "integrity_comparison_and_handoff_overhead_ms": 463.204,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 703.348
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 150.382,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 220945
+                },
+                {
+                  "analysis_elapsed_ms": 115.169,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 185766
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 13.769,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4687732736,
+              "integrity_comparison_and_handoff_overhead_ms": 496.591,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 762.142
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 137.772,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 215570
+                },
+                {
+                  "analysis_elapsed_ms": 109.896,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 189552
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 2.01,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4675969024,
+              "integrity_comparison_and_handoff_overhead_ms": 473.669,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 721.337
+            }
+          ],
+          "canonical_evidence_digest": "sha256:3df46c70-22235b49-2a54317c-109af13c-9a152caa-3ab66e16-5cd6b614-8a35ab3d",
+          "evidence_counts": {
+            "ambiguous_relationships": 0,
+            "cycles": 1,
+            "files_analyzed": 9,
+            "files_discovered": 9,
+            "files_excluded": 0,
+            "findings": 21,
+            "lifecycle_reconciled": true,
+            "metrics": 247,
+            "modules": 9,
+            "parse_gaps": 0,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": true,
+            "reconciliation_skip_reason": null,
+            "relationships": 36,
+            "resolved_static_relationships": 34,
+            "symbols": 16,
+            "truncated": false,
+            "unresolved_dynamic_relationships": 2
+          },
+          "harness_output_format_version": 1,
+          "sha": "git-sha1:678356bf-4e237308-86abaffd-84186d0c-5d3627f7",
+          "snapshot_id": "sha256:d4aa7f7c-971d79ff-1a9461d1-848ced79-4584acc8-ed6fd004-54ceb9c9-55500326",
+          "tracemalloc_peak_bytes": [
+            219943,
+            186687,
+            220945,
+            185766,
+            215570,
+            189552
+          ]
+        }
+      },
+      "comparability_reason": "exact paired fixture bytes",
+      "comparable": true,
+      "comparison": {
+        "absolute_median_difference_ms": -1.888,
+        "confirmed_product_regression": false,
+        "current_median_ms": 119.712,
+        "diagnosis": "inconclusive",
+        "historical_median_ms": 121.6,
+        "percentage_median_difference": -1.553
+      },
+      "fixture": {
+        "byte_count": 1839,
+        "byte_identical": true,
+        "file_count": 9,
+        "tree_digest": "sha256:c2f0f968-e53ef4ff-7343cea8-fc7a1583-db65422f-f66bab72-2628d50f-32faf699"
+      },
+      "label": "existing-findings"
+    },
+    {
+      "builds": {
+        "current": {
+          "analysis_elapsed_ms": [
+            823.259,
+            750.653,
+            852.861,
+            1313.038,
+            794.097,
+            635.217
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 1313.038,
+            "median_absolute_deviation_ms": 51.104,
+            "median_ms": 808.678,
+            "minimum_ms": 635.217
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 823.259,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 2823335
+                },
+                {
+                  "analysis_elapsed_ms": 750.653,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 2660237
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 15.461,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4655960064,
+              "integrity_comparison_and_handoff_overhead_ms": 1164.349,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 21750,
+                "included_file_count": 31,
+                "mode": "filesystem"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 2738.261
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 852.861,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 2816420
+                },
+                {
+                  "analysis_elapsed_ms": 1313.038,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 2660341
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 11.04,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4506009600,
+              "integrity_comparison_and_handoff_overhead_ms": 1056.59,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 21750,
+                "included_file_count": 31,
+                "mode": "filesystem"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 3222.489
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 794.097,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 2826788
+                },
+                {
+                  "analysis_elapsed_ms": 635.217,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 2661756
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 10.786,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4723613696,
+              "integrity_comparison_and_handoff_overhead_ms": 999.879,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 21750,
+                "included_file_count": 31,
+                "mode": "filesystem"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 2429.193
+            }
+          ],
+          "canonical_evidence_digest": "sha256:761b8a30-b035a74f-a27132c9-98f06a8e-bebd37f2-b961aaf5-93982e32-042a73cc",
+          "evidence_counts": {
+            "ambiguous_relationships": 0,
+            "cycles": 1,
+            "files_analyzed": 31,
+            "files_discovered": 31,
+            "files_excluded": 0,
+            "findings": 373,
+            "lifecycle_reconciled": true,
+            "metrics": 3879,
+            "modules": 31,
+            "parse_gaps": 0,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": true,
+            "reconciliation_skip_reason": null,
+            "relationships": 781,
+            "resolved_static_relationships": 781,
+            "symbols": 360,
+            "truncated": false,
+            "unresolved_dynamic_relationships": 0
+          },
+          "harness_output_format_version": 2,
+          "sha": "git-sha1:6509939e-486bb638-0a890612-5381696f-f392179b",
+          "snapshot_id": "sha256:bcc7457f-7b8b90e7-135c1dbe-a654ccf4-350b7968-49f92b12-93e420c8-628ddd29",
+          "tracemalloc_peak_bytes": [
+            2823335,
+            2660237,
+            2816420,
+            2660341,
+            2826788,
+            2661756
+          ]
+        },
+        "historical": {
+          "analysis_elapsed_ms": [
+            787.154,
+            659.55,
+            1014.114,
+            695.186,
+            854.243,
+            669.821
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 1014.114,
+            "median_absolute_deviation_ms": 76.485,
+            "median_ms": 741.17,
+            "minimum_ms": 659.55
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 787.154,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 3825228
+                },
+                {
+                  "analysis_elapsed_ms": 659.55,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 2659047
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 3.45,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 3881734144,
+              "integrity_comparison_and_handoff_overhead_ms": 879.75,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 2326.454
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 1014.114,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 3823093
+                },
+                {
+                  "analysis_elapsed_ms": 695.186,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 2659129
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 28.592,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 3253972992,
+              "integrity_comparison_and_handoff_overhead_ms": 1557.993,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 3267.293
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 854.243,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 3823543
+                },
+                {
+                  "analysis_elapsed_ms": 669.821,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 2660168
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 14.835,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4417114112,
+              "integrity_comparison_and_handoff_overhead_ms": 1129.156,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 2653.22
+            }
+          ],
+          "canonical_evidence_digest": "sha256:cffb2e2c-7109533b-22670b04-ebde12eb-95bfb27e-e640c2de-b1c19b5b-d4e6e962",
+          "evidence_counts": {
+            "ambiguous_relationships": 0,
+            "cycles": 1,
+            "files_analyzed": 31,
+            "files_discovered": 31,
+            "files_excluded": 0,
+            "findings": 373,
+            "lifecycle_reconciled": true,
+            "metrics": 3879,
+            "modules": 31,
+            "parse_gaps": 0,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": true,
+            "reconciliation_skip_reason": null,
+            "relationships": 781,
+            "resolved_static_relationships": 781,
+            "symbols": 360,
+            "truncated": false,
+            "unresolved_dynamic_relationships": 0
+          },
+          "harness_output_format_version": 1,
+          "sha": "git-sha1:678356bf-4e237308-86abaffd-84186d0c-5d3627f7",
+          "snapshot_id": "sha256:69915e32-34ff55ad-10c39e85-88d25b30-3e6ac57d-769d9bb1-99c7be3a-62e787f3",
+          "tracemalloc_peak_bytes": [
+            3825228,
+            2659047,
+            3823093,
+            2659129,
+            3823543,
+            2660168
+          ]
+        }
+      },
+      "comparability_reason": "exact paired fixture bytes",
+      "comparable": true,
+      "comparison": {
+        "absolute_median_difference_ms": 67.508,
+        "confirmed_product_regression": false,
+        "current_median_ms": 808.678,
+        "diagnosis": "inconclusive",
+        "historical_median_ms": 741.17,
+        "percentage_median_difference": 9.108
+      },
+      "fixture": {
+        "byte_count": 21750,
+        "byte_identical": true,
+        "file_count": 31,
+        "tree_digest": "sha256:2cac7ecd-ab9935f3-0208a2ef-aa7097cc-38bf79fd-6b609c06-58cf5373-b5377431"
+      },
+      "label": "public-medium"
+    },
+    {
+      "builds": {
+        "current": {
+          "analysis_elapsed_ms": [
+            3476.954,
+            2998.459,
+            3723.511,
+            3086.295,
+            3622.252,
+            3396.694
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 3723.511,
+            "median_absolute_deviation_ms": 236.057,
+            "median_ms": 3436.824,
+            "minimum_ms": 2998.459
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 3476.954,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 10661584
+                },
+                {
+                  "analysis_elapsed_ms": 2998.459,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 10278431
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 2.673,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4930314240,
+              "integrity_comparison_and_handoff_overhead_ms": 3377.137,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {
+                  "gitignored": 1
+                },
+                "format_version": 1,
+                "included_byte_count": 77801,
+                "included_file_count": 122,
+                "mode": "filesystem"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 9852.55
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 3723.511,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 10661189
+                },
+                {
+                  "analysis_elapsed_ms": 3086.295,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 10278005
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 4.876,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4155232256,
+              "integrity_comparison_and_handoff_overhead_ms": 2849.291,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {
+                  "gitignored": 1
+                },
+                "format_version": 1,
+                "included_byte_count": 77801,
+                "included_file_count": 122,
+                "mode": "filesystem"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 9659.097
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 3622.252,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 10661122
+                },
+                {
+                  "analysis_elapsed_ms": 3396.694,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 10277548
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 10.209,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4708855808,
+              "integrity_comparison_and_handoff_overhead_ms": 3287.235,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {
+                  "gitignored": 1
+                },
+                "format_version": 1,
+                "included_byte_count": 77801,
+                "included_file_count": 122,
+                "mode": "filesystem"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 10306.181
+            }
+          ],
+          "canonical_evidence_digest": "sha256:14435efe-351227df-f6e4e002-7b1fc571-a059ce69-68dbdda0-75961628-3222e438",
+          "evidence_counts": {
+            "ambiguous_relationships": 0,
+            "cycles": 1,
+            "files_analyzed": 121,
+            "files_discovered": 322,
+            "files_excluded": 201,
+            "findings": 2411,
+            "lifecycle_reconciled": true,
+            "metrics": 13089,
+            "modules": 121,
+            "parse_gaps": 0,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": true,
+            "reconciliation_skip_reason": null,
+            "relationships": 3841,
+            "resolved_static_relationships": 1441,
+            "symbols": 1200,
+            "truncated": false,
+            "unresolved_dynamic_relationships": 2400
+          },
+          "harness_output_format_version": 2,
+          "sha": "git-sha1:6509939e-486bb638-0a890612-5381696f-f392179b",
+          "snapshot_id": "sha256:5762b79f-71018bc9-80e5a9b5-eb909c50-5057b7a4-73548888-631ca846-87d1f760",
+          "tracemalloc_peak_bytes": [
+            10661584,
+            10278431,
+            10661189,
+            10278005,
+            10661122,
+            10277548
+          ]
+        },
+        "historical": {
+          "analysis_elapsed_ms": [
+            3740.856,
+            3216.012,
+            3581.503,
+            3006.907,
+            3510.445,
+            3137.12
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 3740.856,
+            "median_absolute_deviation_ms": 222.192,
+            "median_ms": 3363.229,
+            "minimum_ms": 3006.907
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 3740.856,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 11701711
+                },
+                {
+                  "analysis_elapsed_ms": 3216.012,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 10279643
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 6.983,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4933619712,
+              "integrity_comparison_and_handoff_overhead_ms": 3870.237,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 10827.105
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 3581.503,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 11701736
+                },
+                {
+                  "analysis_elapsed_ms": 3006.907,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 10279137
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 3.836,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4873879552,
+              "integrity_comparison_and_handoff_overhead_ms": 2631.233,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 9219.643
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 3510.445,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 11701612
+                },
+                {
+                  "analysis_elapsed_ms": 3137.12,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 10279651
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 2.617,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4731236352,
+              "integrity_comparison_and_handoff_overhead_ms": 2860.09,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 9507.655
+            }
+          ],
+          "canonical_evidence_digest": "sha256:736cae53-0cfb783a-53a095f5-b2da0148-c67e3029-56aca82d-c78e7d21-14f849c9",
+          "evidence_counts": {
+            "ambiguous_relationships": 0,
+            "cycles": 1,
+            "files_analyzed": 121,
+            "files_discovered": 322,
+            "files_excluded": 201,
+            "findings": 2411,
+            "lifecycle_reconciled": true,
+            "metrics": 13089,
+            "modules": 121,
+            "parse_gaps": 0,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": true,
+            "reconciliation_skip_reason": null,
+            "relationships": 3841,
+            "resolved_static_relationships": 1441,
+            "symbols": 1200,
+            "truncated": false,
+            "unresolved_dynamic_relationships": 2400
+          },
+          "harness_output_format_version": 1,
+          "sha": "git-sha1:678356bf-4e237308-86abaffd-84186d0c-5d3627f7",
+          "snapshot_id": "sha256:ca71f699-d486e877-c722a495-2e1b1b79-c242606f-9a570fe6-93c470f8-dc6109b5",
+          "tracemalloc_peak_bytes": [
+            11701711,
+            10279643,
+            11701736,
+            10279137,
+            11701612,
+            10279651
+          ]
+        }
+      },
+      "comparability_reason": "exact paired fixture bytes",
+      "comparable": true,
+      "comparison": {
+        "absolute_median_difference_ms": 73.595,
+        "confirmed_product_regression": false,
+        "current_median_ms": 3436.824,
+        "diagnosis": "inconclusive",
+        "historical_median_ms": 3363.229,
+        "percentage_median_difference": 2.188
+      },
+      "fixture": {
+        "byte_count": 87801,
+        "byte_identical": true,
+        "file_count": 322,
+        "tree_digest": "sha256:95d3089b-8c8f69a2-81bffd51-ce27653e-5cde184b-6d4288fc-5119bcc4-d75f06a2"
+      },
+      "label": "public-large"
+    },
+    {
+      "builds": {
+        "current": {
+          "analysis_elapsed_ms": [
+            618.333,
+            520.415,
+            598.999,
+            519.052,
+            632.999,
+            575.472
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 632.999,
+            "median_absolute_deviation_ms": 38.43,
+            "median_ms": 587.236,
+            "minimum_ms": 519.052
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 618.333,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 1881980
+                },
+                {
+                  "analysis_elapsed_ms": 520.415,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 1737231
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 12.725,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4819955712,
+              "integrity_comparison_and_handoff_overhead_ms": 1102.685,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 16539,
+                "included_file_count": 39,
+                "mode": "filesystem"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 2241.433
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 598.999,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 1882086
+                },
+                {
+                  "analysis_elapsed_ms": 519.052,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 1739202
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 6.724,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 3842424832,
+              "integrity_comparison_and_handoff_overhead_ms": 895.017,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 16539,
+                "included_file_count": 39,
+                "mode": "filesystem"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 2013.068
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 632.999,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 1887493
+                },
+                {
+                  "analysis_elapsed_ms": 575.472,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 1735362
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 16.768,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4678578176,
+              "integrity_comparison_and_handoff_overhead_ms": 937.524,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 16539,
+                "included_file_count": 39,
+                "mode": "filesystem"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 2145.995
+            }
+          ],
+          "canonical_evidence_digest": "sha256:28092b88-640e3162-2aa5b570-83a28f36-36d779bf-8666ba95-a5875fbe-bf492069",
+          "evidence_counts": {
+            "ambiguous_relationships": 0,
+            "cycles": 12,
+            "files_analyzed": 39,
+            "files_discovered": 39,
+            "files_excluded": 0,
+            "findings": 234,
+            "lifecycle_reconciled": true,
+            "metrics": 2511,
+            "modules": 39,
+            "parse_gaps": 0,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": true,
+            "reconciliation_skip_reason": null,
+            "relationships": 507,
+            "resolved_static_relationships": 507,
+            "symbols": 216,
+            "truncated": false,
+            "unresolved_dynamic_relationships": 0
+          },
+          "harness_output_format_version": 2,
+          "sha": "git-sha1:6509939e-486bb638-0a890612-5381696f-f392179b",
+          "snapshot_id": "sha256:a302e112-d516d4ff-144b7b57-c66e0636-c53e712e-4146f2ca-b7291ad3-42604a1e",
+          "tracemalloc_peak_bytes": [
+            1881980,
+            1737231,
+            1882086,
+            1739202,
+            1887493,
+            1735362
+          ]
+        },
+        "historical": {
+          "analysis_elapsed_ms": [
+            635.796,
+            536.665,
+            623.983,
+            522.761,
+            621.525,
+            513.263
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 635.796,
+            "median_absolute_deviation_ms": 50.611,
+            "median_ms": 579.095,
+            "minimum_ms": 513.263
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 635.796,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 2892961
+                },
+                {
+                  "analysis_elapsed_ms": 536.665,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 1737706
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 15.903,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4685893632,
+              "integrity_comparison_and_handoff_overhead_ms": 923.306,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 2095.767
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 623.983,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 2887273
+                },
+                {
+                  "analysis_elapsed_ms": 522.761,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 1732300
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 3.975,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 3926040576,
+              "integrity_comparison_and_handoff_overhead_ms": 714.29,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 1861.034
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 621.525,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 2886968
+                },
+                {
+                  "analysis_elapsed_ms": 513.263,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 1733246
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 1.652,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4742246400,
+              "integrity_comparison_and_handoff_overhead_ms": 710.036,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 1844.824
+            }
+          ],
+          "canonical_evidence_digest": "sha256:3986e679-d89fe41c-106a9b71-0429beef-d41e127e-b9db75a2-b2c51643-eaae4748",
+          "evidence_counts": {
+            "ambiguous_relationships": 0,
+            "cycles": 12,
+            "files_analyzed": 39,
+            "files_discovered": 39,
+            "files_excluded": 0,
+            "findings": 234,
+            "lifecycle_reconciled": true,
+            "metrics": 2511,
+            "modules": 39,
+            "parse_gaps": 0,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": true,
+            "reconciliation_skip_reason": null,
+            "relationships": 507,
+            "resolved_static_relationships": 507,
+            "symbols": 216,
+            "truncated": false,
+            "unresolved_dynamic_relationships": 0
+          },
+          "harness_output_format_version": 1,
+          "sha": "git-sha1:678356bf-4e237308-86abaffd-84186d0c-5d3627f7",
+          "snapshot_id": "sha256:aeb54944-98ec8fc7-cb73efed-949bb7d0-de2e5292-dc1a169f-669cb36a-0ba8f82d",
+          "tracemalloc_peak_bytes": [
+            2892961,
+            1737706,
+            2887273,
+            1732300,
+            2886968,
+            1733246
+          ]
+        }
+      },
+      "comparability_reason": "exact paired fixture bytes",
+      "comparable": true,
+      "comparison": {
+        "absolute_median_difference_ms": 8.141,
+        "confirmed_product_regression": false,
+        "current_median_ms": 587.236,
+        "diagnosis": "inconclusive",
+        "historical_median_ms": 579.095,
+        "percentage_median_difference": 1.406
+      },
+      "fixture": {
+        "byte_count": 16539,
+        "byte_identical": true,
+        "file_count": 39,
+        "tree_digest": "sha256:de221bdd-774b4a95-45d6650f-ac647c6a-68749fae-04a4c7dc-42f3d0f0-8454b2a5"
+      },
+      "label": "public-multipackage"
+    },
+    {
+      "builds": {
+        "current": {
+          "analysis_elapsed_ms": [
+            135.095,
+            115.092,
+            132.116,
+            129.952,
+            133.194,
+            141.447
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 141.447,
+            "median_absolute_deviation_ms": 2.572,
+            "median_ms": 132.655,
+            "minimum_ms": 115.092
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 135.095,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 165287
+                },
+                {
+                  "analysis_elapsed_ms": 115.092,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 148129
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 8.579,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4947996672,
+              "integrity_comparison_and_handoff_overhead_ms": 532.594,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 400,
+                "included_file_count": 13,
+                "mode": "filesystem"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 782.781
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 132.116,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 162701
+                },
+                {
+                  "analysis_elapsed_ms": 129.952,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 148382
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 4.537,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 3891724288,
+              "integrity_comparison_and_handoff_overhead_ms": 480.433,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 400,
+                "included_file_count": 13,
+                "mode": "filesystem"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 742.501
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 133.194,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 162882
+                },
+                {
+                  "analysis_elapsed_ms": 141.447,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 148220
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 1.427,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4740861952,
+              "integrity_comparison_and_handoff_overhead_ms": 492.493,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 400,
+                "included_file_count": 13,
+                "mode": "filesystem"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 767.134
+            }
+          ],
+          "canonical_evidence_digest": "sha256:80da803a-152ff0a2-7983aaf3-42ccfc1f-20ba3506-690ddc1e-abd35746-1763a1d1",
+          "evidence_counts": {
+            "ambiguous_relationships": 0,
+            "cycles": 0,
+            "files_analyzed": 13,
+            "files_discovered": 13,
+            "files_excluded": 0,
+            "findings": 24,
+            "lifecycle_reconciled": true,
+            "metrics": 228,
+            "modules": 12,
+            "parse_gaps": 1,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": false,
+            "reconciliation_skip_reason": "parse-gaps",
+            "relationships": 12,
+            "resolved_static_relationships": 12,
+            "symbols": 12,
+            "truncated": false,
+            "unresolved_dynamic_relationships": 0
+          },
+          "harness_output_format_version": 2,
+          "sha": "git-sha1:6509939e-486bb638-0a890612-5381696f-f392179b",
+          "snapshot_id": "sha256:4d437919-e9bd2f1a-013c6b79-ab977cfa-ac07c2d2-f92bf757-9a7a60b5-90ce8ef0",
+          "tracemalloc_peak_bytes": [
+            165287,
+            148129,
+            162701,
+            148382,
+            162882,
+            148220
+          ]
+        },
+        "historical": {
+          "analysis_elapsed_ms": [
+            131.954,
+            112.066,
+            135.903,
+            116.11,
+            136.282,
+            117.086
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 136.282,
+            "median_absolute_deviation_ms": 9.896,
+            "median_ms": 124.52,
+            "minimum_ms": 112.066
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 131.954,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 175905
+                },
+                {
+                  "analysis_elapsed_ms": 112.066,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 148813
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 4.984,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4838895616,
+              "integrity_comparison_and_handoff_overhead_ms": 501.633,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 745.653
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 135.903,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 176273
+                },
+                {
+                  "analysis_elapsed_ms": 116.11,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 148959
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 8.528,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4173180928,
+              "integrity_comparison_and_handoff_overhead_ms": 447.119,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 699.132
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 136.282,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 174371
+                },
+                {
+                  "analysis_elapsed_ms": 117.086,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 149022
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 8.245,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4712460288,
+              "integrity_comparison_and_handoff_overhead_ms": 456.264,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 709.632
+            }
+          ],
+          "canonical_evidence_digest": "sha256:f090edad-ea9c769c-41599691-8937d6de-65f8ab02-3b6dbb89-86024605-15ba570e",
+          "evidence_counts": {
+            "ambiguous_relationships": 0,
+            "cycles": 0,
+            "files_analyzed": 13,
+            "files_discovered": 13,
+            "files_excluded": 0,
+            "findings": 24,
+            "lifecycle_reconciled": true,
+            "metrics": 228,
+            "modules": 12,
+            "parse_gaps": 1,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": false,
+            "reconciliation_skip_reason": "parse-gaps",
+            "relationships": 12,
+            "resolved_static_relationships": 12,
+            "symbols": 12,
+            "truncated": false,
+            "unresolved_dynamic_relationships": 0
+          },
+          "harness_output_format_version": 1,
+          "sha": "git-sha1:678356bf-4e237308-86abaffd-84186d0c-5d3627f7",
+          "snapshot_id": "sha256:9874bc56-afca1c2c-0b432615-919e6bfe-c4314c4f-c2b3934c-ad8f846e-fae4f61e",
+          "tracemalloc_peak_bytes": [
+            175905,
+            148813,
+            176273,
+            148959,
+            174371,
+            149022
+          ]
+        }
+      },
+      "comparability_reason": "exact paired fixture bytes",
+      "comparable": true,
+      "comparison": {
+        "absolute_median_difference_ms": 8.135,
+        "confirmed_product_regression": false,
+        "current_median_ms": 132.655,
+        "diagnosis": "inconclusive",
+        "historical_median_ms": 124.52,
+        "percentage_median_difference": 6.533
+      },
+      "fixture": {
+        "byte_count": 400,
+        "byte_identical": true,
+        "file_count": 13,
+        "tree_digest": "sha256:51ecae9c-a5f92bb1-1e6bf225-f45ac07d-70c95cb9-b29ab295-0233ca15-97817366"
+      },
+      "label": "public-partial-parse-gap"
+    },
+    {
+      "builds": {
+        "current": {
+          "analysis_elapsed_ms": [
+            91.482,
+            74.776,
+            85.943,
+            74.354,
+            82.715,
+            70.527
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 91.482,
+            "median_absolute_deviation_ms": 5.794,
+            "median_ms": 78.745,
+            "minimum_ms": 70.527
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 91.482,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 89964
+                },
+                {
+                  "analysis_elapsed_ms": 74.776,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 74728
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 4.424,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4958486528,
+              "integrity_comparison_and_handoff_overhead_ms": 474.942,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 345,
+                "included_file_count": 6,
+                "mode": "filesystem"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 641.2
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 85.943,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 89540
+                },
+                {
+                  "analysis_elapsed_ms": 74.354,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 75787
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 2.219,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4172734464,
+              "integrity_comparison_and_handoff_overhead_ms": 475.062,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 345,
+                "included_file_count": 6,
+                "mode": "filesystem"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 635.359
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 82.715,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 90790
+                },
+                {
+                  "analysis_elapsed_ms": 70.527,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 75472
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 6.549,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4739469312,
+              "integrity_comparison_and_handoff_overhead_ms": 460.469,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 345,
+                "included_file_count": 6,
+                "mode": "filesystem"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 613.711
+            }
+          ],
+          "canonical_evidence_digest": "sha256:79e5bc43-11567375-37961792-0adc4a5e-26345f07-ed53a730-6d6214e7-0b4a5e53",
+          "evidence_counts": {
+            "ambiguous_relationships": 0,
+            "cycles": 2,
+            "files_analyzed": 6,
+            "files_discovered": 6,
+            "files_excluded": 0,
+            "findings": 11,
+            "lifecycle_reconciled": true,
+            "metrics": 94,
+            "modules": 6,
+            "parse_gaps": 0,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": true,
+            "reconciliation_skip_reason": null,
+            "relationships": 20,
+            "resolved_static_relationships": 20,
+            "symbols": 4,
+            "truncated": false,
+            "unresolved_dynamic_relationships": 0
+          },
+          "harness_output_format_version": 2,
+          "sha": "git-sha1:6509939e-486bb638-0a890612-5381696f-f392179b",
+          "snapshot_id": "sha256:fd4d2dff-ebf0eda4-7975069d-794c0f39-56d224ef-e376e974-9e8c8c43-6ff73db9",
+          "tracemalloc_peak_bytes": [
+            89964,
+            74728,
+            89540,
+            75787,
+            90790,
+            75472
+          ]
+        },
+        "historical": {
+          "analysis_elapsed_ms": [
+            86.887,
+            75.993,
+            87.062,
+            74.183,
+            82.429,
+            75.946
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 87.062,
+            "median_absolute_deviation_ms": 4.146,
+            "median_ms": 79.211,
+            "minimum_ms": 74.183
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 86.887,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 96688
+                },
+                {
+                  "analysis_elapsed_ms": 75.993,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 78933
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 2.425,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4983885824,
+              "integrity_comparison_and_handoff_overhead_ms": 452.979,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 615.859
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 87.062,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 96640
+                },
+                {
+                  "analysis_elapsed_ms": 74.183,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 77698
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 5.659,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4133896192,
+              "integrity_comparison_and_handoff_overhead_ms": 421.876,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 583.121
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 82.429,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 96523
+                },
+                {
+                  "analysis_elapsed_ms": 75.946,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 78012
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 1.218,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4731211776,
+              "integrity_comparison_and_handoff_overhead_ms": 423.766,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 582.141
+            }
+          ],
+          "canonical_evidence_digest": "sha256:a61339e7-217384b9-f5f23d00-31727995-c6a0841a-3071f701-13155d4d-1da51b6d",
+          "evidence_counts": {
+            "ambiguous_relationships": 0,
+            "cycles": 2,
+            "files_analyzed": 6,
+            "files_discovered": 6,
+            "files_excluded": 0,
+            "findings": 11,
+            "lifecycle_reconciled": true,
+            "metrics": 94,
+            "modules": 6,
+            "parse_gaps": 0,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": true,
+            "reconciliation_skip_reason": null,
+            "relationships": 20,
+            "resolved_static_relationships": 20,
+            "symbols": 4,
+            "truncated": false,
+            "unresolved_dynamic_relationships": 0
+          },
+          "harness_output_format_version": 1,
+          "sha": "git-sha1:678356bf-4e237308-86abaffd-84186d0c-5d3627f7",
+          "snapshot_id": "sha256:09d77ee5-b06e6749-64850b49-c988558c-b97fed86-d4502c77-8fdeafd3-6559a034",
+          "tracemalloc_peak_bytes": [
+            96688,
+            78933,
+            96640,
+            77698,
+            96523,
+            78012
+          ]
+        }
+      },
+      "comparability_reason": "exact paired fixture bytes",
+      "comparable": true,
+      "comparison": {
+        "absolute_median_difference_ms": -0.466,
+        "confirmed_product_regression": false,
+        "current_median_ms": 78.745,
+        "diagnosis": "inconclusive",
+        "historical_median_ms": 79.211,
+        "percentage_median_difference": -0.588
+      },
+      "fixture": {
+        "byte_count": 345,
+        "byte_identical": true,
+        "file_count": 6,
+        "tree_digest": "sha256:4252df7c-25faa755-4238501f-0a2af2fa-5445b6d4-9789a6a2-c2187d6b-c581df1d"
+      },
+      "label": "public-cycles-repeated"
+    },
+    {
+      "builds": {
+        "current": {
+          "analysis_elapsed_ms": [
+            68.428,
+            60.257,
+            60.556,
+            56.174,
+            64.931,
+            57.835
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 68.428,
+            "median_absolute_deviation_ms": 3.402,
+            "median_ms": 60.406,
+            "minimum_ms": 56.174
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 68.428,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 47859
+                },
+                {
+                  "analysis_elapsed_ms": 60.257,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 42429
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 5.803,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4970041344,
+              "integrity_comparison_and_handoff_overhead_ms": 464.309,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 400,
+                "included_file_count": 13,
+                "mode": "filesystem"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 592.994
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 60.556,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 48090
+                },
+                {
+                  "analysis_elapsed_ms": 56.174,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 42426
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 3.613,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4137160704,
+              "integrity_comparison_and_handoff_overhead_ms": 491.075,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 400,
+                "included_file_count": 13,
+                "mode": "filesystem"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 607.805
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 64.931,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 48028
+                },
+                {
+                  "analysis_elapsed_ms": 57.835,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 42305
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 6.065,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4720545792,
+              "integrity_comparison_and_handoff_overhead_ms": 446.193,
+              "repository_integrity": {
+                "complete": true,
+                "equal": true,
+                "exclusion_counts": {},
+                "format_version": 1,
+                "included_byte_count": 400,
+                "included_file_count": 13,
+                "mode": "filesystem"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 568.959
+            }
+          ],
+          "canonical_evidence_digest": "sha256:6d88d5d2-4961a635-c7cc7bb6-2c6ec2e9-6803d398-460f52cb-ab0ae901-20a28543",
+          "evidence_counts": {
+            "ambiguous_relationships": 0,
+            "cycles": 0,
+            "files_analyzed": 3,
+            "files_discovered": 13,
+            "files_excluded": 10,
+            "findings": 4,
+            "lifecycle_reconciled": true,
+            "metrics": 38,
+            "modules": 2,
+            "parse_gaps": 1,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": false,
+            "reconciliation_skip_reason": "truncated-scan",
+            "relationships": 2,
+            "resolved_static_relationships": 2,
+            "symbols": 2,
+            "truncated": true,
+            "unresolved_dynamic_relationships": 0
+          },
+          "harness_output_format_version": 2,
+          "sha": "git-sha1:6509939e-486bb638-0a890612-5381696f-f392179b",
+          "snapshot_id": "sha256:dd866241-1d8b90aa-1772481a-4ebc6e16-14f1151d-2c6f5b93-12daf435-852e8855",
+          "tracemalloc_peak_bytes": [
+            47859,
+            42429,
+            48090,
+            42426,
+            48028,
+            42305
+          ]
+        },
+        "historical": {
+          "analysis_elapsed_ms": [
+            61.269,
+            53.838,
+            65.562,
+            57.752,
+            64.288,
+            56.162
+          ],
+          "analysis_statistics": {
+            "maximum_ms": 65.562,
+            "median_absolute_deviation_ms": 4.063,
+            "median_ms": 59.511,
+            "minimum_ms": 53.838
+          },
+          "batches": [
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 61.269,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 47252
+                },
+                {
+                  "analysis_elapsed_ms": 53.838,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 42610
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 5.268,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4965588992,
+              "integrity_comparison_and_handoff_overhead_ms": 416.424,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 1,
+              "total_cli_batch_wall_ms": 531.531
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 65.562,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 47247
+                },
+                {
+                  "analysis_elapsed_ms": 57.752,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 42657
+                }
+              ],
+              "build_order": "current-historical",
+              "cpu_percent_before": 1.725,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4114411520,
+              "integrity_comparison_and_handoff_overhead_ms": 410.624,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 2,
+              "total_cli_batch_wall_ms": 533.938
+            },
+            {
+              "analysis_repetitions": [
+                {
+                  "analysis_elapsed_ms": 64.288,
+                  "position": 1,
+                  "tracemalloc_peak_bytes": 47358
+                },
+                {
+                  "analysis_elapsed_ms": 56.162,
+                  "position": 2,
+                  "tracemalloc_peak_bytes": 42713
+                }
+              ],
+              "build_order": "historical-current",
+              "cpu_percent_before": 1.45,
+              "determinism": {
+                "repeated_canonical_bytes_equal": true,
+                "repeated_snapshot_identity_equal": true,
+                "repository_bytes_unchanged": true,
+                "saved_handoff_reopened_integrity": true
+              },
+              "free_memory_bytes_before": 4741021696,
+              "integrity_comparison_and_handoff_overhead_ms": 408.763,
+              "repository_integrity": {
+                "complete": null,
+                "equal": true,
+                "exclusion_counts": null,
+                "format_version": null,
+                "included_byte_count": null,
+                "included_file_count": null,
+                "mode": "historical-unversioned-tree-digest"
+              },
+              "round": 3,
+              "total_cli_batch_wall_ms": 529.213
+            }
+          ],
+          "canonical_evidence_digest": "sha256:a90e3cb4-98eca494-01bc6ddb-f78d86bc-1d3301e0-9a61ca77-927e106f-db4aca36",
+          "evidence_counts": {
+            "ambiguous_relationships": 0,
+            "cycles": 0,
+            "files_analyzed": 3,
+            "files_discovered": 13,
+            "files_excluded": 10,
+            "findings": 4,
+            "lifecycle_reconciled": true,
+            "metrics": 38,
+            "modules": 2,
+            "parse_gaps": 1,
+            "probable_static_relationships": 0,
+            "reconciliation_complete": false,
+            "reconciliation_skip_reason": "truncated-scan",
+            "relationships": 2,
+            "resolved_static_relationships": 2,
+            "symbols": 2,
+            "truncated": true,
+            "unresolved_dynamic_relationships": 0
+          },
+          "harness_output_format_version": 1,
+          "sha": "git-sha1:678356bf-4e237308-86abaffd-84186d0c-5d3627f7",
+          "snapshot_id": "sha256:05ee84d3-7fd2da72-724671ab-2b68388e-636ee3c1-51ea1404-1438671b-5e48c48f",
+          "tracemalloc_peak_bytes": [
+            47252,
+            42610,
+            47247,
+            42657,
+            47358,
+            42713
+          ]
+        }
+      },
+      "comparability_reason": "exact paired fixture bytes",
+      "comparable": true,
+      "comparison": {
+        "absolute_median_difference_ms": 0.895,
+        "confirmed_product_regression": false,
+        "current_median_ms": 60.406,
+        "diagnosis": "inconclusive",
+        "historical_median_ms": 59.511,
+        "percentage_median_difference": 1.504
+      },
+      "fixture": {
+        "byte_count": 400,
+        "byte_identical": true,
+        "file_count": 13,
+        "tree_digest": "sha256:51ecae9c-a5f92bb1-1e6bf225-f45ac07d-70c95cb9-b29ab295-0233ca15-97817366"
+      },
+      "label": "public-partial-truncated"
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+import statistics
 import subprocess
 import sys
 from collections import Counter
@@ -65,6 +66,185 @@ _REPORT_FAMILY_NAMES = {
     "Parameters": "parameters",
     "Test-evidence candidate": "test-evidence-candidate",
 }
+
+_COMPARABLE_PERFORMANCE_SUBJECTS = {
+    "zscripts-public",
+    "existing-ordinary",
+    "existing-relationships",
+    "existing-findings",
+    "public-medium",
+    "public-large",
+    "public-multipackage",
+    "public-partial-parse-gap",
+    "public-cycles-repeated",
+    "public-partial-truncated",
+}
+_COMPARABLE_PERFORMANCE_DIAGNOSES = {
+    "environment-related",
+    "Python-runtime-related",
+    "repository-growth-related",
+    "harness-integrity-related",
+    "product-path-related",
+    "mixed",
+    "inconclusive",
+}
+
+
+def _unsegment_evidence_hash(value: object, *, prefix: str, length: int) -> str:
+    assert isinstance(value, str)
+    marker = f"{prefix}:"
+    assert value.startswith(marker)
+    normalized = value.removeprefix(marker).replace("-", "")
+    assert len(normalized) == length
+    assert re.fullmatch(r"[0-9a-f]+", normalized)
+    return normalized
+
+
+def test_comparable_performance_evidence_contract_and_report_parity() -> None:
+    repository_root = Path(__file__).resolve().parents[2]
+    evidence_path = repository_root / "docs" / "product" / "REPOSITORY_REVIEW_COMPARABLE_PERFORMANCE.json"
+    report_path = repository_root / "docs" / "product" / "REPOSITORY_REVIEW_DOGFOOD_REPORT.md"
+    serialized = evidence_path.read_text(encoding="utf-8")
+    payload = json.loads(serialized)
+    report = report_path.read_text(encoding="utf-8")
+    addendum = _report_section(
+        report,
+        "## Comparable Python 3.13 performance addendum",
+        "## Executive Decision",
+    )
+
+    assert payload["format_version"] == 1
+    assert payload["sanitized"] is True
+    assert _unsegment_evidence_hash(
+        payload["builds"]["historical_sha"], prefix="git-sha1", length=40
+    ) == "".join(("678356bf", "4e237308", "86abaffd", "84186d0c", "5d3627f7"))
+    assert _unsegment_evidence_hash(
+        payload["builds"]["current_sha"], prefix="git-sha1", length=40
+    ) == "".join(("6509939e", "486bb638", "0a890612", "5381696f", "f392179b"))
+    assert payload["diagnosis"] in _COMPARABLE_PERFORMANCE_DIAGNOSES
+    assert payload["diagnosis"] == "mixed"
+    assert payload["separate_defect_warranted"] is False
+    assert payload["classification"] == "PUBLIC BETA — ACTIVE DEVELOPMENT"
+    assert payload["limits"]["current_integrity"] == {
+        "git_command_timeout_seconds": 30,
+        "max_file_size_bytes": 268_435_456,
+        "max_files": 50_000,
+        "max_path_entries": 50_000,
+        "max_path_listing_bytes": 67_108_864,
+        "max_total_bytes": 2_147_483_648,
+    }
+    assert payload["repetition_design"]["accepted_analysis_repetitions_per_build_subject"] == 6
+    assert payload["repetition_design"]["contaminated_batches_preserved"] == 2
+
+    subjects = {subject["label"]: subject for subject in payload["subjects"]}
+    assert set(subjects) == _COMPARABLE_PERFORMANCE_SUBJECTS
+    assert subjects["zscripts-public"]["comparable"] is False
+    assert all(
+        subject["comparable"] is True for label, subject in subjects.items() if label != "zscripts-public"
+    )
+
+    for label, subject in subjects.items():
+        assert subject["comparison"]["diagnosis"] in _COMPARABLE_PERFORMANCE_DIAGNOSES
+        assert subject["comparison"]["confirmed_product_regression"] is False
+        if label == "zscripts-public":
+            assert subject["comparison"]["percentage_median_difference"] is None
+        else:
+            assert isinstance(subject["comparison"]["percentage_median_difference"], float)
+            assert subject["fixture"]["byte_identical"] is True
+            _unsegment_evidence_hash(subject["fixture"]["tree_digest"], prefix="sha256", length=64)
+
+        for build_name in ("historical", "current"):
+            build = subject["builds"][build_name]
+            values = build["analysis_elapsed_ms"]
+            peaks = build["tracemalloc_peak_bytes"]
+            assert len(values) == len(peaks) == 6
+            assert all(isinstance(value, (int, float)) and value > 0 for value in values)
+            assert all(isinstance(value, int) and value > 0 for value in peaks)
+            assert len(build["batches"]) == 3
+            assert [batch["round"] for batch in build["batches"]] == [1, 2, 3]
+            assert values == [
+                repetition["analysis_elapsed_ms"]
+                for batch in build["batches"]
+                for repetition in batch["analysis_repetitions"]
+            ]
+            assert all(len(batch["analysis_repetitions"]) == 2 for batch in build["batches"])
+
+            median = statistics.median(values)
+            expected = {
+                "median_ms": round(median, 3),
+                "minimum_ms": round(min(values), 3),
+                "maximum_ms": round(max(values), 3),
+                "median_absolute_deviation_ms": round(
+                    statistics.median(abs(value - median) for value in values),
+                    3,
+                ),
+            }
+            assert build["analysis_statistics"] == expected
+            assert f"{expected['median_ms']:.3f}" in addendum
+            _unsegment_evidence_hash(build["snapshot_id"], prefix="sha256", length=64)
+            _unsegment_evidence_hash(build["canonical_evidence_digest"], prefix="sha256", length=64)
+
+            counts = build["evidence_counts"]
+            for field in (
+                "files_discovered",
+                "files_analyzed",
+                "files_excluded",
+                "modules",
+                "symbols",
+                "relationships",
+                "resolved_static_relationships",
+                "probable_static_relationships",
+                "ambiguous_relationships",
+                "unresolved_dynamic_relationships",
+                "cycles",
+                "metrics",
+                "findings",
+                "parse_gaps",
+            ):
+                assert isinstance(counts[field], int) and counts[field] >= 0
+            assert isinstance(counts["truncated"], bool)
+            assert isinstance(counts["lifecycle_reconciled"], bool)
+            assert isinstance(counts["reconciliation_complete"], bool)
+
+            for batch in build["batches"]:
+                assert isinstance(batch["cpu_percent_before"], (int, float))
+                assert 0 <= batch["cpu_percent_before"] <= 35
+                assert isinstance(batch["free_memory_bytes_before"], int)
+                assert batch["free_memory_bytes_before"] > 0
+                assert batch["total_cli_batch_wall_ms"] > 0
+                assert batch["determinism"] == {
+                    "repeated_canonical_bytes_equal": True,
+                    "repeated_snapshot_identity_equal": True,
+                    "repository_bytes_unchanged": True,
+                    "saved_handoff_reopened_integrity": True,
+                }
+                integrity = batch["repository_integrity"]
+                assert integrity["equal"] is True
+                if build_name == "current":
+                    assert integrity["format_version"] == 1
+                    assert integrity["complete"] is True
+                    assert integrity["mode"] in {"filesystem", "git"}
+                    assert isinstance(integrity["included_file_count"], int)
+                    assert isinstance(integrity["included_byte_count"], int)
+                else:
+                    assert integrity["format_version"] is None
+                    assert integrity["complete"] is None
+                    assert integrity["mode"] == "historical-unversioned-tree-digest"
+
+    assert "No comparable Python 3.13 product regression was confirmed." in addendum
+    assert "A separate defect proposal was therefore not prepared." in addendum
+    assert payload["regression_confidence"] in addendum
+    assert re.search(r"(?i)[a-z]:[\\/]", serialized) is None
+    assert re.search(r'"/', serialized) is None
+    assert "source_excerpt" not in serialized
+    assert "worktree" not in serialized.lower()
+    assert "private-repository" not in serialized.lower()
+    assert "sqlite3" not in serialized.lower()
+    assert "evidence-root" not in serialized.lower()
+    for variable in ("USERNAME", "COMPUTERNAME"):
+        value = os.environ.get(variable)
+        if value:
+            assert f'"{value}"' not in serialized
 
 
 def test_evaluation_is_sanitized_deterministic_and_bounded(tmp_path: Path) -> None:

@@ -3,26 +3,844 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import hashlib
 import json
 import os
 import re
+import stat
 import statistics
+import subprocess  # nosec B404 - fixed Git metadata command only
+import sys
+import tempfile
+import threading
 import time
 import tracemalloc
 from collections import Counter
-from pathlib import Path
-from typing import Any
+from contextlib import contextmanager
+from dataclasses import dataclass
+from pathlib import Path, PurePosixPath
+from typing import Any, BinaryIO, Iterator, Sequence
 
-from zscripts.application.repository_review import RepositoryReviewService
-from zscripts.domain.repository_comparison import HandoffSelection
-from zscripts.domain.repository_review import ScanLimits
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if __package__ in {None, ""}:
+    if str(_REPOSITORY_ROOT) in sys.path:
+        sys.path.remove(str(_REPOSITORY_ROOT))
+    sys.path.insert(0, str(_REPOSITORY_ROOT))
+
+from zscripts.application.repository_review import RepositoryReviewService  # noqa: E402
+from zscripts.domain.repository_comparison import HandoffSelection  # noqa: E402
+from zscripts.domain.repository_review import ScanLimits  # noqa: E402
+from zscripts.infrastructure.repository_discovery import (  # noqa: E402
+    DEFAULT_EXCLUDED_DIRECTORIES,
+    RepositoryDiscovery,
+)
 
 _LABEL_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 _MAX_FINDING_SAMPLE = 20
 _MAX_NEIGHBORHOOD_FOCUSES = 5
 _NEIGHBORHOOD_MAX_NODES = 40
 _NEIGHBORHOOD_MAX_EDGES = 80
+EVALUATION_OUTPUT_FORMAT_VERSION = 2
+INTEGRITY_MANIFEST_FORMAT_VERSION = 1
+_HASH_CHUNK_BYTES = 1024 * 1024
+_GIT_COMMAND_TIMEOUT_SECONDS = 30
+
+
+@dataclass(frozen=True, slots=True)
+class IntegrityLimits:
+    """Independent bounds for repository-integrity evidence."""
+
+    maximum_files: int = 50_000
+    maximum_path_entries: int = 50_000
+    maximum_file_size_bytes: int = 256 * 1024 * 1024
+    maximum_total_bytes: int = 2 * 1024 * 1024 * 1024
+    maximum_path_listing_bytes: int = 64 * 1024 * 1024
+
+    def __post_init__(self) -> None:
+        if (
+            min(
+                self.maximum_files,
+                self.maximum_path_entries,
+                self.maximum_file_size_bytes,
+                self.maximum_total_bytes,
+                self.maximum_path_listing_bytes,
+            )
+            < 1
+        ):
+            raise ValueError("Integrity limits must be positive integers.")
+
+    def sanitized(self) -> dict[str, int]:
+        return {
+            "maximum_files": self.maximum_files,
+            "maximum_path_entries": self.maximum_path_entries,
+            "maximum_file_size_bytes": self.maximum_file_size_bytes,
+            "maximum_total_bytes": self.maximum_total_bytes,
+            "maximum_path_listing_bytes": self.maximum_path_listing_bytes,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class IntegrityManifestEntry:
+    """One deterministic in-memory manifest entry; never emitted publicly."""
+
+    relative_path: str
+    entry_type: str
+    size_bytes: int
+    content_digest: str
+
+
+@dataclass(frozen=True, slots=True)
+class IntegrityManifestResult:
+    """A bounded integrity result with an optional complete manifest."""
+
+    format_version: int
+    mode: str
+    complete: bool
+    digest: str | None
+    included_file_count: int
+    included_byte_count: int
+    excluded_counts: tuple[tuple[str, int], ...]
+    limits: IntegrityLimits
+    failure_reason: str | None
+    entries: tuple[IntegrityManifestEntry, ...] = ()
+
+    def exclusion_counts_dict(self) -> dict[str, int]:
+        return dict(self.excluded_counts)
+
+
+@dataclass(slots=True)
+class _PathEntryBudget:
+    maximum: int
+    count: int = 0
+
+    def consume(self) -> None:
+        self.count += 1
+        if self.count > self.maximum:
+            raise OverflowError("maximum-path-entries-exceeded")
+
+
+class _TrustedRoot:
+    """Descriptor-rooted access on POSIX and guarded handle access on Windows."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root.resolve(strict=True)
+        self.root_descriptor: int | None = None
+
+    def __enter__(self) -> _TrustedRoot:
+        if os.name != "nt":
+            self.root_descriptor = os.open(self.root, _directory_open_flags())
+            if not stat.S_ISDIR(os.fstat(self.root_descriptor).st_mode):
+                os.close(self.root_descriptor)
+                self.root_descriptor = None
+                raise ValueError("trusted-root-not-directory")
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        if self.root_descriptor is not None:
+            os.close(self.root_descriptor)
+            self.root_descriptor = None
+
+    @contextmanager
+    def parent(self, relative: str):
+        parts = PurePosixPath(relative).parts
+        if not parts:
+            raise ValueError("unsafe-integrity-path")
+        if os.name == "nt":
+            with _windows_directory_guards(self.root, parts[:-1]) as parent:
+                yield parent, parts[-1]
+            return
+        descriptor = self._open_directory_parts(parts[:-1])
+        try:
+            yield descriptor, parts[-1]
+        finally:
+            os.close(descriptor)
+
+    @contextmanager
+    def scandir(self, relative: str, expected: os.stat_result | None = None):
+        parts = PurePosixPath(relative).parts if relative else ()
+        if os.name == "nt":
+            with _windows_directory_guards(self.root, parts) as directory:
+                if expected is not None and not _same_directory(expected, Path(directory).lstat()):
+                    raise ValueError("filesystem-entry-changed")
+                with os.scandir(directory) as entries:
+                    yield entries
+            return
+        descriptor = self._open_directory_parts(parts)
+        try:
+            if expected is not None and not _same_directory(expected, os.fstat(descriptor)):
+                raise ValueError("filesystem-entry-changed")
+            with os.scandir(descriptor) as entries:
+                yield entries
+        finally:
+            os.close(descriptor)
+
+    def lstat(self, relative: str) -> os.stat_result:
+        with self.parent(relative) as (parent, name):
+            if os.name == "nt":
+                return (Path(parent) / name).lstat()
+            return os.stat(name, dir_fd=parent, follow_symlinks=False)
+
+    def readlink(self, relative: str) -> str:
+        with self.parent(relative) as (parent, name):
+            if os.name == "nt":
+                raise ValueError("symlink-containment-unavailable")
+            return os.readlink(name, dir_fd=parent)
+
+    def open_regular(self, relative: str, expected: os.stat_result) -> int:
+        with self.parent(relative) as (parent, name):
+            flags = os.O_RDONLY
+            for optional_flag in ("O_NOFOLLOW", "O_CLOEXEC", "O_BINARY"):
+                flags |= int(getattr(os, optional_flag, 0))
+            if os.name == "nt":
+                descriptor = os.open(Path(parent) / name, flags)
+            else:
+                descriptor = os.open(name, flags, dir_fd=parent)
+            try:
+                opened = os.fstat(descriptor)
+                if not stat.S_ISREG(opened.st_mode):
+                    raise ValueError("opened-entry-not-regular")
+                if not _same_regular_file(expected, opened):
+                    raise ValueError("filesystem-entry-changed")
+                if os.name == "nt" and not _windows_descriptor_is_contained(descriptor, self.root):
+                    raise ValueError("filesystem-entry-outside-root")
+            except BaseException:
+                os.close(descriptor)
+                raise
+            return descriptor
+
+    def _open_directory_parts(self, parts: Sequence[str]) -> int:
+        if self.root_descriptor is None:
+            raise ValueError("trusted-root-unavailable")
+        descriptor = os.dup(self.root_descriptor)
+        try:
+            for part in parts:
+                child = os.open(part, _directory_open_flags(), dir_fd=descriptor)
+                metadata = os.fstat(child)
+                if not stat.S_ISDIR(metadata.st_mode):
+                    os.close(child)
+                    raise ValueError("ancestor-not-directory")
+                os.close(descriptor)
+                descriptor = child
+        except BaseException:
+            os.close(descriptor)
+            raise
+        return descriptor
+
+
+class _ManifestBuilder:
+    def __init__(self, *, mode: str, limits: IntegrityLimits) -> None:
+        self.mode = mode
+        self.limits = limits
+        self.entries: list[IntegrityManifestEntry] = []
+        self.excluded: Counter[str] = Counter()
+        self.included_bytes = 0
+        self.considered_entries = 0
+        self.failure_reason: str | None = None
+
+    @property
+    def complete(self) -> bool:
+        return self.failure_reason is None
+
+    def exclude(self, reason: str, count: int = 1) -> None:
+        self.excluded[reason] += count
+
+    def fail(self, reason: str) -> None:
+        if self.failure_reason is None:
+            self.failure_reason = reason
+
+    def add_path(self, trusted_root: _TrustedRoot, relative: str) -> None:
+        if not self.complete:
+            return
+        self.considered_entries += 1
+        if self.considered_entries > self.limits.maximum_files:
+            self.fail("maximum-files-exceeded")
+            return
+        try:
+            metadata = trusted_root.lstat(relative)
+        except (OSError, ValueError):
+            self.fail("filesystem-entry-unreadable")
+            return
+        if stat.S_ISLNK(metadata.st_mode):
+            try:
+                target = trusted_root.readlink(relative).encode("utf-8", errors="strict")
+            except ValueError as exc:
+                self.fail(str(exc))
+                return
+            except (OSError, UnicodeError):
+                self.fail("symlink-target-unreadable")
+                return
+            self._add_bytes(relative, "symlink", target)
+            return
+        if not stat.S_ISREG(metadata.st_mode):
+            self.exclude("unsupported-entry-type")
+            return
+        size = metadata.st_size
+        if size > self.limits.maximum_file_size_bytes:
+            self.fail("maximum-file-size-exceeded")
+            return
+        if self.included_bytes + size > self.limits.maximum_total_bytes:
+            self.fail("maximum-total-bytes-exceeded")
+            return
+        try:
+            descriptor = _open_regular_file_without_following(trusted_root, relative, metadata)
+        except OSError:
+            self.fail("symlink-follow-blocked")
+            return
+        except ValueError as exc:
+            self.fail(str(exc))
+            return
+        try:
+            with os.fdopen(descriptor, "rb", closefd=True) as stream:
+                content_digest, observed_size = _stream_digest(stream, size)
+                final_metadata = os.fstat(stream.fileno())
+        except OSError:
+            self.fail("file-content-unreadable")
+            return
+        if observed_size != size or not _same_regular_file(metadata, final_metadata):
+            self.fail("filesystem-entry-changed")
+            return
+        self.entries.append(IntegrityManifestEntry(relative, "regular", size, content_digest))
+        self.included_bytes += size
+
+    def _add_bytes(self, relative: str, entry_type: str, content: bytes) -> None:
+        size = len(content)
+        if size > self.limits.maximum_file_size_bytes:
+            self.fail("maximum-file-size-exceeded")
+            return
+        if self.included_bytes + size > self.limits.maximum_total_bytes:
+            self.fail("maximum-total-bytes-exceeded")
+            return
+        self.entries.append(
+            IntegrityManifestEntry(relative, entry_type, size, hashlib.sha256(content).hexdigest())
+        )
+        self.included_bytes += size
+
+    def result(self) -> IntegrityManifestResult:
+        entries = tuple(sorted(self.entries, key=lambda item: item.relative_path.encode("utf-8")))
+        complete = self.complete
+        digest = (
+            hashlib.sha256(_canonical_manifest_bytes(self.mode, entries)).hexdigest() if complete else None
+        )
+        return IntegrityManifestResult(
+            format_version=INTEGRITY_MANIFEST_FORMAT_VERSION,
+            mode=self.mode,
+            complete=complete,
+            digest=digest,
+            included_file_count=len(entries),
+            included_byte_count=self.included_bytes,
+            excluded_counts=tuple(sorted(self.excluded.items())),
+            limits=self.limits,
+            failure_reason=self.failure_reason,
+            entries=entries,
+        )
+
+
+def _stream_digest(stream: BinaryIO, expected_size: int) -> tuple[str, int]:
+    digest = hashlib.sha256()
+    observed_size = 0
+    while observed_size < expected_size:
+        chunk = stream.read(min(_HASH_CHUNK_BYTES, expected_size - observed_size))
+        if not chunk:
+            break
+        observed_size += len(chunk)
+        digest.update(chunk)
+    if stream.read(1):
+        observed_size += 1
+    return digest.hexdigest(), observed_size
+
+
+def _open_regular_file_without_following(
+    trusted_root: _TrustedRoot,
+    relative: str,
+    expected: os.stat_result,
+) -> int:
+    return trusted_root.open_regular(relative, expected)
+
+
+def _directory_open_flags() -> int:
+    flags = os.O_RDONLY
+    for optional_flag in ("O_DIRECTORY", "O_NOFOLLOW", "O_CLOEXEC", "O_BINARY"):
+        flags |= int(getattr(os, optional_flag, 0))
+    return flags
+
+
+@contextmanager
+def _windows_directory_guards(root: Path, parts: Sequence[str]):
+    if os.name != "nt":  # pragma: no cover - Windows-only fallback
+        raise ValueError("windows-directory-guard-unavailable")
+    handles: list[int] = []
+    current = root
+    try:
+        handles.append(_open_windows_directory_handle(current, root))
+        for part in parts:
+            current = current / part
+            handles.append(_open_windows_directory_handle(current, root))
+        yield current
+    finally:
+        if handles:
+            import ctypes
+
+            for handle in reversed(handles):
+                ctypes.windll.kernel32.CloseHandle(handle)
+
+
+def _open_windows_directory_handle(path: Path, root: Path) -> int:
+    import ctypes
+    from ctypes import wintypes
+
+    class _ByHandleFileInformation(ctypes.Structure):
+        _fields_ = [
+            ("dwFileAttributes", wintypes.DWORD),
+            ("ftCreationTime", wintypes.FILETIME),
+            ("ftLastAccessTime", wintypes.FILETIME),
+            ("ftLastWriteTime", wintypes.FILETIME),
+            ("dwVolumeSerialNumber", wintypes.DWORD),
+            ("nFileSizeHigh", wintypes.DWORD),
+            ("nFileSizeLow", wintypes.DWORD),
+            ("nNumberOfLinks", wintypes.DWORD),
+            ("nFileIndexHigh", wintypes.DWORD),
+            ("nFileIndexLow", wintypes.DWORD),
+        ]
+
+    create_file = ctypes.windll.kernel32.CreateFileW
+    create_file.argtypes = (
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    )
+    create_file.restype = wintypes.HANDLE
+    handle = create_file(
+        str(path),
+        0x0001,
+        0x0001 | 0x0002,
+        None,
+        3,
+        0x02000000 | 0x00200000,
+        None,
+    )
+    invalid_handle = ctypes.c_void_p(-1).value
+    if handle == invalid_handle:
+        raise OSError(ctypes.get_last_error(), "directory handle could not be opened")
+    try:
+        information = _ByHandleFileInformation()
+        if not ctypes.windll.kernel32.GetFileInformationByHandle(handle, ctypes.byref(information)):
+            raise OSError(ctypes.get_last_error(), "directory handle could not be inspected")
+        if not information.dwFileAttributes & 0x0010:
+            raise ValueError("ancestor-not-directory")
+        if information.dwFileAttributes & 0x0400:
+            raise ValueError("ancestor-symlink-or-reparse-point")
+        if not _windows_handle_is_contained(handle, root):
+            raise ValueError("filesystem-entry-outside-root")
+    except BaseException:
+        ctypes.windll.kernel32.CloseHandle(handle)
+        raise
+    return int(handle)
+
+
+def _windows_descriptor_is_contained(descriptor: int, root: Path) -> bool:
+    if os.name != "nt":
+        return True
+    import msvcrt
+
+    return _windows_handle_is_contained(msvcrt.get_osfhandle(descriptor), root)
+
+
+def _windows_handle_is_contained(handle: int, root: Path) -> bool:
+    import ctypes
+
+    size = ctypes.windll.kernel32.GetFinalPathNameByHandleW(handle, None, 0, 0)
+    if not size:
+        raise OSError(ctypes.get_last_error(), "handle path could not be inspected")
+    buffer = ctypes.create_unicode_buffer(size + 1)
+    if not ctypes.windll.kernel32.GetFinalPathNameByHandleW(handle, buffer, len(buffer), 0):
+        raise OSError(ctypes.get_last_error(), "handle path could not be inspected")
+    final_path = buffer.value
+    if final_path.startswith("\\\\?\\UNC\\"):
+        final_path = "\\\\" + final_path[8:]
+    elif final_path.startswith("\\\\?\\"):
+        final_path = final_path[4:]
+    normalized_root = os.path.normcase(os.path.abspath(root))
+    normalized_final = os.path.normcase(os.path.abspath(final_path))
+    try:
+        return os.path.commonpath((normalized_root, normalized_final)) == normalized_root
+    except ValueError:
+        return False
+
+
+def _same_regular_file(
+    expected: os.stat_result,
+    observed: os.stat_result,
+) -> bool:
+    if not stat.S_ISREG(expected.st_mode) or not stat.S_ISREG(observed.st_mode):
+        return False
+    if expected.st_size != observed.st_size:
+        return False
+    expected_identity = (expected.st_dev, expected.st_ino)
+    observed_identity = (observed.st_dev, observed.st_ino)
+    if all(expected_identity) and expected_identity != observed_identity:
+        return False
+    return True
+
+
+def _same_directory(expected: os.stat_result, observed: os.stat_result) -> bool:
+    if not stat.S_ISDIR(expected.st_mode) or not stat.S_ISDIR(observed.st_mode):
+        return False
+    expected_identity = (expected.st_dev, expected.st_ino)
+    observed_identity = (observed.st_dev, observed.st_ino)
+    return not all(expected_identity) or expected_identity == observed_identity
+
+
+def _canonical_manifest_bytes(
+    mode: str,
+    entries: Sequence[IntegrityManifestEntry],
+) -> bytes:
+    canonical = bytearray(
+        f"integrity-manifest\0{INTEGRITY_MANIFEST_FORMAT_VERSION}\0{mode}\0".encode("ascii")
+    )
+    for entry in entries:
+        canonical.extend(entry.relative_path.encode("utf-8"))
+        canonical.extend(b"\0")
+        canonical.extend(entry.entry_type.encode("ascii"))
+        canonical.extend(b"\0")
+        canonical.extend(str(entry.size_bytes).encode("ascii"))
+        canonical.extend(b"\0")
+        canonical.extend(entry.content_digest.encode("ascii"))
+        canonical.extend(b"\0")
+    return bytes(canonical)
+
+
+def _build_integrity_manifest(
+    repository_path: Path,
+    *,
+    limits: IntegrityLimits | None = None,
+    configured_excludes: Sequence[str] = (),
+) -> IntegrityManifestResult:
+    """Build a deterministic bounded manifest at the analyzer's resolved root."""
+
+    selected_limits = limits or IntegrityLimits()
+    discovery = RepositoryDiscovery()
+    scope = discovery.resolve_scope(repository_path)
+    root = Path(scope.analysis_root)
+    excludes = tuple(
+        sorted(
+            {
+                item.strip().replace("\\", "/") if os.name == "nt" else item.strip()
+                for item in configured_excludes
+                if item.strip()
+            }
+        )
+    )
+    if scope.git_root_detected:
+        return _build_git_integrity_manifest(root, selected_limits, excludes)
+    return _build_filesystem_integrity_manifest(root, selected_limits, excludes)
+
+
+def _build_git_integrity_manifest(
+    root: Path,
+    limits: IntegrityLimits,
+    configured_excludes: Sequence[str],
+) -> IntegrityManifestResult:
+    builder = _ManifestBuilder(mode="git", limits=limits)
+    fixed_default_excludes = tuple(
+        f"--exclude={name}/" for name in DEFAULT_EXCLUDED_DIRECTORIES if name != ".git"
+    )
+    try:
+        payload = _run_fixed_git_listing(
+            root,
+            (
+                "ls-files",
+                "--cached",
+                "--others",
+                "--exclude-per-directory=.gitignore",
+                *fixed_default_excludes,
+                "-z",
+            ),
+            maximum_output_bytes=limits.maximum_path_listing_bytes,
+        )
+        excluded_payload = _run_fixed_git_listing(
+            root,
+            (
+                "ls-files",
+                "--others",
+                "--ignored",
+                "--exclude-per-directory=.gitignore",
+                *fixed_default_excludes,
+                "--directory",
+                "--no-empty-directory",
+                "-z",
+            ),
+            maximum_output_bytes=limits.maximum_path_listing_bytes,
+        )
+    except (OSError, subprocess.SubprocessError, ValueError):
+        builder.fail("git-path-list-unavailable-or-bounded")
+        return builder.result()
+
+    candidates: list[str] = []
+    seen_candidates: set[str] = set()
+    path_budget = _PathEntryBudget(limits.maximum_path_entries)
+    try:
+        for raw_relative in _iter_bounded_nul_paths(payload, path_budget):
+            relative = _validated_relative_path(raw_relative)
+            if _has_default_excluded_part(relative):
+                builder.exclude("default-environment-or-cache")
+                continue
+            if _matches_configured_integrity_exclude(relative, configured_excludes):
+                builder.exclude("configured-integrity-exclude")
+                continue
+            if relative in seen_candidates:
+                builder.fail("duplicate-integrity-path")
+                return builder.result()
+            if len(candidates) >= limits.maximum_files:
+                builder.fail("maximum-files-exceeded")
+                return builder.result()
+            candidates.append(relative)
+            seen_candidates.add(relative)
+        for raw_relative in _iter_bounded_nul_paths(excluded_payload, path_budget):
+            relative = _validated_relative_path(raw_relative)
+            if _has_default_excluded_part(relative):
+                builder.exclude("default-environment-or-cache")
+            else:
+                builder.exclude("gitignored")
+    except OverflowError:
+        builder.fail("maximum-path-entries-exceeded")
+        return builder.result()
+    except ValueError:
+        builder.fail("unsafe-git-path-list")
+        return builder.result()
+    try:
+        with _TrustedRoot(root) as trusted_root:
+            for relative in sorted(candidates, key=lambda item: item.encode("utf-8")):
+                builder.add_path(trusted_root, relative)
+                if not builder.complete:
+                    break
+    except (OSError, ValueError):
+        builder.fail("trusted-root-access-unavailable")
+    return builder.result()
+
+
+def _build_filesystem_integrity_manifest(
+    root: Path,
+    limits: IntegrityLimits,
+    configured_excludes: Sequence[str],
+) -> IntegrityManifestResult:
+    builder = _ManifestBuilder(mode="filesystem", limits=limits)
+    candidates: list[str] = []
+    encountered_entries = 0
+    directories: list[tuple[str, os.stat_result | None]] = [("", None)]
+    try:
+        with _TrustedRoot(root) as trusted_root:
+            ignore_patterns = _load_integrity_gitignore_patterns(trusted_root)
+            while directories:
+                relative_directory, expected_directory = directories.pop()
+                bounded_names: list[str] = []
+                with trusted_root.scandir(relative_directory, expected_directory) as entries:
+                    for entry in entries:
+                        encountered_entries += 1
+                        if encountered_entries > limits.maximum_path_entries:
+                            builder.fail("maximum-path-entries-exceeded")
+                            return builder.result()
+                        bounded_names.append(entry.name)
+                child_directories: list[tuple[str, os.stat_result]] = []
+                for name in sorted(bounded_names, key=lambda item: item.encode("utf-8")):
+                    relative = _validated_relative_path(
+                        f"{relative_directory}/{name}" if relative_directory else name
+                    )
+                    if _has_default_excluded_part(relative):
+                        builder.exclude("default-environment-or-cache")
+                    elif _matches_configured_integrity_exclude(relative, configured_excludes):
+                        builder.exclude("configured-integrity-exclude")
+                    elif RepositoryDiscovery._matches_gitignore(relative, ignore_patterns):
+                        builder.exclude("gitignored")
+                    else:
+                        metadata = trusted_root.lstat(relative)
+                        if stat.S_ISDIR(metadata.st_mode):
+                            child_directories.append((relative, metadata))
+                            continue
+                        if len(candidates) >= limits.maximum_files:
+                            builder.fail("maximum-files-exceeded")
+                            return builder.result()
+                        candidates.append(relative)
+                directories.extend(reversed(child_directories))
+            for relative in sorted(candidates, key=lambda item: item.encode("utf-8")):
+                builder.add_path(trusted_root, relative)
+                if not builder.complete:
+                    break
+    except (OSError, ValueError):
+        builder.fail("filesystem-containment-unavailable")
+        return builder.result()
+    return builder.result()
+
+
+def _load_integrity_gitignore_patterns(trusted_root: _TrustedRoot) -> tuple[str, ...]:
+    try:
+        metadata = trusted_root.lstat(".gitignore")
+        if not stat.S_ISREG(metadata.st_mode):
+            return ()
+        descriptor = trusted_root.open_regular(".gitignore", metadata)
+        with os.fdopen(descriptor, "rb", closefd=True) as stream:
+            content = stream.read(65_536).decode("utf-8", errors="replace")
+    except (OSError, ValueError):
+        return ()
+    return tuple(
+        line.strip()
+        for line in content.splitlines()
+        if line.strip() and not line.lstrip().startswith("#") and not line.startswith("!")
+    )
+
+
+def _run_fixed_git_listing(
+    root: Path,
+    arguments: Sequence[str],
+    *,
+    maximum_output_bytes: int,
+) -> bytes:
+    no_hooks = Path(tempfile.gettempdir()) / "zscripts-no-git-hooks"
+    command = [
+        "git",
+        "--no-optional-locks",
+        "-c",
+        "core.fsmonitor=false",
+        "-c",
+        "core.excludesFile=",
+        "-c",
+        f"core.hooksPath={no_hooks}",
+        "-C",
+        str(root),
+        *arguments,
+    ]
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "GIT_TERMINAL_PROMPT": "0",
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "XDG_CONFIG_HOME": str(Path(tempfile.gettempdir()) / "zscripts-empty-git-config"),
+            "LC_ALL": "C",
+        }
+    )
+    process = subprocess.Popen(  # nosec B603 - executable and argument contract are fixed
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        env=environment,
+        shell=False,
+    )
+    stdout = process.stdout
+    if stdout is None:  # pragma: no cover - PIPE guarantees stdout
+        _terminate_and_reap(process)
+        raise ValueError("Git integrity paths could not be listed safely.")
+    output = bytearray()
+    output_exceeded = threading.Event()
+    reader_failed = threading.Event()
+
+    def read_bounded_output() -> None:
+        try:
+            while len(output) <= maximum_output_bytes:
+                remaining = maximum_output_bytes + 1 - len(output)
+                chunk = stdout.read(min(_HASH_CHUNK_BYTES, remaining))
+                if not chunk:
+                    return
+                output.extend(chunk)
+                if len(output) > maximum_output_bytes:
+                    output_exceeded.set()
+                    try:
+                        process.terminate()
+                    except OSError:
+                        pass
+                    return
+        except OSError:
+            reader_failed.set()
+            return
+
+    reader = threading.Thread(target=read_bounded_output, daemon=True)
+    reader.start()
+    deadline = time.monotonic() + _GIT_COMMAND_TIMEOUT_SECONDS
+    timed_out = False
+    while process.poll() is None and not output_exceeded.is_set() and not reader_failed.is_set():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            timed_out = True
+            break
+        try:
+            process.wait(timeout=min(0.05, remaining))
+        except subprocess.TimeoutExpired:
+            continue
+    if timed_out or output_exceeded.is_set() or reader_failed.is_set():
+        _terminate_and_reap(process)
+    else:
+        process.wait()
+    reader.join(timeout=1.0)
+    stdout.close()
+    if reader.is_alive():
+        _terminate_and_reap(process)
+        raise ValueError("Git integrity paths could not be listed safely.")
+    if timed_out:
+        raise subprocess.TimeoutExpired(command, _GIT_COMMAND_TIMEOUT_SECONDS)
+    if output_exceeded.is_set():
+        raise ValueError("Git integrity path listing exceeded its bounded output limit.")
+    if reader_failed.is_set():
+        raise ValueError("Git integrity paths could not be listed safely.")
+    if process.returncode:
+        raise ValueError("Git integrity paths could not be listed safely.")
+    return bytes(output)
+
+
+def _terminate_and_reap(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is not None:
+        process.wait()
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=1.0)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+
+
+def _iter_bounded_nul_paths(payload: bytes, budget: _PathEntryBudget) -> Iterator[str]:
+    if payload and not payload.endswith(b"\0"):
+        raise ValueError("Git path listing was not NUL terminated.")
+    start = 0
+    while start < len(payload):
+        end = payload.find(b"\0", start)
+        if end < 0:  # pragma: no cover - termination check above
+            raise ValueError("Git path listing was not NUL terminated.")
+        budget.consume()
+        try:
+            yield payload[start:end].decode("utf-8", errors="strict")
+        except UnicodeDecodeError as exc:
+            raise ValueError("Git path listing was not valid UTF-8.") from exc
+        start = end + 1
+
+
+def _validated_relative_path(path: str) -> str:
+    if not path or "\0" in path:
+        raise ValueError("Integrity paths must be non-empty and NUL-free.")
+    if os.name == "nt" and "\\" in path:
+        raise ValueError("Integrity paths must use safe Git repository-relative separators.")
+    pure = PurePosixPath(path)
+    if pure.is_absolute() or pure.as_posix() == "." or ".." in pure.parts or re.match(r"^[A-Za-z]:", path):
+        raise ValueError("Integrity paths must be safe repository-relative paths.")
+    normalized = pure.as_posix()
+    if normalized.startswith("../") or normalized.startswith("//"):
+        raise ValueError("Integrity paths must remain inside the repository root.")
+    return normalized
+
+
+def _has_default_excluded_part(relative: str) -> bool:
+    return any(part in DEFAULT_EXCLUDED_DIRECTORIES for part in PurePosixPath(relative).parts)
+
+
+def _matches_configured_integrity_exclude(relative: str, patterns: Sequence[str]) -> bool:
+    name = PurePosixPath(relative).name
+    return any(
+        fnmatch.fnmatchcase(relative, pattern) or fnmatch.fnmatchcase(name, pattern) for pattern in patterns
+    )
 
 
 def generate_public_fixtures(root: Path) -> tuple[tuple[str, Path], ...]:
@@ -54,6 +872,8 @@ def evaluate_subjects(
     data_directory: Path,
     repeats: int,
     limits: ScanLimits,
+    integrity_limits: IntegrityLimits | None = None,
+    integrity_excludes: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Evaluate subjects through application services and write sanitized JSON."""
 
@@ -63,6 +883,7 @@ def evaluate_subjects(
     _require_external_path(output_path, normalized, kind="output")
     _require_external_path(data_directory, normalized, kind="data directory")
     data_directory.mkdir(parents=True, exist_ok=True)
+    selected_integrity_limits = integrity_limits or IntegrityLimits()
     results = [
         _evaluate_subject(
             label,
@@ -70,11 +891,14 @@ def evaluate_subjects(
             data_directory=data_directory / label,
             repeats=repeats,
             limits=limits,
+            integrity_limits=selected_integrity_limits,
+            integrity_excludes=integrity_excludes,
         )
         for label, path in normalized
     ]
     payload: dict[str, Any] = {
-        "format_version": 1,
+        "format_version": EVALUATION_OUTPUT_FORMAT_VERSION,
+        "integrity_manifest_format_version": INTEGRITY_MANIFEST_FORMAT_VERSION,
         "sanitized": True,
         "tracemalloc_scope": (
             "Python allocations observed by tracemalloc; not complete process or native memory."
@@ -86,6 +910,7 @@ def evaluate_subjects(
             "max_source_lines": limits.max_source_lines,
             "max_source_bytes": limits.max_source_bytes,
         },
+        "integrity_limits": selected_integrity_limits.sanitized(),
         "subjects": results,
     }
     serialized = json.dumps(payload, indent=2, sort_keys=True) + "\n"
@@ -104,8 +929,15 @@ def _evaluate_subject(
     data_directory: Path,
     repeats: int,
     limits: ScanLimits,
+    integrity_limits: IntegrityLimits,
+    integrity_excludes: Sequence[str],
 ) -> dict[str, Any]:
-    before_digest = _tree_digest(path)
+    before_manifest = _build_integrity_manifest(
+        path,
+        limits=integrity_limits,
+        configured_excludes=integrity_excludes,
+    )
+    _require_complete_manifest(before_manifest, phase="before")
     service = RepositoryReviewService(data_directory=data_directory, limits=limits)
     evidences = []
     elapsed_ms: list[float] = []
@@ -127,7 +959,13 @@ def _evaluate_subject(
         peak_bytes.append(peak)
         phase_sequences.append(phases)
         evidences.append(evidence)
-    after_digest = _tree_digest(path)
+    after_manifest = _build_integrity_manifest(
+        path,
+        limits=integrity_limits,
+        configured_excludes=integrity_excludes,
+    )
+    _require_complete_manifest(after_manifest, phase="after")
+    integrity_equal = _integrity_manifests_equal(before_manifest, after_manifest)
     evidence = evidences[-1]
     relationship_statuses = Counter(item.resolution_status for item in evidence.relationships)
     unresolved = relationship_statuses["ambiguous"] + relationship_statuses["unresolved-dynamic"]
@@ -209,8 +1047,36 @@ def _evaluate_subject(
                 {hashlib.sha256(item.canonical_bytes()).hexdigest() for item in evidences}
             )
             == 1,
-            "repository_bytes_unchanged": before_digest == after_digest,
+            "repository_bytes_unchanged": integrity_equal,
             "recent_repository_count": len(service.list_repositories()),
+        },
+        "integrity": {
+            "format_version": INTEGRITY_MANIFEST_FORMAT_VERSION,
+            "mode": before_manifest.mode,
+            "complete": before_manifest.complete and after_manifest.complete,
+            "before_digest": before_manifest.digest,
+            "after_digest": after_manifest.digest,
+            "equal": integrity_equal,
+            "inclusion_metadata_equal": (
+                before_manifest.included_file_count == after_manifest.included_file_count
+                and before_manifest.included_byte_count == after_manifest.included_byte_count
+                and before_manifest.excluded_counts == after_manifest.excluded_counts
+                and before_manifest.mode == after_manifest.mode
+            ),
+            "included_files": {
+                "before": before_manifest.included_file_count,
+                "after": after_manifest.included_file_count,
+            },
+            "included_bytes": {
+                "before": before_manifest.included_byte_count,
+                "after": after_manifest.included_byte_count,
+            },
+            "excluded_counts": {
+                "before": before_manifest.exclusion_counts_dict(),
+                "after": after_manifest.exclusion_counts_dict(),
+            },
+            "limits": integrity_limits.sanitized(),
+            "failure_reason": None,
         },
         "comparison": {
             "equal_snapshots": bool(comparison["equal_snapshots"]),
@@ -303,26 +1169,33 @@ def _require_external_path(
     kind: str,
 ) -> None:
     resolved = candidate.resolve()
-    if any(resolved == root or resolved.is_relative_to(root) for _, root in subjects):
+    discovery = RepositoryDiscovery()
+    analysis_roots = tuple(Path(discovery.resolve_scope(root).analysis_root) for _, root in subjects)
+    if any(resolved == root or resolved.is_relative_to(root) for root in analysis_roots):
         raise ValueError(f"Evaluation {kind} must be outside every analyzed repository.")
 
 
-def _tree_digest(root: Path) -> str:
-    digest = hashlib.sha256()
-    for directory, names, files in os.walk(root, followlinks=False):
-        directory_path = Path(directory)
-        names[:] = sorted(name for name in names if name != ".git")
-        for name in sorted(files):
-            path = directory_path / name
-            relative = path.relative_to(root).as_posix()
-            digest.update(relative.encode("utf-8"))
-            digest.update(b"\0")
-            if path.is_symlink():
-                digest.update(os.readlink(path).encode("utf-8", errors="replace"))
-            else:
-                digest.update(path.read_bytes())
-            digest.update(b"\0")
-    return digest.hexdigest()
+def _require_complete_manifest(manifest: IntegrityManifestResult, *, phase: str) -> None:
+    if manifest.complete:
+        return
+    reason = manifest.failure_reason or "unknown-bounded-failure"
+    raise ValueError(f"Integrity manifest {phase} phase incomplete: {reason}.")
+
+
+def _integrity_manifests_equal(
+    before: IntegrityManifestResult,
+    after: IntegrityManifestResult,
+) -> bool:
+    return bool(
+        before.complete
+        and after.complete
+        and before.format_version == after.format_version
+        and before.mode == after.mode
+        and before.digest == after.digest
+        and before.included_file_count == after.included_file_count
+        and before.included_byte_count == after.included_byte_count
+        and before.excluded_counts == after.excluded_counts
+    )
 
 
 def _round_series(values: list[float]) -> list[float]:
@@ -451,6 +1324,29 @@ def _parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--max-files", type=int, default=5_000)
     evaluate.add_argument("--max-file-size-bytes", type=int, default=1_000_000)
     evaluate.add_argument("--max-total-bytes", type=int, default=100_000_000)
+    evaluate.add_argument("--integrity-max-files", type=int, default=50_000)
+    evaluate.add_argument("--integrity-max-path-entries", type=int, default=50_000)
+    evaluate.add_argument(
+        "--integrity-max-file-size-bytes",
+        type=int,
+        default=256 * 1024 * 1024,
+    )
+    evaluate.add_argument(
+        "--integrity-max-total-bytes",
+        type=int,
+        default=2 * 1024 * 1024 * 1024,
+    )
+    evaluate.add_argument(
+        "--integrity-max-path-listing-bytes",
+        type=int,
+        default=64 * 1024 * 1024,
+    )
+    evaluate.add_argument(
+        "--integrity-exclude",
+        action="append",
+        default=[],
+        help="Add an explicit repository-relative integrity exclusion pattern.",
+    )
     return parser
 
 
@@ -471,6 +1367,14 @@ def main(argv: list[str] | None = None) -> int:
             max_file_size_bytes=args.max_file_size_bytes,
             max_total_bytes=args.max_total_bytes,
         ),
+        integrity_limits=IntegrityLimits(
+            maximum_files=args.integrity_max_files,
+            maximum_path_entries=args.integrity_max_path_entries,
+            maximum_file_size_bytes=args.integrity_max_file_size_bytes,
+            maximum_total_bytes=args.integrity_max_total_bytes,
+            maximum_path_listing_bytes=args.integrity_max_path_listing_bytes,
+        ),
+        integrity_excludes=tuple(args.integrity_exclude),
     )
     print(f"Wrote sanitized dogfood results for {len(subjects)} subject(s) to {args.output.name}.")
     return 0

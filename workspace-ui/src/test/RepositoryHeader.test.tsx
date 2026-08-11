@@ -13,7 +13,7 @@ const sameMinuteChoices: SnapshotChoice[] = [
         completed_at: "2026-08-01T18:42:04.000Z",
         observed_state_known: true,
         branch: "branch-a",
-        git_sha: "55f20e0c17d1ea0f",
+        git_sha: "fixture1-not-a-secret",
         dirty: false,
         staged: false,
         untracked: false,
@@ -27,7 +27,7 @@ const sameMinuteChoices: SnapshotChoice[] = [
         completed_at: "2026-08-01T18:42:49.000Z",
         observed_state_known: true,
         branch: "branch-b",
-        git_sha: "55f20e0c17d1ea0f",
+        git_sha: "fixture1-not-a-secret",
         dirty: true,
         staged: true,
         untracked: true,
@@ -50,8 +50,8 @@ describe("RepositoryHeader", () => {
 
         const options = screen.getAllByRole("option");
         expect(options.map((option) => option.textContent)).toEqual([
-            "2026-08-01 18:42:04Z · branch-a @ 55f20e0c · snapshot …11111111 · complete · clean",
-            "2026-08-01 18:42:49Z · branch-b @ 55f20e0c · snapshot …22222222 · truncated + 2 parse gaps · dirty + staged + untracked",
+            "2026-08-01 18:42:04Z · branch-a @ fixture1 · snapshot …11111111 · complete · clean",
+            "2026-08-01 18:42:49Z · branch-b @ fixture1 · snapshot …22222222 · truncated + 2 parse gaps · dirty + staged + untracked",
         ]);
         expect(options[0].textContent).not.toBe(options[1].textContent);
         expect(screen.getByText(/Selected snapshot:/).textContent).toContain("…11111111");

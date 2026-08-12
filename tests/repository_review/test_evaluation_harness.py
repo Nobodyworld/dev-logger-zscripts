@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+import statistics
 import subprocess
 import sys
 from collections import Counter
@@ -65,6 +66,459 @@ _REPORT_FAMILY_NAMES = {
     "Parameters": "parameters",
     "Test-evidence candidate": "test-evidence-candidate",
 }
+
+_COMPARABLE_PERFORMANCE_SUBJECTS = {
+    "zscripts-public",
+    "existing-ordinary",
+    "existing-relationships",
+    "existing-findings",
+    "public-medium",
+    "public-large",
+    "public-multipackage",
+    "public-partial-parse-gap",
+    "public-cycles-repeated",
+    "public-partial-truncated",
+}
+_COMPARABLE_PERFORMANCE_DIAGNOSES = {
+    "environment-related",
+    "Python-runtime-related",
+    "repository-growth-related",
+    "harness-integrity-related",
+    "product-path-related",
+    "mixed",
+    "inconclusive",
+}
+_COMPARABLE_PERFORMANCE_CAPTURE_METHODS = {
+    "python -m pip list --format=json from exact measured environments",
+}
+_COMPARABLE_PERFORMANCE_CORRUPTIONS = (
+    "percentage-median-difference",
+    "confirmed-product-regression",
+    "regression-threshold",
+    "comparable-evidence-count",
+    "dependency-version",
+    "dependency-digest",
+)
+
+
+def _unsegment_evidence_hash(value: object, *, prefix: str, length: int) -> str:
+    assert isinstance(value, str)
+    marker = f"{prefix}:"
+    assert value.startswith(marker)
+    normalized = value.removeprefix(marker).replace("-", "")
+    assert len(normalized) == length
+    assert re.fullmatch(r"[0-9a-f]+", normalized)
+    return normalized
+
+
+def _performance_report_rows(addendum: str) -> dict[str, dict[str, object]]:
+    table = _report_section(
+        addendum,
+        "### Raw analysis timings and statistics",
+        "### Evidence counts, growth, integrity, and determinism",
+    )
+    rows: dict[str, dict[str, object]] = {}
+    for line in table.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) != 7 or not cells[0].startswith("`"):
+            continue
+        label = cells[0].strip("`")
+        rows[label] = {
+            "historical_raw": [float(value.strip()) for value in cells[1].split(",")],
+            "current_raw": [float(value.strip()) for value in cells[2].split(",")],
+            "historical_statistics": [float(value.strip()) for value in cells[3].split("/")],
+            "current_statistics": [float(value.strip()) for value in cells[4].split("/")],
+            "percentage_change": (
+                None if cells[5] == "not comparable" else float(cells[5].removesuffix("%"))
+            ),
+            "non_analysis_overhead": [float(value.strip()) for value in cells[6].split("/")],
+        }
+    assert set(rows) == _COMPARABLE_PERFORMANCE_SUBJECTS
+    return rows
+
+
+def _canonical_dependency_inventory(packages: list[dict[str, str]]) -> bytes:
+    return json.dumps(
+        packages,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+
+
+def _dependency_differences(
+    historical: list[dict[str, str]],
+    current: list[dict[str, str]],
+) -> dict[str, object]:
+    historical_versions = {package["name"]: package["version"] for package in historical}
+    current_versions = {package["name"]: package["version"] for package in current}
+    historical_names = set(historical_versions)
+    current_names = set(current_versions)
+    return {
+        "current_only": [
+            {"name": name, "version": current_versions[name]}
+            for name in sorted(current_names - historical_names)
+        ],
+        "historical_only": [
+            {"name": name, "version": historical_versions[name]}
+            for name in sorted(historical_names - current_names)
+        ],
+        "identical": historical == current,
+        "version_mismatches": [
+            {
+                "current_version": current_versions[name],
+                "historical_version": historical_versions[name],
+                "name": name,
+            }
+            for name in sorted(historical_names & current_names)
+            if historical_versions[name] != current_versions[name]
+        ],
+    }
+
+
+def _assert_dependency_environment_contract(
+    payload: dict[str, object],
+    addendum: str,
+) -> None:
+    environments = payload["dependency_environments"]
+    assert isinstance(environments, dict)
+    assert environments["capture_method"] in _COMPARABLE_PERFORMANCE_CAPTURE_METHODS
+    assert environments["normalization"] == {
+        "canonical_json": (
+            "UTF-8 JSON array with sorted object keys, compact separators, and no trailing newline"
+        ),
+        "name_rule": (
+            "PEP 503 lowercase with each run of hyphen, underscore, or period replaced by one hyphen"
+        ),
+        "ordering": "normalized name, then version",
+    }
+
+    package_sets: dict[str, list[dict[str, str]]] = {}
+    for build_name in ("historical", "current"):
+        environment = environments[build_name]
+        assert isinstance(environment, dict)
+        assert environment["python"] == "CPython 3.13.7 64-bit"
+        assert environment["pip"] == "26.2.1"
+        packages = environment["packages"]
+        assert isinstance(packages, list)
+        assert environment["package_count"] == len(packages)
+        assert packages == sorted(packages, key=lambda package: (package["name"], package["version"]))
+        assert len({package["name"] for package in packages}) == len(packages)
+        for package in packages:
+            assert set(package) == {"name", "version"}
+            assert re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", package["name"])
+            assert isinstance(package["version"], str) and package["version"]
+            entry = json.dumps(package, sort_keys=True).lower()
+            for marker in ("file:", "http:", "https:", "editable", "@", "\\", "/"):
+                assert marker not in entry
+        digest = hashlib.sha256(_canonical_dependency_inventory(packages)).hexdigest()
+        assert _unsegment_evidence_hash(environment["canonical_digest"], prefix="sha256", length=64) == digest
+        assert (f"| {build_name.title()} | CPython 3.13.7 64-bit / 26.2.1 | {len(packages)} |") in addendum
+        assert f"`{digest}`" in addendum
+        package_sets[build_name] = packages
+
+    expected_comparison = _dependency_differences(
+        package_sets["historical"],
+        package_sets["current"],
+    )
+    assert environments["comparison"] == expected_comparison
+    if expected_comparison["identical"]:
+        assert package_sets["historical"] == package_sets["current"]
+        assert "identical audited dependency inventories" in addendum
+        assert (
+            "historical-only packages,\ncurrent-only packages, and version mismatches are all empty"
+            in addendum
+        )
+    else:
+        assert "identical audited dependency inventories" not in addendum
+
+
+def _assert_comparable_performance_evidence(
+    evidence_path: Path,
+    report_path: Path,
+) -> None:
+    serialized = evidence_path.read_text(encoding="utf-8")
+    payload = json.loads(serialized)
+    report = report_path.read_text(encoding="utf-8")
+    addendum = _report_section(
+        report,
+        "## Comparable Python 3.13 performance addendum",
+        "## Executive Decision",
+    )
+
+    assert payload["format_version"] == 1
+    assert payload["sanitized"] is True
+    assert _unsegment_evidence_hash(
+        payload["builds"]["historical_sha"], prefix="git-sha1", length=40
+    ) == "".join(("678356bf", "4e237308", "86abaffd", "84186d0c", "5d3627f7"))
+    assert _unsegment_evidence_hash(
+        payload["builds"]["current_sha"], prefix="git-sha1", length=40
+    ) == "".join(("6509939e", "486bb638", "0a890612", "5381696f", "f392179b"))
+    assert payload["diagnosis"] in _COMPARABLE_PERFORMANCE_DIAGNOSES
+    assert payload["diagnosis"] == "mixed"
+    assert payload["classification"] == "PUBLIC BETA — ACTIVE DEVELOPMENT"
+    assert payload["limits"]["current_integrity"] == {
+        "git_command_timeout_seconds": 30,
+        "max_file_size_bytes": 268_435_456,
+        "max_files": 50_000,
+        "max_path_entries": 50_000,
+        "max_path_listing_bytes": 67_108_864,
+        "max_total_bytes": 2_147_483_648,
+    }
+    assert payload["repetition_design"]["accepted_analysis_repetitions_per_build_subject"] == 6
+    assert payload["repetition_design"]["contaminated_batches_preserved"] == 2
+
+    policy = payload["regression_policy"]
+    assert policy["format_version"] == 1
+    assert policy["median_slowdown_threshold_percent"] == 25.0
+    assert policy["minimum_confirming_comparable_subjects"] == 2
+    assert policy["comparison_decimal_places"] == 3
+    for field in (
+        "requires_consistent_instrumentation",
+        "requires_evidence_count_parity",
+        "requires_identical_fixture_bytes",
+        "requires_same_host",
+        "requires_same_python_patch",
+        "single_subject_exception_requires_isolated_product_phase",
+        "zscripts_requires_identical_tree_for_percentage_comparison",
+    ):
+        assert policy[field] is True
+    assert "at least 25% slower" in policy["decision_description"]
+    assert "at least two comparable subjects" in policy["decision_description"]
+    assert "No current directly comparable subject reaches the threshold." in policy["decision_description"]
+
+    _assert_dependency_environment_contract(payload, addendum)
+    report_rows = _performance_report_rows(addendum)
+
+    subjects = {subject["label"]: subject for subject in payload["subjects"]}
+    assert set(subjects) == _COMPARABLE_PERFORMANCE_SUBJECTS
+    assert subjects["zscripts-public"]["comparable"] is False
+    assert all(
+        subject["comparable"] is True for label, subject in subjects.items() if label != "zscripts-public"
+    )
+
+    comparable_percentages: dict[str, float] = {}
+    for label, subject in subjects.items():
+        assert subject["comparison"]["diagnosis"] in _COMPARABLE_PERFORMANCE_DIAGNOSES
+        if label == "zscripts-public":
+            assert subject["comparable"] is False
+            assert subject["fixture"]["byte_identical"] is False
+            assert subject["fixture"]["tree_digest"] is None
+            assert subject["comparison"]["percentage_median_difference"] is None
+        else:
+            assert subject["fixture"]["byte_identical"] is True
+            _unsegment_evidence_hash(subject["fixture"]["tree_digest"], prefix="sha256", length=64)
+            assert (
+                subject["builds"]["historical"]["evidence_counts"]
+                == subject["builds"]["current"]["evidence_counts"]
+            )
+
+        calculated_statistics: dict[str, dict[str, float]] = {}
+        for build_name in ("historical", "current"):
+            build = subject["builds"][build_name]
+            values = build["analysis_elapsed_ms"]
+            peaks = build["tracemalloc_peak_bytes"]
+            assert len(values) == len(peaks) == 6
+            assert all(isinstance(value, (int, float)) and value > 0 for value in values)
+            assert all(isinstance(value, int) and value > 0 for value in peaks)
+            assert len(build["batches"]) == 3
+            assert [batch["round"] for batch in build["batches"]] == [1, 2, 3]
+            assert values == [
+                repetition["analysis_elapsed_ms"]
+                for batch in build["batches"]
+                for repetition in batch["analysis_repetitions"]
+            ]
+            assert all(len(batch["analysis_repetitions"]) == 2 for batch in build["batches"])
+
+            median = statistics.median(values)
+            expected = {
+                "median_ms": round(median, 3),
+                "minimum_ms": round(min(values), 3),
+                "maximum_ms": round(max(values), 3),
+                "median_absolute_deviation_ms": round(
+                    statistics.median(abs(value - median) for value in values),
+                    3,
+                ),
+            }
+            assert build["analysis_statistics"] == expected
+            calculated_statistics[build_name] = expected
+            _unsegment_evidence_hash(build["snapshot_id"], prefix="sha256", length=64)
+            _unsegment_evidence_hash(build["canonical_evidence_digest"], prefix="sha256", length=64)
+
+            counts = build["evidence_counts"]
+            for field in (
+                "files_discovered",
+                "files_analyzed",
+                "files_excluded",
+                "modules",
+                "symbols",
+                "relationships",
+                "resolved_static_relationships",
+                "probable_static_relationships",
+                "ambiguous_relationships",
+                "unresolved_dynamic_relationships",
+                "cycles",
+                "metrics",
+                "findings",
+                "parse_gaps",
+            ):
+                assert isinstance(counts[field], int) and counts[field] >= 0
+            assert isinstance(counts["truncated"], bool)
+            assert isinstance(counts["lifecycle_reconciled"], bool)
+            assert isinstance(counts["reconciliation_complete"], bool)
+
+            for batch in build["batches"]:
+                assert isinstance(batch["cpu_percent_before"], (int, float))
+                assert 0 <= batch["cpu_percent_before"] <= 35
+                assert isinstance(batch["free_memory_bytes_before"], int)
+                assert batch["free_memory_bytes_before"] > 0
+                assert batch["total_cli_batch_wall_ms"] > 0
+                assert batch["determinism"] == {
+                    "repeated_canonical_bytes_equal": True,
+                    "repeated_snapshot_identity_equal": True,
+                    "repository_bytes_unchanged": True,
+                    "saved_handoff_reopened_integrity": True,
+                }
+                integrity = batch["repository_integrity"]
+                assert integrity["equal"] is True
+                if build_name == "current":
+                    assert integrity["format_version"] == 1
+                    assert integrity["complete"] is True
+                    assert integrity["mode"] in {"filesystem", "git"}
+                    assert isinstance(integrity["included_file_count"], int)
+                    assert isinstance(integrity["included_byte_count"], int)
+                else:
+                    assert integrity["format_version"] is None
+                    assert integrity["complete"] is None
+                    assert integrity["mode"] == "historical-unversioned-tree-digest"
+
+        historical_median = calculated_statistics["historical"]["median_ms"]
+        current_median = calculated_statistics["current"]["median_ms"]
+        decimal_places = policy["comparison_decimal_places"]
+        absolute_difference = round(current_median - historical_median, decimal_places)
+        comparison = subject["comparison"]
+        assert comparison["historical_median_ms"] == historical_median
+        assert comparison["current_median_ms"] == current_median
+        assert comparison["absolute_median_difference_ms"] == absolute_difference
+        if subject["comparable"]:
+            percentage_difference = round(
+                absolute_difference / historical_median * 100,
+                decimal_places,
+            )
+            assert comparison["percentage_median_difference"] == percentage_difference
+            comparable_percentages[label] = percentage_difference
+        else:
+            assert comparison["percentage_median_difference"] is None
+
+        row = report_rows[label]
+        assert row["historical_raw"] == subject["builds"]["historical"]["analysis_elapsed_ms"]
+        assert row["current_raw"] == subject["builds"]["current"]["analysis_elapsed_ms"]
+        for build_name in ("historical", "current"):
+            statistics_row = row[f"{build_name}_statistics"]
+            calculated = calculated_statistics[build_name]
+            assert statistics_row == [
+                calculated["median_ms"],
+                calculated["minimum_ms"],
+                calculated["maximum_ms"],
+                calculated["median_absolute_deviation_ms"],
+            ]
+        assert row["percentage_change"] == comparison["percentage_median_difference"]
+        expected_overhead = [
+            round(
+                statistics.median(
+                    batch["integrity_comparison_and_handoff_overhead_ms"]
+                    for batch in subject["builds"][build_name]["batches"]
+                ),
+                decimal_places,
+            )
+            for build_name in ("historical", "current")
+        ]
+        assert row["non_analysis_overhead"] == expected_overhead
+
+    threshold_subjects = {
+        label
+        for label, percentage in comparable_percentages.items()
+        if percentage >= policy["median_slowdown_threshold_percent"]
+    }
+    assert threshold_subjects == set()
+    derived_global_result = len(threshold_subjects) >= policy["minimum_confirming_comparable_subjects"]
+    for label, subject in subjects.items():
+        expected_subject_result = derived_global_result and label in threshold_subjects
+        assert subject["comparison"]["confirmed_product_regression"] is expected_subject_result
+    assert payload["confirmed_product_regression"] is derived_global_result
+    assert payload["separate_defect_warranted"] is derived_global_result
+
+    minimum_percentage = min(comparable_percentages.values())
+    maximum_percentage = max(comparable_percentages.values())
+    assert (
+        "identical-fixture percentage range is "
+        f"{minimum_percentage:+.3f}% through {maximum_percentage:+.3f}%."
+    ) in addendum
+    assert (
+        "No directly comparable subject reached the "
+        f"{policy['median_slowdown_threshold_percent']:g}% threshold."
+    ) in addendum
+    assert "Zscripts is not percentage-compared because its\nrepository trees differ" in addendum
+
+    assert "No comparable Python 3.13 product regression was confirmed." in addendum
+    assert "A separate defect proposal was therefore not prepared." in addendum
+    assert payload["regression_confidence"] in addendum
+    assert re.search(r"(?i)[a-z]:[\\/]", serialized) is None
+    assert re.search(r'"/', serialized) is None
+    assert "source_excerpt" not in serialized
+    assert "worktree" not in serialized.lower()
+    assert "private-repository" not in serialized.lower()
+    assert "sqlite3" not in serialized.lower()
+    assert "evidence-root" not in serialized.lower()
+    for variable in ("USERNAME", "COMPUTERNAME"):
+        value = os.environ.get(variable)
+        if value:
+            assert f'"{value}"' not in serialized
+
+
+def test_comparable_performance_evidence_contract_and_report_parity() -> None:
+    repository_root = Path(__file__).resolve().parents[2]
+    _assert_comparable_performance_evidence(
+        repository_root / "docs" / "product" / "REPOSITORY_REVIEW_COMPARABLE_PERFORMANCE.json",
+        repository_root / "docs" / "product" / "REPOSITORY_REVIEW_DOGFOOD_REPORT.md",
+    )
+
+
+@pytest.mark.parametrize("corruption", _COMPARABLE_PERFORMANCE_CORRUPTIONS)
+def test_comparable_performance_evidence_rejects_corruption(
+    tmp_path: Path,
+    corruption: str,
+) -> None:
+    repository_root = Path(__file__).resolve().parents[2]
+    source_evidence = repository_root / "docs" / "product" / "REPOSITORY_REVIEW_COMPARABLE_PERFORMANCE.json"
+    source_report = repository_root / "docs" / "product" / "REPOSITORY_REVIEW_DOGFOOD_REPORT.md"
+    payload = json.loads(source_evidence.read_text(encoding="utf-8"))
+
+    if corruption == "percentage-median-difference":
+        payload["subjects"][1]["comparison"]["percentage_median_difference"] += 1
+    elif corruption == "confirmed-product-regression":
+        payload["subjects"][1]["comparison"]["confirmed_product_regression"] = True
+    elif corruption == "regression-threshold":
+        payload["regression_policy"]["median_slowdown_threshold_percent"] = 24.0
+    elif corruption == "comparable-evidence-count":
+        payload["subjects"][1]["builds"]["current"]["evidence_counts"]["files_discovered"] += 1
+    elif corruption == "dependency-version":
+        payload["dependency_environments"]["historical"]["packages"][0]["version"] = "0.0.6"
+    elif corruption == "dependency-digest":
+        digest = payload["dependency_environments"]["current"]["canonical_digest"]
+        payload["dependency_environments"]["current"]["canonical_digest"] = (
+            f"{digest[:-1]}{'0' if digest[-1] != '0' else '1'}"
+        )
+    else:
+        raise AssertionError(f"Unhandled corruption: {corruption}")
+
+    evidence_path = tmp_path / "performance.json"
+    report_path = tmp_path / "report.md"
+    evidence_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    report_path.write_text(source_report.read_text(encoding="utf-8"), encoding="utf-8")
+
+    with pytest.raises(AssertionError):
+        _assert_comparable_performance_evidence(evidence_path, report_path)
 
 
 def test_evaluation_is_sanitized_deterministic_and_bounded(tmp_path: Path) -> None:

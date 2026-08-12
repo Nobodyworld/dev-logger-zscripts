@@ -34,6 +34,15 @@
 
 ### Added
 
+- Comparable CPython 3.13.7 Repository Review performance evidence for the
+  historical measured build and exact post-PR-118 main. Nine byte-identical
+  public fixture subjects showed median analysis changes from -1.553% to
+  +9.108%, so no product regression or optimization defect was confirmed;
+  sanitized raw repetitions, spread, integrity, determinism, and repository
+  growth evidence are published with the dogfood report. A machine-validated
+  regression policy now derives comparison fields and conclusions from raw
+  measurements, while audited normalized inventories prove dependency parity
+  between the exact measured environments.
 - Repository-scope presentation contract version `1`: the local workspace
   strictly resolves an entered directory and explicitly confirms a broader
   enclosing Git root before starting analysis. The preflight is read-only and

@@ -6,7 +6,206 @@
     "historical_tree": "git-sha1:bfdb9bbd-b686174e-cd53d888-68e2cf2c-96976b71"
   },
   "classification": "PUBLIC BETA \u2014 ACTIVE DEVELOPMENT",
+  "confirmed_product_regression": false,
   "diagnosis": "mixed",
+  "dependency_environments": {
+    "capture_method": "python -m pip list --format=json from exact measured environments",
+    "comparison": {
+      "current_only": [],
+      "historical_only": [],
+      "identical": true,
+      "version_mismatches": []
+    },
+    "current": {
+      "canonical_digest": "sha256:3c2fa384-e7334926-39c65396-877f0da6-92232178-f81865d2-e27c0a34-79e3cfbe",
+      "package_count": 21,
+      "packages": [
+        {
+          "name": "annotated-doc",
+          "version": "0.0.5"
+        },
+        {
+          "name": "annotated-types",
+          "version": "0.8.0"
+        },
+        {
+          "name": "anyio",
+          "version": "4.14.2"
+        },
+        {
+          "name": "attrs",
+          "version": "26.1.0"
+        },
+        {
+          "name": "click",
+          "version": "8.4.2"
+        },
+        {
+          "name": "colorama",
+          "version": "0.4.6"
+        },
+        {
+          "name": "fastapi",
+          "version": "0.139.2"
+        },
+        {
+          "name": "h11",
+          "version": "0.16.0"
+        },
+        {
+          "name": "idna",
+          "version": "3.18"
+        },
+        {
+          "name": "jsonschema",
+          "version": "4.26.0"
+        },
+        {
+          "name": "jsonschema-specifications",
+          "version": "2025.9.1"
+        },
+        {
+          "name": "pip",
+          "version": "26.2.1"
+        },
+        {
+          "name": "pydantic",
+          "version": "2.13.4"
+        },
+        {
+          "name": "pydantic-core",
+          "version": "2.46.4"
+        },
+        {
+          "name": "referencing",
+          "version": "0.37.0"
+        },
+        {
+          "name": "rpds-py",
+          "version": "2026.6.3"
+        },
+        {
+          "name": "starlette",
+          "version": "1.6.0"
+        },
+        {
+          "name": "typing-extensions",
+          "version": "4.16.0"
+        },
+        {
+          "name": "typing-inspection",
+          "version": "0.4.3"
+        },
+        {
+          "name": "uvicorn",
+          "version": "0.51.0"
+        },
+        {
+          "name": "zscripts",
+          "version": "0.1.0"
+        }
+      ],
+      "pip": "26.2.1",
+      "python": "CPython 3.13.7 64-bit"
+    },
+    "historical": {
+      "canonical_digest": "sha256:3c2fa384-e7334926-39c65396-877f0da6-92232178-f81865d2-e27c0a34-79e3cfbe",
+      "package_count": 21,
+      "packages": [
+        {
+          "name": "annotated-doc",
+          "version": "0.0.5"
+        },
+        {
+          "name": "annotated-types",
+          "version": "0.8.0"
+        },
+        {
+          "name": "anyio",
+          "version": "4.14.2"
+        },
+        {
+          "name": "attrs",
+          "version": "26.1.0"
+        },
+        {
+          "name": "click",
+          "version": "8.4.2"
+        },
+        {
+          "name": "colorama",
+          "version": "0.4.6"
+        },
+        {
+          "name": "fastapi",
+          "version": "0.139.2"
+        },
+        {
+          "name": "h11",
+          "version": "0.16.0"
+        },
+        {
+          "name": "idna",
+          "version": "3.18"
+        },
+        {
+          "name": "jsonschema",
+          "version": "4.26.0"
+        },
+        {
+          "name": "jsonschema-specifications",
+          "version": "2025.9.1"
+        },
+        {
+          "name": "pip",
+          "version": "26.2.1"
+        },
+        {
+          "name": "pydantic",
+          "version": "2.13.4"
+        },
+        {
+          "name": "pydantic-core",
+          "version": "2.46.4"
+        },
+        {
+          "name": "referencing",
+          "version": "0.37.0"
+        },
+        {
+          "name": "rpds-py",
+          "version": "2026.6.3"
+        },
+        {
+          "name": "starlette",
+          "version": "1.6.0"
+        },
+        {
+          "name": "typing-extensions",
+          "version": "4.16.0"
+        },
+        {
+          "name": "typing-inspection",
+          "version": "0.4.3"
+        },
+        {
+          "name": "uvicorn",
+          "version": "0.51.0"
+        },
+        {
+          "name": "zscripts",
+          "version": "0.1.0"
+        }
+      ],
+      "pip": "26.2.1",
+      "python": "CPython 3.13.7 64-bit"
+    },
+    "normalization": {
+      "canonical_json": "UTF-8 JSON array with sorted object keys, compact separators, and no trailing newline",
+      "name_rule": "PEP 503 lowercase with each run of hyphen, underscore, or period replaced by one hyphen",
+      "ordering": "normalized name, then version"
+    }
+  },
   "environment": {
     "accepted_batch_free_memory_max_bytes": 4983885824,
     "accepted_batch_free_memory_min_bytes": 3037155328,
@@ -91,6 +290,21 @@
     }
   },
   "regression_confidence": "No comparable Python 3.13 product regression was confirmed.",
+  "regression_policy": {
+    "comparison_decimal_places": 3,
+    "comparison_rounding": "Round medians to three decimals; subtract rounded medians and round to three decimals; divide the rounded absolute difference by the rounded historical median, multiply by 100, and round to three decimals.",
+    "decision_description": "Percentage regression applies only to directly comparable byte-identical subjects on the same host and Python patch with consistent instrumentation and evidence-count parity. A subject reaches the primary threshold when its current median is at least 25% slower; confirmation requires at least two comparable subjects unless one isolated product phase supports the documented exception. Zscripts is not percentage-compared because its repository trees differ. No current directly comparable subject reaches the threshold.",
+    "format_version": 1,
+    "median_slowdown_threshold_percent": 25.0,
+    "minimum_confirming_comparable_subjects": 2,
+    "requires_consistent_instrumentation": true,
+    "requires_evidence_count_parity": true,
+    "requires_identical_fixture_bytes": true,
+    "requires_same_host": true,
+    "requires_same_python_patch": true,
+    "single_subject_exception_requires_isolated_product_phase": true,
+    "zscripts_requires_identical_tree_for_percentage_comparison": true
+  },
   "repetition_design": {
     "accepted_analysis_repetitions_per_build_subject": 6,
     "analysis_repetitions_per_batch": 2,

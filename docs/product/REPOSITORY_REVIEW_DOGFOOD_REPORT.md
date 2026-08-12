@@ -553,16 +553,50 @@ any other deferred expansion.
 No comparable Python 3.13 product regression was confirmed. The historical
 measured build `678356bf4e23730886abaffd84186d0c5d3627f7` and exact post-PR-118
 main `6509939e486bb6380a8906125381696ff392179b` were measured on the same host
-with CPython 3.13.7, matched dependencies, identical instrumentation, and nine
-byte-identical fixture subjects. Current median analysis time ranged from
-1.553% faster to 9.108% slower on those subjects; none reached the 25%
-regression threshold. Zscripts itself was 1,558.696 ms slower at the median,
-but that comparison is repository-growth-related and intentionally has no
-percentage regression because the two repository trees differ.
+with CPython 3.13.7, identical audited dependency inventories, identical
+instrumentation, and nine byte-identical fixture subjects. The
+identical-fixture percentage range is -1.553% through +9.108%. No directly
+comparable subject reached the 25% threshold. Zscripts itself was 1,558.696 ms
+slower at the median, but Zscripts is not percentage-compared because its
+repository trees differ; that observation is repository-growth-related.
 
 The sanitized raw evidence and calculations are in
 [`REPOSITORY_REVIEW_COMPARABLE_PERFORMANCE.json`](REPOSITORY_REVIEW_COMPARABLE_PERFORMANCE.json).
 No analyzer optimization or separate defect is warranted from this evidence.
+
+### Regression policy and dependency audit
+
+Regression policy format 1 applies percentage conclusions only to directly
+comparable byte-identical subjects measured on the same host and Python patch
+with consistent instrumentation and equal evidence counts. Medians, absolute
+differences, and percentage differences use the documented three-decimal
+rounding sequence. A subject reaches the primary threshold when its current
+median is at least 25% slower. Global confirmation requires at least two such
+comparable subjects; a single-subject exception requires an isolated product
+phase. No current subject meets either route.
+
+Regression tests recalculate every comparison field from the raw measurements,
+enforce evidence-count parity for all nine byte-identical fixtures, derive the
+threshold set and global result from the machine-readable policy, and parse this
+addendum's raw timing table back to the JSON. Zscripts requires identical trees
+for percentage comparison under the same policy, so no percentage conclusion is
+drawn for its unequal historical and current trees.
+
+Both exact measured virtual environments remained available after the run.
+Their actual inventories were captured with `python -m pip list --format=json`,
+then names were normalized by the PEP 503 rule and sorted by normalized name and
+version. Each canonical digest covers the compact UTF-8 JSON package array with
+sorted object keys and no trailing newline.
+
+| Build | Python / pip | Normalized packages | Canonical SHA-256 inventory digest |
+| --- | --- | ---: | --- |
+| Historical | CPython 3.13.7 64-bit / 26.2.1 | 21 | `3c2fa384e733492639c65396877f0da692232178f81865d2e27c0a3479e3cfbe` |
+| Current | CPython 3.13.7 64-bit / 26.2.1 | 21 | `3c2fa384e733492639c65396877f0da692232178f81865d2e27c0a3479e3cfbe` |
+
+The normalized arrays are exactly equal: historical-only packages,
+current-only packages, and version mismatches are all empty. The committed
+evidence records only package names and versions, never environment paths,
+editable locations, direct URLs, caches, user names, or machine names.
 
 ### Preflight, environment, and quiet-host procedure
 
@@ -671,7 +705,8 @@ integrity measurement.
 Three measurements are insufficient for statistical-significance claims; six
 per build reduce the harness minimum-repeat mismatch but do not change that
 constraint. The largest comparable median increase, `public-medium`, was only
-67.508 ms and remained far below 25%. Its spread also overlaps substantially.
+67.508 ms. No directly comparable subject reached the 25% threshold. Its spread
+also overlaps substantially.
 No direction satisfying the acceptance rule appeared across nontrivial
 identical-byte subjects, and no isolated product phase was implicated.
 

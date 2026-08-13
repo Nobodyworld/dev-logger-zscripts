@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- Make documentation-link validation select tracked plus repository-nonignored
+  Markdown deterministically, exclude ignored developer artifacts, neutralize
+  system/global/XDG and `.git/info/exclude` state, bound and incrementally parse
+  Git path output, retry transient external failures without hiding persistent
+  broken links, cache duplicate URL checks, and report bounded scope failures
+  without tracebacks.
 - Bound Repository Review evaluation integrity with output format `2` and
   integrity-manifest format `1`: Git and non-Git subjects now use deterministic
   streamed manifests, analyzer-aligned roots and default-directory exclusions,

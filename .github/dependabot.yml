@@ -15,6 +15,11 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # Ruff upgrades require a dedicated formatting-contract PR.
+      - dependency-name: "ruff"
+      # Issue #73 freezes Torch during the Phase 2A compatibility window.
+      - dependency-name: "torch"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

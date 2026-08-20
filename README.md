@@ -89,7 +89,9 @@ flowchart LR
 - Required JSON Schema validation for normalized payloads; invalid payloads are
   rejected in editable and isolated-wheel installations.
 - Experimental local repository review workspace with bounded, read-only Python
-  AST analysis, atomic SQLite snapshots, and responsive Overview/Symbols views.
+  AST analysis, atomic SQLite snapshots, and the complete
+  `Scan → Explore → Review → Compare → Handoff` workflow across Overview,
+  Symbols, Relationships, Findings, Compare, and Handoff views.
 
 ## Quickstart
 
@@ -215,8 +217,8 @@ consumer review, and
 `docs/operations/LEGACY_HELPER_DEPRECATION_NOTICE.md` for the active
 public-beta deprecation notice.
 
-Torch remains at 2.9.0 during Phase 2A. Torch 2.13 and all ML-helper migration
-decisions remain deferred under issue #62.
+Torch remains at 2.9.0 during Phase 2A. Torch updates and all ML-helper migration
+decisions remain deferred under active issue #73.
 
 Use the registry system to call helpers by tag:
 
@@ -250,10 +252,11 @@ Support and usage references:
 - Raw log to normalized/redacted walkthrough: `docs/guides/RAW_LOG_TO_REDACTED_REPORT.md`
 - GitHub Actions usage examples: `docs/guides/GITHUB_ACTIONS_USAGE.md`
 
-Additional governance documents live at the root:
+Governance and contribution references:
 
-- `SPEC.md` – Repository expectations, maintenance status, and tasking guidance.
-- `STYLE-GUIDE.md` – Organisation-wide coding standards.
+- `CONTRIBUTING.md` – Setup, quality gates, and pull-request expectations.
+- `docs/TASKLIST.md` – Historical task ledger; current active work is tracked in
+  GitHub issues.
 - `CHANGELOG.md` – Chronological record of notable changes.
 
 ## Development Workflow
@@ -330,5 +333,5 @@ check provider. Extension and health-check contributions must follow
 - `docs/releases/RELEASE_NOTES.md` – Narrative release history.
 - `docs/SUPPORT.md` / `SECURITY.md` – Support channels and vulnerability reporting.
 
-Keep `TASKLIST.md` updated when work completes and log notable upgrades in
-`CHANGELOG.md`.
+Track current work in GitHub issues, preserve historical task records in
+`docs/TASKLIST.md`, and log notable upgrades in `CHANGELOG.md`.

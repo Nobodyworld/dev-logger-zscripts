@@ -1,18 +1,21 @@
-# TASKLIST: Task Compilation
+# TASKLIST: Historical Task Compilation
 
--*NEVER REMOVE SPEC.md, STYLE-GUIDE.md, or TASKLIST.md FROM THE ROOT*
+This file preserves the repository's older one-line task ledger. Current work,
+priorities, dependencies, and completion decisions are tracked through GitHub
+issues and pull requests.
 
-Use this file to compile and track all tasks that need to be completed for this repository. Check off items as they are finished. Keep each task on a single line. Check off already completed tasks and keep things in chronological order when updating and adding to the file. Follow Template Entry below.
+Do not add a current task here unless the repository owner explicitly chooses to
+maintain both systems. When preserving an older completed task, keep each task on
+one line and add a one-line completion note with a date and public PR or report
+reference when available.
 
-Keep entries one-line, oldest-first. When completing a task, check it off and append a one-line completion note indented underneath (date + PR/link + 1-2 sentence summary).
-
-## Template (single-line + optional completion note)
+## Historical template
 
 ```text
 - [ ] Short task description — TK-YYYYMMDD-###
 ```
 
-Completion note (indented, one line):
+Completion note:
 
 ```text
   - Completed: YYYY-MM-DD — PR: <url> — short summary
@@ -20,7 +23,7 @@ Completion note (indented, one line):
 
 ---
 
-## Tasks
+## Historical tasks
 
 - [x] Add atomic_write_bytes helper for binary artifact support in io_utils — TK-20250215-001
   - Completed: 2025-02-15T00:00Z — Report: [REPORT-0001](reports/narratives/REPORTS/000_CONTEXT.md)

@@ -22,11 +22,11 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@9191ea1a55b1e7028943ee5647bf579e1182b42d # post-v7.0.0 security fixes
         with:
           python-version: "3.11"
       - name: Set up Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@e51e5fe84fc33b4c73ebe40526b2694712b5b858 # post-v7.0.0 GHSA fix
         with:
           node-version: "24.19.0"
       - name: Activate pinned pnpm

@@ -153,7 +153,7 @@ def test_deprecation_notice_starts_but_does_not_complete_cycle() -> None:
     assert EXPECTED_THRESHOLD in notice
     assert "all **154 tracked helper python modules remain included in the wheel today**" in lowered
     assert "the cycle starts with this notice. it is not complete in this change." in lowered
-    assert re.search(r"phase 2b remains separately\s+owner-gated through issue #62", lowered)
+    assert re.search(r"phase 2b remains separately\s+owner-gated through (?:active\s+)?issue #73", lowered)
     assert "cycle is complete" not in lowered
 
 

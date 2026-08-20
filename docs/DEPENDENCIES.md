@@ -46,16 +46,23 @@ license inventory.
 
 ## CI action provenance
 
-All workflow actions remain GitHub-owned and immutable commit-pinned. The setup
-actions now use their native Node 24 major versions while preserving the
-repository's existing Python, Node, pnpm, permission, and artifact contracts.
+All workflow actions remain GitHub-owned and immutable commit-pinned. Checkout
+and artifact upload use the latest reviewed immutable releases. The two setup
+actions temporarily use reviewed official commits after their `v7.0.0` tags
+because upstream merged bundle-security fixes without yet publishing patched
+version tags.
 
-| Action | Commit | Reviewed tag |
+| Action | Commit | Reviewed provenance |
 | --- | --- | --- |
 | `actions/checkout` | `3d3c42e5aac5ba805825da76410c181273ba90b1` | `v7.0.1` |
-| `actions/setup-python` | `5fda3b95a4ea91299a34e894583c3862153e4b97` | `v7.0.0` |
-| `actions/setup-node` | `820762786026740c76f36085b0efc47a31fe5020` | `v7.0.0` |
+| `actions/setup-python` | `9191ea1a55b1e7028943ee5647bf579e1182b42d` | Official post-`v7.0.0` security commit: patched `brace-expansion`, `fast-xml-parser`, `js-yaml`, and `undici`; rebuilt checked-in action bundles. |
+| `actions/setup-node` | `e51e5fe84fc33b4c73ebe40526b2694712b5b858` | Official post-`v7.0.0` security commit: patched all bundled `brace-expansion` lines for GHSA-3jxr-9vmj-r5cp and GHSA-mh99-v99m-4gvg; rebuilt checked-in action bundles. |
 | `actions/upload-artifact` | `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` | `v7.0.1` |
+
+Both reviewed setup commits retain `runs.using: node24`. Issue #127 tracks
+returning them to immutable tagged patch releases after upstream publishes tags
+that contain the same security fixes. Do not move either pin back to the older
+`v7.0.0` release commit merely to regain a version tag.
 
 The workflow activates exact `pnpm@10.18.1` through the Corepack bundled with
 the selected Node runtime. This avoids an unapproved third-party action while
@@ -80,7 +87,10 @@ existing Actions allowlist. Checkout continues to use
 - **Legacy-helper dependencies** remain compatibility-only extras rather than
   core runtime requirements. Requests now excludes the affected pre-2.33.0
   line; Torch remains frozen under the separately governed Phase 2A contract.
-- **Transitive dependencies** are resolved and checked by `pip-audit`; the
+- **Action supply chain** is full-SHA pinned and reviewed beyond tag labels. The
+  setup-action release tags were not treated as current after upstream disclosed
+  and fixed vulnerable bundled dependencies in later official commits.
+- **Transitive Python dependencies** are resolved and checked by `pip-audit`; the
   hosted gate audits the installed development and helper environment.
 
 ## Tool Upgrade Policy

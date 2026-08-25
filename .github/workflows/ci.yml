@@ -26,7 +26,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Set up Node
-        uses: actions/setup-node@e51e5fe84fc33b4c73ebe40526b2694712b5b858 # post-v7.0.0 GHSA fix
+        uses: actions/setup-node@94196ee1d15439c1b6651cd87ef14e88ec435966 # post-v7.0.0 GHSA fix
         with:
           node-version: "24.19.0"
       - name: Activate pinned pnpm

@@ -45,6 +45,12 @@ All other helpers are legacy, unsupported, and temporarily wheel-included.
 Temporary compatibility does not declare any helper safe for unreviewed input,
 production-supported, or behaviorally stable.
 
+Issue #130 separately removes Torch and TorchText from repository-managed
+installation profiles while preserving the complete helper source and packaging
+surface. The historical ML modules remain unchanged and unsupported; anyone who
+deliberately runs them must provision and own an external environment. See the
+[`Legacy ML managed-dependency policy`](LEGACY_ML_DEPENDENCY_POLICY.md).
+
 ## Release and versioning expectations
 
 Zscripts is in public beta. No stable release or semantic-version compatibility
@@ -55,7 +61,8 @@ This notice does not:
 
 - begin Phase 2B;
 - remove helpers from the wheel;
-- change package discovery, dependencies, registry targets, or Torch versions;
+- change package discovery, registry targets, or helper source;
+- provision or support a Torch/TorchText runtime;
 - add an executing compatibility shim;
 - create an extraction repository or package; or
 - publish a package, tag, or GitHub Release.

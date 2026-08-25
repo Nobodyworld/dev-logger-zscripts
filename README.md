@@ -206,6 +206,12 @@ Install helpers extras only when needed:
 - `pip install .[helpers-web]`
 - `pip install .[helpers-ml]`
 
+The `helpers-ml` extra installs only the repository-managed `scikit-learn` and
+`tiktoken` dependencies. It intentionally does not provision Torch or TorchText.
+The unchanged historical ML source remains wheel-included as unsupported
+compatibility material; anyone deliberately running it must provision and own a
+separate environment.
+
 The Phase 2A compatibility window begins when Phase 2A merges and lasts until
 both 90 calendar days and one documented public-beta deprecation cycle have
 completed; the later condition controls. Phase 2B requires consumer review and
@@ -213,12 +219,16 @@ separate owner approval. This public-source beta commitment is not a stable
 semantic-version guarantee. See
 `docs/operations/LEGACY_HELPER_COMPATIBILITY.md` for the enforceable contract,
 `docs/operations/LEGACY_HELPER_CONSUMER_REVIEW.md` for the evidence-backed
-consumer review, and
+consumer review,
 `docs/operations/LEGACY_HELPER_DEPRECATION_NOTICE.md` for the active
-public-beta deprecation notice.
+public-beta deprecation notice, and
+`docs/operations/LEGACY_ML_DEPENDENCY_POLICY.md` for the managed legacy-ML
+dependency boundary.
 
-Torch remains at 2.9.0 during Phase 2A. Torch updates and all ML-helper migration
-decisions remain deferred under active issue #73.
+Removing Torch from project-managed profiles under issue #130 changes only the
+dependency boundary. It does not remove or modify helper source, change package
+discovery or registry targets, complete the deprecation cycle, or authorize
+Phase 2B.
 
 Use the registry system to call helpers by tag:
 

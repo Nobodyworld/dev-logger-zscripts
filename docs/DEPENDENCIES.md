@@ -1,6 +1,6 @@
 # Dependency Audit
 
-Last reviewed: 2026-08-19
+Last reviewed: 2026-08-25
 
 | Package | Version Constraint | Purpose | License | Notes |
 |---------|--------------------|---------|---------|-------|
@@ -15,7 +15,19 @@ Last reviewed: 2026-08-19
 | HTTPX2 | `==2.12.0` | Current Starlette/FastAPI `TestClient` transport. | BSD-3-Clause | Current reviewed release. It bounds peak memory while streaming compressed responses and closes failed decode streams; validated through the complete workspace API and test suite. |
 | requests | `>=2.33.0` (`2.34.2` in the pinned helper profile) | Compatibility dependency for the frozen legacy helper surface. | Apache-2.0 | The minimum excludes versions affected by CVE-2026-25645. The exact helper profile uses the current reviewed release; Zscripts does not directly call `requests.utils.extract_zipped_paths`. |
 | types-jsonschema | `==4.26.0.20260518` | Strict mypy stubs for the required JSON Schema runtime. | Apache-2.0 | Developer dependency only. |
-| torch | `>=2.9.0` (`2.9.0` in the pinned ML profile) | Compatibility dependency for frozen legacy ML helpers. | BSD-3-Clause | Issue #73 freezes Torch during the Phase 2A compatibility window. Ordinary Dependabot version updates are ignored; Phase 2B or a Torch migration requires separate owner approval. |
+
+## Legacy ML dependency boundary
+
+Torch and TorchText are intentionally absent from project-managed requirements
+and extras. The `helpers-ml` extra retains only `scikit-learn` and `tiktoken`.
+The unchanged historical ML helper source remains wheel-included as unsupported
+compatibility material and requires an externally managed environment if a user
+deliberately runs it. See
+[`operations/LEGACY_ML_DEPENDENCY_POLICY.md`](operations/LEGACY_ML_DEPENDENCY_POLICY.md).
+
+This removes Zscripts' ownership of an affected frozen Torch installation without
+removing, repairing, modernizing, or claiming support for the legacy source. It
+does not authorize Phase 2B.
 
 ## Repository-review frontend
 
@@ -85,8 +97,9 @@ existing Actions allowlist. Checkout continues to use
   of the required repository contract. Ruff is exact-pinned because formatter
   releases can change required diffs and otherwise make hosted CI non-reproducible.
 - **Legacy-helper dependencies** remain compatibility-only extras rather than
-  core runtime requirements. Requests now excludes the affected pre-2.33.0
-  line; Torch remains frozen under the separately governed Phase 2A contract.
+  core runtime requirements. Requests excludes the affected pre-2.33.0 line;
+  Torch and TorchText are no longer repository-managed dependencies, while the
+  historical ML source remains explicitly unsupported and wheel-included.
 - **Action supply chain** is full-SHA pinned and reviewed beyond tag labels. The
   setup-action release tags were not treated as current after upstream disclosed
   and fixed vulnerable bundled dependencies in later official commits.

@@ -19,6 +19,9 @@ The evidence-backed consumer review and active public-beta notice are
 [`../operations/LEGACY_HELPER_CONSUMER_REVIEW.md`](../operations/LEGACY_HELPER_CONSUMER_REVIEW.md)
 and
 [`../operations/LEGACY_HELPER_DEPRECATION_NOTICE.md`](../operations/LEGACY_HELPER_DEPRECATION_NOTICE.md).
+The owner-approved managed dependency boundary for the unchanged historical ML
+source is recorded in
+[`../operations/LEGACY_ML_DEPENDENCY_POLICY.md`](../operations/LEGACY_ML_DEPENDENCY_POLICY.md).
 
 ## Policy
 
@@ -27,6 +30,15 @@ and
 - Helper domains should be migrated to a separate repository over time.
 - Maintained core layers must not import `zscripts.helpers` or obsolete
   top-level `helpers` paths.
+
+## Managed extras
+
+The `helpers-ml` extra installs only the reviewed repository-managed
+`scikit-learn` and `tiktoken` dependencies. It intentionally does not provision
+Torch or TorchText. The legacy ML modules remain wheel-included and unchanged,
+but they are unsupported compatibility material rather than a supported runtime.
+Anyone deliberately running that historical source must provision and own a
+separate environment.
 
 ## Migration Direction
 
@@ -39,8 +51,10 @@ When splitting helper domains out:
 No Phase 2B migration can begin until at least 90 days after the Phase 2A merge
 and at least one documented public-beta deprecation cycle have completed,
 whichever is later. Consumer review and separate owner approval are still
-required after that threshold. Torch remains at 2.9.0; Torch 2.13 review is
-deferred to the ML-helper decision under issue #62.
+required after that threshold. Removing Torch from repository-managed profiles
+under issue #130 changes only dependency provisioning; it does not begin Phase
+2B or alter helper source, package discovery, wheel inclusion, or registry
+contracts.
 
 The notice started at the Phase 2A merge timestamp. It documents the 90-day
 threshold and begins the required public-beta cycle; it does not complete the

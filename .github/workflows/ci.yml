@@ -22,7 +22,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@9191ea1a55b1e7028943ee5647bf579e1182b42d # post-v7.0.0 security fixes
+        uses: actions/setup-python@751276eafca55f10f252026015f43c488f2322ba # post-v7.0.0 security fixes
         with:
           python-version: "3.11"
       - name: Set up Node

@@ -15,6 +15,34 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # Ruff upgrades require a dedicated formatting-contract PR.
+      - dependency-name: "ruff"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+      # Issue #73 freezes Torch during the Phase 2A compatibility window.
+      - dependency-name: "torch"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+  - package-ecosystem: "npm"
+    directory: "/workspace-ui"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+    groups:
+      frontend-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

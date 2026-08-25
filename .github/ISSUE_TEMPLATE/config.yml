@@ -3,6 +3,3 @@ contact_links:
   - name: Security Reports
     url: https://github.com/Nobodyworld/dev-logger-zscripts/security
     about: Use GitHub private vulnerability reporting. Do not file public issues for vulnerabilities.
-  - name: Support
-    url: https://github.com/Nobodyworld/dev-logger-zscripts/discussions
-    about: Ask questions and share community tips in GitHub Discussions.

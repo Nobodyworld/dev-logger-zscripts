@@ -3,7 +3,8 @@
 Status: notice started; deprecation cycle **not complete**.
 
 This notice begins the mandatory public-beta deprecation cycle for the legacy
-helper collection tracked by issues #73 and #62.
+helper collection tracked by active issue #73, following the completed Phase 2A
+disposition decision under issue #62.
 
 ## Notice window
 
@@ -16,8 +17,8 @@ helper collection tracked by issues #73 and #62.
 
 The cycle starts with this notice. It is not complete in this change. Reaching
 the time threshold does not authorize Phase 2B. Phase 2B remains separately
-owner-gated through issue #62 after every compatibility-window condition is
-satisfied.
+owner-gated through active issue #73 after every compatibility-window condition
+is satisfied.
 
 ## Current compatibility status
 
@@ -63,10 +64,9 @@ This notice does not:
 
 Share non-sensitive compatibility evidence, migration needs, or consumer
 feedback through
-[`GitHub issues`](https://github.com/Nobodyworld/dev-logger-zscripts/issues) or
-GitHub Discussions when Discussions are enabled.
+[`GitHub issues`](https://github.com/Nobodyworld/dev-logger-zscripts/issues).
 Do not post credentials, private source, personal data, proprietary paths, or
 other sensitive material.
 
 Potential vulnerabilities must follow
-[`SECURITY.md`](../../SECURITY.md), not a public issue or Discussion.
+[`SECURITY.md`](../../SECURITY.md), not a public issue.

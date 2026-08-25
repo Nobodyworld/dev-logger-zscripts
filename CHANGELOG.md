@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- Refresh GitHub-owned setup actions to their native Node 24 major versions,
+  update supported HTTPX2/FastAPI/Uvicorn and Requests security baselines,
+  preserve the reviewed Ruff and Torch freezes in Dependabot, and document
+  dependency rationale plus immutable action provenance.
 - Make documentation-link validation select tracked plus repository-nonignored
   Markdown deterministically, exclude ignored developer artifacts, neutralize
   system/global/XDG and `.git/info/exclude` state, bound and incrementally parse

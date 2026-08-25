@@ -4,9 +4,14 @@
 
 ### Fixed
 
+- Remove Torch and TorchText from repository-managed legacy ML dependency
+  profiles while preserving all 154 helper modules, registry targets, package
+  discovery, and helper source unchanged. Historical ML source remains
+  unsupported and requires an externally managed environment if deliberately
+  executed.
 - Refresh GitHub-owned setup actions to their native Node 24 major versions,
   update supported HTTPX2/FastAPI/Uvicorn and Requests security baselines,
-  preserve the reviewed Ruff and Torch freezes in Dependabot, and document
+  preserve the reviewed Ruff formatter pin in Dependabot, and document
   dependency rationale plus immutable action provenance.
 - Make documentation-link validation select tracked plus repository-nonignored
   Markdown deterministically, exclude ignored developer artifacts, neutralize

@@ -75,7 +75,6 @@ helpers-web = [
 helpers-ml = [
     "scikit-learn>=1.7.2",
     "tiktoken>=0.12.0",
-    "torch>=2.9.0",
 ]
 helpers-optional = [
     "tensorflow>=2.20.0; python_version < '3.14'",

@@ -1,0 +1,50 @@
+{
+  "decision": "remove-repository-managed-torch",
+  "effective_base_sha": "2275cf10b68e7cd9ed1cb8ac35377789e94fe2c4",
+  "governing_issue": 130,
+  "helpers_ml_dependencies": [
+    "scikit-learn>=1.7.2",
+    "tiktoken>=0.12.0"
+  ],
+  "legacy_ml_module_count": 6,
+  "legacy_torch_import_modules": [
+    "zscripts/helpers/machine_learning/model.py",
+    "zscripts/helpers/machine_learning/model_c.py",
+    "zscripts/helpers/machine_learning/model_copy_3.py",
+    "zscripts/helpers/machine_learning/model_work.py",
+    "zscripts/helpers/machine_learning/predict.py"
+  ],
+  "managed_torch": false,
+  "owner": "Nobodyworld",
+  "phase2b_authorized": false,
+  "preservation_contract": {
+    "compatibility_point_count": 7,
+    "helper_module_count": 154,
+    "helper_source_sha256": "3ad00abc6bd267b8f2d2bb1da1dd1e0f67ebccf15188eeb66afdeef7fda14a19",
+    "package_discovery_exclude": [
+      "artifacts*",
+      "docs*",
+      "examples*",
+      "tests*"
+    ],
+    "package_discovery_include": [
+      "adapters*",
+      "agents*",
+      "schemas*",
+      "scripts*",
+      "zscripts*"
+    ],
+    "registry_blob_sha1": "ca3420b8d443514b15e039d7a8f04e2ccb24b041",
+    "registry_key_count": 13,
+    "wheel_inclusion": "all-154-temporarily-wheel-included"
+  },
+  "rationale": [
+    "Torch imports occur only in unsupported legacy ML helper source.",
+    "No legacy ML helper is exposed through the registry or the machine_learning package initializer.",
+    "The historical ML source also depends on undeclared TorchText and contains obsolete import and import-time behavior risks.",
+    "Removing the managed dependency avoids claiming supported compatibility while leaving source and packaging unchanged."
+  ],
+  "schema_version": 1,
+  "source_policy": "docs/operations/LEGACY_ML_DEPENDENCY_POLICY.md",
+  "torch_installation_policy": "externally-managed-unsupported-legacy-only"
+}

@@ -17,6 +17,7 @@ from scripts import check_legacy_helper_boundary as boundary
 ROOT = Path(__file__).resolve().parents[1]
 SURFACE_PATH = ROOT / "docs/operations/legacy_helper_surface.json"
 COMPATIBILITY_PATH = ROOT / "docs/operations/legacy_helper_compatibility.json"
+ML_POLICY_PATH = ROOT / "docs/operations/legacy_ml_dependency_policy.json"
 
 
 def _json(path: Path) -> dict[str, object]:
@@ -137,17 +138,41 @@ def test_boundary_rejects_static_and_literal_dynamic_helper_imports(source: str)
     assert boundary.find_core_import_violations(source)
 
 
-def test_torch_contract_remains_at_approved_2_9_0() -> None:
+def test_managed_ml_dependency_boundary_excludes_torch_and_preserves_source() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     helpers_ml = project["project"]["optional-dependencies"]["helpers-ml"]
-    assert "torch>=2.9.0" in helpers_ml
+    assert helpers_ml == ["scikit-learn>=1.7.2", "tiktoken>=0.12.0"]
+
     requirement_lines = {
         line.strip()
         for line in (ROOT / "configs/requirements/ml.txt").read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.startswith("#")
     }
-    assert "torch==2.9.0" in requirement_lines
-    assert not any(line.startswith("torch==") and line != "torch==2.9.0" for line in requirement_lines)
+    assert requirement_lines == {"scikit-learn==1.7.2", "tiktoken==0.12.0"}
+    assert not any(line.lower().startswith(("torch", "torchtext")) for line in requirement_lines)
+
+    dependabot = yaml.safe_load((ROOT / ".github/dependabot.yml").read_text(encoding="utf-8"))
+    pip_update = next(
+        entry for entry in dependabot["updates"] if entry["package-ecosystem"] == "pip"
+    )
+    ignored_dependencies = {
+        entry["dependency-name"] for entry in pip_update.get("ignore", [])
+    }
+    assert "ruff" in ignored_dependencies
+    assert "torch" not in ignored_dependencies
+
+    policy = _json(ML_POLICY_PATH)
+    assert policy["schema_version"] == 1
+    assert policy["decision"] == "remove-repository-managed-torch"
+    assert policy["managed_torch"] is False
+    assert policy["phase2b_authorized"] is False
+    legacy_modules = policy["legacy_torch_import_modules"]
+    assert isinstance(legacy_modules, list)
+    assert len(legacy_modules) == 5
+    for relative_path in legacy_modules:
+        assert isinstance(relative_path, str)
+        source = (ROOT / relative_path).read_text(encoding="utf-8")
+        assert "import torch" in source or "from torch" in source
 
 
 def test_wheel_member_check_requires_all_surface_modules(tmp_path: Path) -> None:

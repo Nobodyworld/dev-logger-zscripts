@@ -1,6 +1,6 @@
 # Repository Agent Instructions
 
-These instructions supplement, and do not weaken, any stricter repository rules in `PROJECT_RULESET.md`, `CONTRIBUTING.md`, or scoped `AGENTS.md` files.
+These instructions supplement, and do not weaken, current owner instructions, `CONTRIBUTING.md`, or more narrowly scoped `AGENTS.md` files.
 
 ## Work-slice workspace hygiene
 

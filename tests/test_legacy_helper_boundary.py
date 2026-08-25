@@ -152,15 +152,8 @@ def test_managed_ml_dependency_boundary_excludes_torch_and_preserves_source() ->
     assert not any(line.lower().startswith(("torch", "torchtext")) for line in requirement_lines)
 
     dependabot = yaml.safe_load((ROOT / ".github/dependabot.yml").read_text(encoding="utf-8"))
-    pip_update = next(
-        entry
-        for entry in dependabot["updates"]
-        if entry["package-ecosystem"] == "pip"
-    )
-    ignored_dependencies = {
-        entry["dependency-name"]
-        for entry in pip_update.get("ignore", [])
-    }
+    pip_update = next(entry for entry in dependabot["updates"] if entry["package-ecosystem"] == "pip")
+    ignored_dependencies = {entry["dependency-name"] for entry in pip_update.get("ignore", [])}
     assert "ruff" in ignored_dependencies
     assert "torch" not in ignored_dependencies
 

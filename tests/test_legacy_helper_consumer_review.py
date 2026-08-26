@@ -12,6 +12,7 @@ CONSUMERS_PATH = ROOT / "docs/operations/legacy_helper_consumers.json"
 COMPATIBILITY_PATH = ROOT / "docs/operations/legacy_helper_compatibility.json"
 SURFACE_PATH = ROOT / "docs/operations/legacy_helper_surface.json"
 NOTICE_PATH = ROOT / "docs/operations/LEGACY_HELPER_DEPRECATION_NOTICE.md"
+ML_POLICY_PATH = ROOT / "docs/operations/legacy_ml_dependency_policy.json"
 
 EXPECTED_SHA = "d3a4eb92ed7f4f1590e7f4ea3ae079edb15a7d35"
 EXPECTED_MERGE_TIMESTAMP = "2026-07-23T00:40:54Z"
@@ -186,18 +187,36 @@ def test_helper_source_registry_and_package_discovery_remain_frozen() -> None:
     assert scope["wheel_inclusion"] == "all-154-temporarily-wheel-included"
 
 
-def test_torch_contract_remains_exactly_2_9_0() -> None:
-    payload = _json(CONSUMERS_PATH)
-    scope = payload["scope_contract"]
+def test_managed_ml_policy_supersedes_historical_torch_scope() -> None:
+    historical = _json(CONSUMERS_PATH)["scope_contract"]
+    assert historical["torch_package_lower_bound"] == "torch>=2.9.0"
+    assert historical["torch_exact_pin"] == "torch==2.9.0"
+
+    content = ML_POLICY_PATH.read_text(encoding="utf-8")
+    policy = _json(ML_POLICY_PATH)
+    assert content == json.dumps(policy, indent=2, sort_keys=True) + "\n"
+    assert policy["schema_version"] == 1
+    assert policy["decision"] == "remove-repository-managed-torch"
+    assert policy["managed_torch"] is False
+    assert policy["phase2b_authorized"] is False
+
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     helpers_ml = project["project"]["optional-dependencies"]["helpers-ml"]
+    assert helpers_ml == ["scikit-learn>=1.7.2", "tiktoken>=0.12.0"]
     requirement_lines = {
         line.strip()
         for line in (ROOT / "configs/requirements/ml.txt").read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.startswith("#")
     }
-    assert scope["torch_package_lower_bound"] == "torch>=2.9.0"
-    assert scope["torch_exact_pin"] == "torch==2.9.0"
-    assert "torch>=2.9.0" in helpers_ml
-    assert "torch==2.9.0" in requirement_lines
-    assert not any(line.startswith("torch==") and line != "torch==2.9.0" for line in requirement_lines)
+    assert requirement_lines == {"scikit-learn==1.7.2", "tiktoken==0.12.0"}
+    assert not any(line.lower().startswith(("torch", "torchtext")) for line in requirement_lines)
+
+    preservation = policy["preservation_contract"]
+    assert preservation["helper_module_count"] == 154
+    assert preservation["compatibility_point_count"] == 7
+    assert preservation["registry_key_count"] == 13
+    assert preservation["helper_source_sha256"] == historical["helper_source_sha256"]
+    assert preservation["registry_blob_sha1"] == historical["registry_blob_sha1"]
+    assert preservation["package_discovery_include"] == historical["package_discovery_include"]
+    assert preservation["package_discovery_exclude"] == historical["package_discovery_exclude"]
+    assert preservation["wheel_inclusion"] == historical["wheel_inclusion"]

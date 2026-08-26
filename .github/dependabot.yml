@@ -22,12 +22,6 @@ updates:
           - "version-update:semver-major"
           - "version-update:semver-minor"
           - "version-update:semver-patch"
-      # Issue #73 freezes Torch during the Phase 2A compatibility window.
-      - dependency-name: "torch"
-        update-types:
-          - "version-update:semver-major"
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
   - package-ecosystem: "npm"
     directory: "/workspace-ui"
     schedule:

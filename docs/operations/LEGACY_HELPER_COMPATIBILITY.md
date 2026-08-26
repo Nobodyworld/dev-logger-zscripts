@@ -8,6 +8,9 @@ The follow-up
 current, historical, and indexed-public evidence. The
 [`public-beta deprecation notice`](LEGACY_HELPER_DEPRECATION_NOTICE.md) records
 the merged start event and begins—but does not complete—the mandatory cycle.
+The owner-approved dependency boundary for the unchanged historical ML source
+is recorded in
+[`LEGACY_ML_DEPENDENCY_POLICY.md`](LEGACY_ML_DEPENDENCY_POLICY.md).
 
 ## Scope
 
@@ -105,12 +108,19 @@ owner-approved security or compatibility exception. A baseline module may not
 disappear during Phase 2A. Duplicate, unsorted, absolute, missing, or untracked
 paths fail the gate.
 
-## Torch freeze
+## Managed legacy-ML dependency boundary
 
-Phase 2A preserves `torch==2.9.0` in the ML requirements and the existing
-`torch>=2.9.0` package-metadata lower bound. Torch 2.13 remains deferred. Torch
-review belongs to the ML-helper migration/disposition decision under issue #62;
-no Torch upgrade is authorized during Phase 2A.
+Issue #130 supersedes only the earlier requirement to provision Torch `2.9.0`.
+Zscripts no longer declares or pins Torch or TorchText in repository-managed
+requirements or extras. The `helpers-ml` extra retains only its reviewed
+`scikit-learn` and `tiktoken` dependencies.
+
+This security boundary does not alter Phase 2A source compatibility: all 154
+helper modules remain wheel-included, the six historical ML modules remain
+present and unchanged, package discovery is unchanged, and no registry key
+points to the ML domain. Those historical modules are explicitly unsupported
+and require a separately owned external environment if someone deliberately
+runs them. This is not a Torch upgrade, a support claim, or Phase 2B.
 
 ## Phase 2B prerequisites
 

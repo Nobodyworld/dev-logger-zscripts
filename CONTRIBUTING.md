@@ -8,8 +8,9 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
 - Use [Conventional Commits](https://www.conventionalcommits.org/) for every commit message.
 - Open an issue before large or breaking work; share an execution plan for complex refactors.
 - Keep pull requests focused and include tests/docs for any user-visible change.
-- Run `python scripts/quality_gate.py quality` (or `make quality`) before
-  opening a pull request. This is the complete hosted-CI gate; `make check` is
+- Run `python scripts/quality_gate.py quality` (or `make quality`) and
+  `python -m pre_commit run detect-secrets --all-files` before opening a pull
+  request. Together these reproduce the hosted-CI checks; `make check` is
   the faster contributor gate.
 - Annotate TODOs with priority and effort using `TODO(P1, est:4h): context` so
   automation can triage outstanding work.
@@ -44,10 +45,14 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
    - `quality`: `format-check`, `lint`, `type`, `frontend-install`, `frontend-format`, `frontend-lint`, `frontend-typecheck`, `frontend-tests`, `frontend-build`, `repository-safety`, `snapshot-store`, `workspace-api`, `packaged-workspace`, `helper-surface`, `helper-boundary`, `helper-compatibility`, `bandit`, `audit`, `binary`, `tests`, `coverage`, `docs`, `editable-smoke`, `wheel`, `zipapp`, `diagnostics`
    - `release`: `format-check`, `lint`, `type`, `frontend-install`, `frontend-format`, `frontend-lint`, `frontend-typecheck`, `frontend-tests`, `frontend-build`, `repository-safety`, `snapshot-store`, `workspace-api`, `packaged-workspace`, `helper-surface`, `helper-boundary`, `helper-compatibility`, `bandit`, `audit`, `binary`, `tests`, `coverage`, `docs`, `editable-smoke`, `wheel`, `zipapp`, `diagnostics`, `redaction`, `gitleaks-worktree`, `gitleaks-history`, `clean`
 
-   `check` is the fast contributor gate. `quality` is the complete hosted-CI
-   gate and enforces at least 85% coverage. `release` is the complete local
-   release gate; it fails if Gitleaks is unavailable and requires a clean
-   worktree. Machine-readable results are written under `reports/`.
+   `check` is the fast contributor gate. `quality` runs the 26 quality
+   operations used by hosted CI and enforces at least 85% coverage. Hosted CI
+   also runs the existing detect-secrets pre-commit hook as a separate step;
+   the `quality` profile alone does not run that hook. `release` is the complete
+   local release profile; it fails if Gitleaks is unavailable and requires a
+   clean worktree. Run the existing pre-commit checks separately, and run the
+   final release profile after committing intended changes. Machine-readable
+   quality results are written under `reports/`.
 
 3. **Ops Health Probe**
 
@@ -75,6 +80,10 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
 
    - `pre-commit run --all-files` runs Ruff (format + lint), mypy, Bandit, and
      detect-secrets using `.secrets.baseline`.
+   - Hosted CI runs `python -m pre_commit run detect-secrets --all-files` with
+     the same hook revision, baseline, and exclusions from
+     `.pre-commit-config.yaml`. It does not regenerate the baseline or ignore
+     a failed scan.
    - The local commit-message hook runs the standard-library-only
      `scripts/validate_commit_message.py` validator. It does not download
      software or access the network.

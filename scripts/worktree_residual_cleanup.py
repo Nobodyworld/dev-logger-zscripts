@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import stat
+import string
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
@@ -354,7 +355,7 @@ def _verify_preservation(manifest: dict[str, Any]) -> None:
         or not ref
         or not isinstance(expected, str)
         or len(expected) != 40
-        or any(character not in "0123456789abcdefABCDEF" for character in expected)
+        or any(character not in string.hexdigits for character in expected)
     ):
         raise CleanupError("Preservation ref and 40-character hexadecimal head are required")
     actual = _run_git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").strip()

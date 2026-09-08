@@ -107,9 +107,7 @@ def test_still_registered_root_is_rejected(tmp_path: Path, monkeypatch: pytest.M
     assert root.exists()
 
 
-def test_unapproved_or_unowned_manifest_is_rejected(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_unapproved_or_unowned_manifest_is_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     parent = tmp_path / "owned"
     root = parent / "residual"
     repo = tmp_path / "repo"
@@ -214,9 +212,7 @@ def test_partial_removal_failure_stops_and_leaves_residue(
     assert cleanup.scan_entries(str(root))[0].path == "b.txt"
 
 
-def test_manifest_with_git_metadata_is_rejected(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_manifest_with_git_metadata_is_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     parent = tmp_path / "owned"
     root = parent / "residual"
     repo = tmp_path / "repo"

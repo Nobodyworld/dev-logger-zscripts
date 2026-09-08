@@ -47,9 +47,7 @@ def test_inventory_records_empty_directory(tmp_path: Path) -> None:
     root = tmp_path / "root"
     (root / "empty").mkdir(parents=True)
 
-    assert cleanup.scan_entries(str(root)) == [
-        cleanup.EntryRecord(path="empty", kind="directory")
-    ]
+    assert cleanup.scan_entries(str(root)) == [cleanup.EntryRecord(path="empty", kind="directory")]
 
 
 def test_inventory_does_not_follow_internal_external_or_broken_symlinks(tmp_path: Path) -> None:
@@ -119,7 +117,10 @@ def test_registered_worktree_parser_uses_porcelain_z(tmp_path: Path) -> None:
     (repo / "file.txt").write_text("fixture", encoding="utf-8")
     subprocess.run(["git", "-C", str(repo), "add", "file.txt"], check=True)
     subprocess.run(["git", "-C", str(repo), "commit", "-qm", "fixture"], check=True)
-    subprocess.run(["git", "-C", str(repo), "worktree", "add", "-q", "-b", "fixture-worktree", str(worktree)], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "add", "-q", "-b", "fixture-worktree", str(worktree)],
+        check=True,
+    )
 
     registered = cleanup.registered_worktrees(str(repo))
 

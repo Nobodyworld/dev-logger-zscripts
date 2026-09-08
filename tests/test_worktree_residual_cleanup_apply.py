@@ -107,6 +107,24 @@ def test_still_registered_root_is_rejected(tmp_path: Path, monkeypatch: pytest.M
     assert root.exists()
 
 
+def test_inventory_captured_while_registered_cannot_be_reused_after_unregistration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parent = tmp_path / "owned"
+    root = parent / "residual"
+    repo = tmp_path / "repo"
+    root.mkdir(parents=True)
+    repo.mkdir()
+    manifest = _approved_manifest(root, repo, parent, [])
+    manifest["registered_worktree"] = True
+    _bypass_external_git_gates(monkeypatch)
+
+    with pytest.raises(cleanup.CleanupError, match="captured after worktree unregistration"):
+        cleanup.apply_manifest(manifest)
+
+    assert root.exists()
+
+
 def test_unapproved_or_unowned_manifest_is_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     parent = tmp_path / "owned"
     root = parent / "residual"
@@ -139,6 +157,25 @@ def test_already_absent_root_is_idempotent_after_safety_gates(
     _bypass_external_git_gates(monkeypatch)
 
     assert cleanup.apply_manifest(manifest) == "already-absent"
+
+
+def test_absent_inventory_cannot_delete_a_newly_appeared_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parent = tmp_path / "owned"
+    root = parent / "residual"
+    repo = tmp_path / "repo"
+    parent.mkdir()
+    repo.mkdir()
+    manifest = _approved_manifest(root, repo, parent, [])
+    manifest["exists"] = False
+    root.mkdir()
+    _bypass_external_git_gates(monkeypatch)
+
+    with pytest.raises(cleanup.CleanupError, match="appeared after"):
+        cleanup.apply_manifest(manifest)
+
+    assert root.exists()
 
 
 def test_empty_existing_root_can_be_removed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

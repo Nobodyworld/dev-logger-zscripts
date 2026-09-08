@@ -84,16 +84,18 @@ def test_inventory_supports_long_paths(tmp_path: Path, monkeypatch: pytest.Monke
     current = root
     for index in range(9):
         current = current / (f"segment-{index}-" + "x" * 24)
-    current.mkdir(parents=True)
-    leaf = current / "payload.txt"
-    leaf.write_text("long-path", encoding="utf-8")
+    os.makedirs(cleanup._native_path(str(current)))
+    leaf = os.path.join(str(current), "payload.txt")
+    with open(cleanup._native_path(leaf), "w", encoding="utf-8") as stream:
+        stream.write("long-path")
     repo.mkdir()
     monkeypatch.setattr(cleanup, "registered_worktrees", lambda _repo: set())
 
     payload = cleanup.build_inventory(str(root), repo=str(repo), owned_parent=str(parent))
 
     assert any(entry["path"].endswith("payload.txt") for entry in payload["entries"])
-    assert leaf.read_text(encoding="utf-8") == "long-path"
+    with open(cleanup._native_path(leaf), encoding="utf-8") as stream:
+        assert stream.read() == "long-path"
 
 
 def test_protected_overlap_is_rejected(tmp_path: Path) -> None:
@@ -105,6 +107,39 @@ def test_protected_overlap_is_rejected(tmp_path: Path) -> None:
         cleanup._assert_no_overlap(str(root), str(parent), [str(protected_child)])
     with pytest.raises(cleanup.CleanupError, match="overlaps"):
         cleanup._assert_no_overlap(str(protected_child), str(parent), [str(root)])
+
+
+def test_physical_protected_overlap_through_link_is_rejected(tmp_path: Path) -> None:
+    parent = tmp_path / "owned"
+    root = parent / "residual"
+    alias = tmp_path / "protected-alias"
+    root.mkdir(parents=True)
+    try:
+        alias.symlink_to(root, target_is_directory=True)
+    except OSError:
+        pytest.skip("host cannot create directory symlinks")
+
+    with pytest.raises(cleanup.CleanupError, match="overlaps"):
+        cleanup._assert_no_overlap(str(root), str(parent), [str(alias)])
+
+
+def test_owned_parent_link_is_rejected_before_inventory(tmp_path: Path) -> None:
+    real_parent = tmp_path / "real-owned"
+    linked_parent = tmp_path / "linked-owned"
+    repo = tmp_path / "repo"
+    real_parent.mkdir()
+    repo.mkdir()
+    try:
+        linked_parent.symlink_to(real_parent, target_is_directory=True)
+    except OSError:
+        pytest.skip("host cannot create directory symlinks")
+
+    with pytest.raises(cleanup.CleanupError, match="Owned parent"):
+        cleanup.build_inventory(
+            str(linked_parent / "residual"),
+            repo=str(repo),
+            owned_parent=str(linked_parent),
+        )
 
 
 def test_registered_worktree_parser_uses_porcelain_z(tmp_path: Path) -> None:

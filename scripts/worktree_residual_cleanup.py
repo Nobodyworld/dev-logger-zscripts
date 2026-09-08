@@ -79,6 +79,14 @@ def _relative_parts(relative: str) -> tuple[str, ...]:
     return parsed.parts
 
 
+def _paths_overlap(first: str, second: str) -> bool:
+    try:
+        common = os.path.commonpath([first, second])
+    except ValueError:
+        return False
+    return common in {first, second}
+
+
 def _assert_no_overlap(root: str, owned_parent: str, protected_roots: Iterable[str]) -> None:
     target = _canonical(root)
     parent = _canonical(owned_parent)
@@ -89,13 +97,11 @@ def _assert_no_overlap(root: str, owned_parent: str, protected_roots: Iterable[s
     if common != parent or target == parent:
         raise CleanupError("Residual root must be a strict descendant of --owned-parent")
 
+    target_real = _canonical(os.path.realpath(root))
     for protected in protected_roots:
         candidate = _canonical(protected)
-        try:
-            common = os.path.commonpath([target, candidate])
-        except ValueError:
-            continue
-        if common in {target, candidate}:
+        candidate_real = _canonical(os.path.realpath(protected))
+        if _paths_overlap(target, candidate) or _paths_overlap(target_real, candidate_real):
             raise CleanupError(f"Residual root overlaps a protected root: {protected!r}")
 
 
@@ -108,6 +114,35 @@ def _assert_plain_root(root: str) -> None:
         raise CleanupError("Residual root itself must not be a link/reparse point")
     if not stat.S_ISDIR(st.st_mode):
         raise CleanupError("Residual root must be a directory")
+
+
+def _assert_plain_owned_chain(root: str, owned_parent: str) -> None:
+    """Reject a reparse point anywhere from the owned parent through the root."""
+    parent = os.path.abspath(owned_parent)
+    target = os.path.abspath(root)
+    try:
+        parent_stat = os.stat(_native_path(parent), follow_symlinks=False)
+    except OSError as exc:
+        raise CleanupError(f"Owned parent is unavailable: {owned_parent!r}: {exc}") from exc
+    if _is_reparse(parent_stat) or not stat.S_ISDIR(parent_stat.st_mode):
+        raise CleanupError("Owned parent must be a plain directory, not a link/reparse point")
+
+    relative = os.path.relpath(target, parent)
+    parts = tuple(part for part in relative.split(os.sep) if part not in {"", "."})
+    if any(part == ".." for part in parts):
+        raise CleanupError("Residual root escaped the owned parent")
+
+    current = parent
+    for part in parts:
+        current = os.path.join(current, part)
+        try:
+            current_stat = os.stat(_native_path(current), follow_symlinks=False)
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            raise CleanupError(f"Owned path chain is unavailable: {current!r}: {exc}") from exc
+        if _is_reparse(current_stat) or not stat.S_ISDIR(current_stat.st_mode):
+            raise CleanupError(f"Owned path chain contains a link/reparse point: {current!r}")
 
 
 def _assert_plain_directory_chain(root: str, parts: tuple[str, ...]) -> None:
@@ -235,6 +270,7 @@ def build_inventory(
     """Build the read-only review artifact. It is never approved automatically."""
     protected = [os.path.abspath(path) for path in protected_roots]
     _assert_no_overlap(root, owned_parent, protected)
+    _assert_plain_owned_chain(root, owned_parent)
     _assert_plain_root(root)
     exists = os.path.exists(_native_path(root))
     entries = scan_entries(root, max_entries=max_entries, max_file_bytes=max_file_bytes) if exists else []
@@ -345,6 +381,8 @@ def _verify_apply_gates(manifest: dict[str, Any]) -> list[EntryRecord]:
     parent = manifest.get("owned_parent")
     repo = manifest.get("repo")
     protected = manifest.get("protected_roots", [])
+    inventory_exists = manifest.get("exists")
+    inventory_registered = manifest.get("registered_worktree")
     if not isinstance(root, str) or not root:
         raise CleanupError("Manifest root is required")
     if not isinstance(parent, str) or not parent:
@@ -353,14 +391,25 @@ def _verify_apply_gates(manifest: dict[str, Any]) -> list[EntryRecord]:
         raise CleanupError("Manifest repo is required")
     if not isinstance(protected, list) or not all(isinstance(path, str) for path in protected):
         raise CleanupError("Manifest protected_roots must be a list of paths")
+    if not isinstance(inventory_exists, bool):
+        raise CleanupError("Manifest exists field must be boolean")
+    if inventory_registered is not False:
+        raise CleanupError("Approved inventory must have been captured after worktree unregistration")
+    if not inventory_exists and expected:
+        raise CleanupError("An absent inventory cannot contain entries")
 
     _assert_no_overlap(root, parent, protected)
+    _assert_plain_owned_chain(root, parent)
     _assert_plain_root(root)
     _verify_approval(manifest)
     _verify_preservation(manifest)
     if _canonical(root) in registered_worktrees(repo):
         raise CleanupError("Residual root is still registered as a Git worktree")
-    if not os.path.exists(_native_path(root)):
+
+    live_exists = os.path.exists(_native_path(root))
+    if not inventory_exists and live_exists:
+        raise CleanupError("Residual root appeared after the approved absent inventory")
+    if not live_exists:
         return expected
     if any(record.path == ".git" or record.path.startswith(".git/") for record in expected):
         raise CleanupError("Residual contains .git metadata; raw residual deletion is prohibited")

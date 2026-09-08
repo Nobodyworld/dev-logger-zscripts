@@ -20,7 +20,8 @@ python scripts/worktree_residual_cleanup.py inventory C:\agent-owned\residual `
 Inventory performs no removal. It:
 
 - requires the target to be a strict descendant of the declared owned parent;
-- rejects target/protected-root overlap;
+- rejects a link/reparse point anywhere from the owned parent through the residual root;
+- rejects both lexical and resolved overlap with protected roots;
 - records whether Git still lists the target as a worktree;
 - enumerates entries without descending through symlinks/junctions/reparse points;
 - hashes regular files as raw bytes with SHA-256, so CRLF and same-length content changes remain visible;
@@ -30,6 +31,10 @@ Inventory performs no removal. It:
 - defaults to 200,000 entries and 1 GiB per file, with explicit CLI overrides.
 
 A registered target, unknown content, unsupported entry type, secret/database/user data, unexplained environment content, or uncertain ownership means **retain it**. Directory names such as `.venv`, `reports`, and `artifacts` do not prove disposability.
+
+The inventory must be captured **after** Git no longer registers the worktree. If `registered_worktree` is `true`, unregister through the normal reviewed Git workflow and create a fresh inventory; do not edit that field and reuse the older inventory.
+
+For former tracked residue, separately compare the reviewed raw hashes/bytes with the independently preserved Git blobs or verified checkout attributes. This helper records content identity; it does not infer provenance or declare a file disposable.
 
 ## 2. Review and approve the exact manifest
 
@@ -61,6 +66,8 @@ Only after reviewing every entry and separately proving preservation/inactive us
 
 Do not remove entries from the manifest to make an unknown file disappear from review. Apply compares the complete live inventory to the complete approved inventory and fails on any difference.
 
+An inventory that recorded the root as absent cannot later authorize deletion of a newly appeared directory at the same path. If the path appears, start over with a fresh read-only inventory and ownership/provenance review.
+
 ## 3. Apply only the reviewed manifest
 
 ```powershell
@@ -69,12 +76,14 @@ python scripts/worktree_residual_cleanup.py apply C:\evidence\residual-inventory
 
 Before removing anything, apply rechecks:
 
-1. root/owned-parent/protected-root containment;
+1. root/owned-parent/protected-root containment, including resolved protected overlap and reparse ancestors;
 2. explicit approval, current-slice ownership, and inactive-use attestations;
-3. the preservation ref resolves to the exact approved commit;
-4. Git no longer registers the target as a worktree;
-5. the residual contains no `.git` metadata;
-6. every live file, directory, and reparse point exactly matches the approved manifest.
+3. that the approved inventory itself was captured after worktree unregistration;
+4. the preservation ref resolves to the exact approved commit;
+5. Git still does not register the target as a worktree;
+6. an absent inventory did not become a newly appeared root;
+7. the residual contains no `.git` metadata;
+8. every live file, directory, and reparse point exactly matches the approved manifest.
 
 Removal is entry-by-entry. The tool never calls recursive deletion, `git clean`, hard reset, stash, force worktree removal, or cache cleanup. Files and link/reparse points are removed before directories; every entry is revalidated immediately before its operation. A directory parent that becomes a reparse point is rejected rather than traversed.
 
@@ -92,10 +101,12 @@ The focused fixture suite covers:
 
 - inventory non-mutation and raw CRLF hashing;
 - empty and already-absent roots;
+- rejection if an absent inventory's path reappears;
+- rejection of pre-unregistration inventories;
 - long paths;
 - internal, external, and broken links without traversal;
 - a native Windows junction fixture when available;
-- protected-root overlap;
+- protected-root lexical/resolved overlap and linked owned-parent rejection;
 - registered-worktree rejection;
 - same-size changed content;
 - unknown files;

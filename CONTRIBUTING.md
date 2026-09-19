@@ -9,8 +9,11 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
 - Open an issue before large or breaking work; share an execution plan for complex refactors.
 - Keep pull requests focused and include tests/docs for any user-visible change.
 - Run `python scripts/quality_gate.py quality` (or `make quality`) before
-  opening a pull request. This is the complete hosted-CI gate; `make check` is
-  the faster contributor gate.
+  opening a pull request. This remains the complete local quality profile,
+  including the dependency audit; `make check` is the faster contributor gate.
+  Hosted CI keeps merge-required code quality separate from the independently
+  reported dependency audit so an unresolved upstream advisory does not freeze
+  unrelated development.
 - Annotate TODOs with priority and effort using `TODO(P1, est:4h): context` so
   automation can triage outstanding work.
 
@@ -44,10 +47,15 @@ Thanks for investing time in improving Zscripts! This guide explains how to get 
    - `quality`: `format-check`, `lint`, `type`, `frontend-install`, `frontend-format`, `frontend-lint`, `frontend-typecheck`, `frontend-tests`, `frontend-build`, `repository-safety`, `snapshot-store`, `workspace-api`, `packaged-workspace`, `helper-surface`, `helper-boundary`, `helper-compatibility`, `bandit`, `audit`, `binary`, `tests`, `coverage`, `docs`, `editable-smoke`, `wheel`, `zipapp`, `diagnostics`
    - `release`: `format-check`, `lint`, `type`, `frontend-install`, `frontend-format`, `frontend-lint`, `frontend-typecheck`, `frontend-tests`, `frontend-build`, `repository-safety`, `snapshot-store`, `workspace-api`, `packaged-workspace`, `helper-surface`, `helper-boundary`, `helper-compatibility`, `bandit`, `audit`, `binary`, `tests`, `coverage`, `docs`, `editable-smoke`, `wheel`, `zipapp`, `diagnostics`, `redaction`, `gitleaks-worktree`, `gitleaks-history`, `clean`
 
-   `check` is the fast contributor gate. `quality` is the complete hosted-CI
-   gate and enforces at least 85% coverage. `release` is the complete local
-   release gate; it fails if Gitleaks is unavailable and requires a clean
-   worktree. Machine-readable results are written under `reports/`.
+   `check` is the fast contributor gate. The local `quality` profile remains
+   complete and includes `audit`. Hosted CI runs the merge-required `quality`
+   job without `audit`, while the separate `dependency-audit` job runs that
+   security check independently and remains visibly failing when advisories are
+   unresolved. A failed dependency audit is still a security and release blocker;
+   it must not be suppressed, ignored, or treated as a passing release gate.
+   `release` is the complete local release gate; it fails if Gitleaks is
+   unavailable and requires a clean worktree. Machine-readable results are
+   written under `reports/`.
 
 3. **Ops Health Probe**
 

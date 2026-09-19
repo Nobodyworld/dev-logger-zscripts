@@ -34,9 +34,8 @@ def test_workflow_keeps_required_quality_separate_from_dependency_audit() -> Non
                     calls.append(match.group(1))
         calls_by_job[job_name] = calls
 
-    expected_quality = [
-        operation for operation in quality_gate.QUALITY_OPERATIONS if operation != "audit"
-    ]
+    expected_quality = list(quality_gate.QUALITY_OPERATIONS)
+    expected_quality.remove("audit")
     assert calls_by_job["quality"] == expected_quality
     assert calls_by_job["dependency-audit"] == ["audit"]
 

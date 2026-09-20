@@ -23,11 +23,15 @@ def test_workflow_keeps_required_quality_separate_from_dependency_audit() -> Non
     assert jobs["quality"]["timeout-minutes"] == 30
     assert jobs["dependency-audit"]["timeout-minutes"] == 15
     assert workflow["permissions"] == {"contents": "read"}
+    assert "audit" in quality_gate.PROFILES["quality"]
+    assert "audit" in quality_gate.PROFILES["release"]
 
     calls_by_job: dict[str, list[str]] = {}
     for job_name in ("quality", "dependency-audit"):
         calls: list[str] = []
+        assert "continue-on-error" not in jobs[job_name]
         for step in jobs[job_name]["steps"]:
+            assert "continue-on-error" not in step
             for line in str(step.get("run", "")).splitlines():
                 match = re.fullmatch(r"\s*python scripts/quality_gate\.py ([a-z-]+)\s*", line)
                 if match:
@@ -46,6 +50,31 @@ def test_workflow_keeps_required_quality_separate_from_dependency_audit() -> Non
         for step in jobs[job_name]["steps"]:
             if "uses" in step:
                 assert re.search(r"@[0-9a-f]{40}$", step["uses"])
+
+
+def test_hosted_secret_scan_uses_existing_hook_before_quality_operations() -> None:
+    workflow = yaml.safe_load(_read(".github/workflows/ci.yml"))
+    quality = workflow["jobs"]["quality"]
+    assert "needs" not in quality
+    assert "if" not in quality
+    assert "continue-on-error" not in quality
+
+    steps = quality["steps"]
+    scans = [step for step in steps if step.get("name") == "Detect secrets (pre-commit parity)"]
+    assert len(scans) == 1
+    scan = scans[0]
+    assert scan["run"] == "python -m pre_commit run detect-secrets --all-files"
+    assert "if" not in scan
+    assert "continue-on-error" not in scan
+    for scope in (workflow, quality, scan):
+        assert "SKIP" not in scope.get("env", {})
+
+    step_names = [step.get("name") for step in steps]
+    install_index = step_names.index("Install dependencies")
+    quality_steps = [step for step in steps if "python scripts/quality_gate.py " in step.get("run", "")]
+    assert quality_steps
+    first_quality_index = steps.index(quality_steps[0])
+    assert install_index < steps.index(scan) < first_quality_index
 
 
 def test_make_profiles_delegate_to_the_canonical_script() -> None:

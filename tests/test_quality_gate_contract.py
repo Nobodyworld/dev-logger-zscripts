@@ -69,14 +69,11 @@ def test_hosted_secret_scan_uses_existing_hook_before_quality_operations() -> No
     for scope in (workflow, quality, scan):
         assert "SKIP" not in scope.get("env", {})
 
-    install_index = next(
-        index for index, step in enumerate(steps) if step.get("name") == "Install dependencies"
-    )
-    first_quality_index = next(
-        index
-        for index, step in enumerate(steps)
-        if "python scripts/quality_gate.py " in step.get("run", "")
-    )
+    step_names = [step.get("name") for step in steps]
+    install_index = step_names.index("Install dependencies")
+    quality_steps = [step for step in steps if "python scripts/quality_gate.py " in step.get("run", "")]
+    assert quality_steps
+    first_quality_index = steps.index(quality_steps[0])
     assert install_index < steps.index(scan) < first_quality_index
 
 

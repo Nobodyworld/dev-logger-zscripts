@@ -2,19 +2,25 @@
 
 Zscripts is a local-first repository review workspace for deterministic, read-only Python repository analysis. Its primary workflow is `Scan → Explore → Review → Compare → Handoff`. The maintained CLI also provides structured log collection, normalization, redaction, diagnostics, and reporting for developers and automation systems.
 
-## PUBLIC BETA — ACTIVE DEVELOPMENT
+## ARCHIVED REFERENCE IMPLEMENTATION — NOT PRODUCTION READY
 
-Zscripts is actively developed and is not guaranteed to parse every possible
-third-party log format. Adapter output, diagnostics, and generated reports should
-be reviewed before use in production or publication.
+Zscripts is retired as an active product and preserved publicly as a reference implementation.
+It is not maintained, no stable release was published, and no security-support commitment
+continues after archival.
 
-Redaction is a defense-in-depth feature, not a substitute for reviewing sensitive
-output. Never assume automated redaction has identified every credential,
-personal record, proprietary value, or organization-specific secret.
+The repository accumulated several useful but increasingly distinct eras: the original log
+toolkit, a large legacy-helper compatibility surface, and the later Repository Review
+workspace. Rather than keep refactoring those histories into one product, future work should
+start in separately scoped repositories and deliberately reuse only the contracts or ideas
+that still fit.
 
-Public repository visibility is distinct from a tagged stable release. Until a
-stable release is explicitly published, the current `main` branch and any
-pre-1.0 artifacts should be treated as beta software.
+At archival, the independent dependency audit still reports the known NLTK condition tracked
+historically in issue #54. No advisory was suppressed or dismissed to make the repository
+appear green. Do not adopt this repository as a production dependency without taking ownership
+of dependency review, security maintenance, and validation.
+
+See [ARCHIVE.md](ARCHIVE.md) for the retirement rationale and preserved scope. Redaction remains
+defense in depth, not a guarantee that generated output is safe to publish.
 
 Public narrative:
 
@@ -177,7 +183,7 @@ binaries, ignored files, and symlinks. Scans have file-count, per-file, and
 total-byte limits; cancelled or failed attempts never appear as completed
 snapshots. Ordinary use makes no outbound network request.
 
-This is **PUBLIC BETA — ACTIVE DEVELOPMENT**. Static syntax evidence cannot prove
+This is an **ARCHIVED REFERENCE IMPLEMENTATION**. Static syntax evidence cannot prove
 runtime behavior, architectural intent, code safety, or framework semantics.
 Relationship exploration is deliberately bounded and reports ambiguous or
 unresolved evidence instead of guessing.
@@ -353,5 +359,4 @@ check provider. Extension and health-check contributions must follow
 - `docs/releases/RELEASE_NOTES.md` – Narrative release history.
 - `docs/SUPPORT.md` / `SECURITY.md` – Support channels and vulnerability reporting.
 
-Track current work in GitHub issues, preserve historical task records in
-`docs/TASKLIST.md`, and log notable upgrades in `CHANGELOG.md`.
+GitHub issues, pull requests, plans, and validation records are preserved as historical evidence. No active roadmap or maintenance queue continues after archival.

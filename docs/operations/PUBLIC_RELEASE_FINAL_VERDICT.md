@@ -1,6 +1,10 @@
-# Public Release Final Verdict
+# Public Release Final Verdict — Historical Record
 
-## Current Status
+> **Historical evidence dated 2026-07-16:** this page preserves the validation and
+> publication decision at `399792b687549ea97e9319ad9728c7494a0c7ede`. It is not a
+> current-main validation record. See `BASELINE.md` and issue #54 for current state.
+
+## Historical Status at 2026-07-16
 
 - Classification: `PUBLIC BETA — ACTIVE DEVELOPMENT`
 - Repository visibility: public

@@ -1,6 +1,10 @@
-# Clean-Clone Release Validation
+# Clean-Clone Release Validation — Historical Record
 
-## Current Record
+> **Historical evidence:** this page records the July 2026 clean-clone gate around
+> `399792b687549ea97e9319ad9728c7494a0c7ede`. It is not current-main acceptance.
+> See `BASELINE.md` and issue #54 for current state.
+
+## Historical Record
 
 - Classification: `PUBLIC BETA — ACTIVE DEVELOPMENT`
 - Repository visibility: public
@@ -14,7 +18,7 @@ Bandit, dependency audit, binary scan, documentation links, editable/wheel/
 zipapp smokes, diagnostics, redaction, and Gitleaks worktree/history scans.
 This evidence does not describe a stable release.
 
-## Current Hosted State
+## Historical Hosted State
 
 Public run `29454174475` failed in `quality` because `pip-audit` detected
 `PYSEC-2026-3447` in runner-installed `setuptools 79.0.1`; 83.0.0 is the fixed

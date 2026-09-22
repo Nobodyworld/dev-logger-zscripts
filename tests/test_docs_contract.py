@@ -66,9 +66,7 @@ def test_public_product_identity_and_operational_truth_are_aligned() -> None:
     guardrails = (ROOT / "docs/guardrails.md").read_text(encoding="utf-8")
     baseline = (ROOT / "docs/operations/BASELINE.md").read_text(encoding="utf-8")
     verdict = (ROOT / "docs/operations/PUBLIC_RELEASE_FINAL_VERDICT.md").read_text(encoding="utf-8")
-    clean_clone = (ROOT / "docs/operations/CLEAN_CLONE_RELEASE_VALIDATION.md").read_text(
-        encoding="utf-8"
-    )
+    clean_clone = (ROOT / "docs/operations/CLEAN_CLONE_RELEASE_VALIDATION.md").read_text(encoding="utf-8")
 
     assert "Scan → Explore → Review → Compare → Handoff" in readme
     assert "Experimental Repository Review Workspace" not in readme

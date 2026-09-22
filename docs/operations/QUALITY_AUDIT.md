@@ -1,6 +1,10 @@
-# Quality Audit
+# Quality Audit — Historical Validation Record
 
-## Status Classification
+> **Historical evidence:** this document records the July 2026 public-beta audit around
+> `399792b687549ea97e9319ad9728c7494a0c7ede`. It is not the current repository baseline.
+> See `BASELINE.md` and issue #54 for current gate/security state.
+
+## Historical Status Classification
 
 `PUBLIC BETA — ACTIVE DEVELOPMENT`
 

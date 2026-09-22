@@ -1,79 +1,90 @@
-# System Architecture Overview
+# System Architecture
 
-## High-Level Components
+## Product identity
 
-- **`zscripts/cli.py`** – Parses CLI arguments, performs path validation, and
-  orchestrates the `collect`, `consolidate`, and `tree` commands. It delegates
-  extension lookups to the preset registry and emits structured logs with stable
-  error identifiers.
-- **`zscripts/config.py`** – Loads JSON configuration files, normalises the
-  values into immutable dataclasses, resolves filesystem paths relative to the
-  package root, and exposes compatibility accessors for legacy constants.
-- **`zscripts/utils.py`** – Provides traversal and transformation helpers used by
-  every CLI command. Responsibilities include ignore pattern compilation,
-  grouping of source files, consolidation of outputs, and generation of tree
-  snapshots.
-- **`zscripts/presets.py`** – Maintains the authoritative list of language
-  presets. Each preset defines extensions, log directory names, and single-file
-  targets. Both the CLI and agent adapter rely on this registry to stay in
-  sync.
-- **`agents/cli_adapter.py`** – Publishes a machine-readable description of the
-  CLI surface. The adapter mirrors default values and preset names so that MCP
-  manifests, AgentKit profiles, or other orchestration layers can remain
-  correct without manual updates.
-- **`examples/sample_project/`** – Demonstrates how a multi-language repository behaves
-  under the CLI and provides fixtures for tests.
-- **`tests/`** – Exercises CLI flows, preset behaviour, and serialization
-  guarantees to prevent regressions.
+Zscripts' primary product is Repository Review: a local-first, read-only Python repository
+workspace built around `Scan → Explore → Review → Compare → Handoff`.
 
-## Execution Walkthrough
+The repository also maintains a log-toolkit CLI for collection, normalization, redaction,
+reporting, diagnostics, adapters, observability, and extensions. Legacy helpers under
+`zscripts/helpers/` are compatibility-only and governed separately by #73.
 
-1. The CLI entry point (`python -m zscripts`) parses arguments and resolves the
-   project root, defaulting to the nearest Git repository or `pyproject.toml`.
-2. `zscripts.config.load_config()` reads configuration JSON (optionally merged
-   with overrides) and produces immutable `Config` and `ResolvedPaths`
-   structures.
-3. Based on the requested subcommand, the CLI retrieves preset metadata from
-   `zscripts.presets` helpers to build extension filters and default output
-   locations.
-4. `zscripts.utils` orchestrates filesystem traversal, ensuring ignore patterns
-   from both configuration and `.gitignore` files are respected. File contents
-   are streamed and summarised into the desired artefacts (per-app logs,
-   consolidated bundles, or tree snapshots).
-5. The CLI emits structured summaries and exit codes that automation systems can
-   consume.
-6. Separately, orchestration frameworks call `agents.cli_adapter.export_cli_metadata()`
-   to retrieve an aligned description of commands and presets.
+## Repository Review flow
 
-## Data Flow
+```text
+repository path
+    ↓
+RepositoryDiscovery ── bounded files / Git metadata
+    ↓
+PythonAnalyzer ─────── symbols / imports / static evidence
+    ↓
+RelationshipAnalyzer + FindingAnalyzer
+    ↓
+RepositoryReviewService
+    ↓
+SnapshotStore ─────── atomic SQLite snapshots / lifecycle / reviews / handoffs
+    ↓
+workspace_api (127.0.0.1 only)
+    ↓
+React workspace
+Overview → Symbols → Relationships → Findings → Compare → Handoff
+```
 
-- Configuration is read once, cached via `_get_default_config()`, and reused
-  across modules to avoid repeated disk access.
-- Preset definitions live in memory as frozen dataclasses; extension maps and
-  directories are exposed through read-only `MappingProxyType` instances to
-  prevent mutation.
-- CLI commands stream filesystem content via generators, keeping memory usage
-  predictable for large repositories.
-- Agent payloads serialise to plain dictionaries so they can be stored in MCP
-  manifests, JSON files, or API payloads without further adaptation.
+### Core modules
 
-## Key Guarantees
+- `zscripts/infrastructure/repository_discovery.py` — bounded repository/file discovery and fixed allowlisted Git metadata queries.
+- `zscripts/infrastructure/python_analyzer.py` — Python AST evidence without importing analyzed code.
+- `zscripts/infrastructure/relationship_analysis.py` — bounded static relationship and graph evidence.
+- `zscripts/infrastructure/finding_analysis.py` — deterministic metrics/finding candidates.
+- `zscripts/infrastructure/comparison_analysis.py` — conservative immutable snapshot comparison.
+- `zscripts/infrastructure/handoff_rendering.py` — bounded non-executable Markdown/JSON handoffs.
+- `zscripts/infrastructure/snapshot_store.py` — SQLite persistence, migrations, finding lifecycle/reviews, and saved handoff integrity.
+- `zscripts/application/repository_review.py` — application orchestration and public evidence shaping.
+- `zscripts/interfaces/workspace_api.py` — strict localhost-only FastAPI surface and packaged frontend serving.
+- `workspace-ui/src/` — React presentation consuming the same evidence model.
 
-- **Immutability:** Preset mappings and configuration snapshots use
-  `MappingProxyType` or frozen dataclasses to avoid accidental mutation.
-- **Validation:** CLI output paths are validated for writability before any file
-  I/O occurs, producing actionable errors for automation systems.
-- **Type Safety:** Strict mypy configuration ensures new modules maintain typing
-  guarantees (e.g., agent payloads and preset registries).
+## Repository Review safety boundary
 
-## Extensibility
+Analyzed repositories are hostile input. Repository Review reads bounded source bytes and
+uses AST/static evidence; it does not import target modules or execute target project commands.
+Symlinks are excluded. Source excerpts are explicit, bounded, hash-verified, and not persisted.
+Failed/cancelled attempts do not become completed snapshots. Static evidence is conservative:
+ambiguity, truncation, parse gaps, unsupported versions, and unknown state are surfaced rather
+than guessed.
 
-- **Adding new stacks:** Extend `_PRESETS` in `zscripts/presets.py`. The CLI and
-  agent adapter automatically pick up the new preset, and defaults can be
-  overridden via `configs/zscripts.config.json`.
-- **Customising ignore rules:** Update `configs/zscripts.config.json` to amend `skip`
-  directories or `user_ignore_patterns`. `zscripts.utils.load_gitignore_patterns`
-  merges configuration with `.gitignore` contents and caches the result.
-- **Integrating automation:** Consume `export_cli_metadata()` to render rich
-  prompts or UI. The payload includes example commands and parameter metadata to
-  keep interactive shells and AI copilots aligned with the CLI.
+The workspace binds to `127.0.0.1` and uses restrictive browser headers. Ordinary Repository
+Review does not require outbound runtime requests.
+
+## Maintained log-toolkit flow
+
+```text
+file / stdin / explicitly selected command
+    ↓
+adapter
+    ↓
+normalized schema
+    ↓
+redaction / summary / explanation / report / diagnostics
+```
+
+`zscripts/application/services.py` coordinates adapters, schema validation, redaction and
+command collection. Command collection uses `scripts/sandbox.py` process guardrails, which
+are **not OS-level isolation**: they constrain working directory, environment, timeout and,
+where supported, resource limits. A child process otherwise retains the launching account's
+OS permissions.
+
+Observability and extension infrastructure under `zscripts/observability/` and
+`zscripts/extensions/` supports this maintained CLI surface.
+
+## Dependency direction
+
+Domain contracts do not depend on presentation. Infrastructure implements evidence/persistence
+mechanics; application services orchestrate them; CLI/API/UI consume application contracts.
+Repository Review writes its local state outside analyzed repositories.
+
+## Current structural constraint
+
+The product is well covered but several maintained modules are concentrated
+(`snapshot_store.py`, RepositoryReviewService, workspace API route construction, and large
+frontend views/styles). Issue #156 owns bounded behavior-preserving decomposition before #94
+adds another persisted evidence layer.

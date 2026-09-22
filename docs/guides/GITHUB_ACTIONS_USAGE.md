@@ -1,47 +1,63 @@
 # GitHub Actions Usage
 
-Use the CLI directly in workflows to normalize and summarize build logs.
+Use the maintained CLI in workflows when a deterministic log artifact is useful. Repository
+Review itself is local-first and does not require GitHub Actions.
 
-## Minimal Example
+The example below follows this repository's reviewed supply-chain conventions: read-only
+permissions, full-SHA GitHub-owned Actions, and non-persisted checkout credentials.
+
+## Minimal redacted-report example
 
 ```yaml
 name: Log Diagnostics
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["main"]
+
+permissions:
+  contents: read
 
 jobs:
-  normalize-logs:
+  report:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@9191ea1a55b1e7028943ee5647bf579e1182b42d # reviewed post-v7.0.0 security commit
         with:
           python-version: "3.11"
-      - name: Install project
+
+      - name: Install Zscripts from this checkout
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .[dev]
-      - name: Normalize sample CI log
+          python -m pip install -e .
+
+      - name: Build redacted JSON report
         run: |
-          python cli.py --adapter ci parse --input examples/ci/sample.log > normalized_ci_log.json
-      - name: Build redacted markdown report
+          python cli.py --adapter ci report --input examples/ci/sample.log --format json --redact --output report.json
+
+      - name: Build redacted Markdown report
         run: |
           python cli.py --adapter ci report --input examples/ci/sample.log --format markdown --redact --output report.md
-      - name: Upload outputs
-        uses: actions/upload-artifact@v5
+
+      - name: Upload reviewed outputs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: normalized-and-report
+          name: zscripts-reports
           path: |
-            normalized_ci_log.json
+            report.json
             report.md
 ```
 
-## Notes
+## Safety notes
 
-- Keep `--redact` enabled for CI artifacts.
-- Prefer adapter-specific inputs (for example `--adapter ci`) to improve parsing quality.
-- Reuse `python scripts/quality_gate.py quality` to run the hosted quality
-  contract locally.
+- Treat every artifact as independently reviewable output. Redacting one file does not sanitize
+  another file produced by a different command.
+- Automated redaction is defense in depth, not proof that an artifact is safe to publish.
+- Use synthetic/public fixtures in examples and review generated artifacts before sharing them.
+- Do not replace immutable Action SHAs with floating tags merely for readability.
+- When copying this example later, re-check maintained Action provenance in
+  `docs/DEPENDENCIES.md`; dependency/action upgrades are separate maintenance decisions.

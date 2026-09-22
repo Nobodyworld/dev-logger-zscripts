@@ -1,9 +1,8 @@
 # Future Roadmap
 
-Zscripts is transitioning toward a local, deterministic **repository review
-workspace**.
+Zscripts is a local, deterministic **repository review workspace**.
 
-The authoritative plan is:
+Authoritative direction:
 
 - [Zscripts 0.2 Repository Review Workspace Roadmap](product/REPOSITORY_INTELLIGENCE_ROADMAP.md)
 - [Umbrella issue #76](https://github.com/Nobodyworld/dev-logger-zscripts/issues/76)
@@ -14,31 +13,26 @@ The authoritative plan is:
 Scan → Explore → Review → Compare → Handoff
 ```
 
-The workspace—not a generated spreadsheet or report bundle—is the product.
-Analysis remains local, read-only, reviewable, and usable without an LLM.
+The workspace is the product. Analysis remains local-first, read-only, deterministic,
+reviewable, and usable without an LLM or cloud account. The maintained log-toolkit CLI remains
+a supported capability; legacy helpers remain compatibility-only under #73.
 
-## Current priority
+## Current highest-impact sequence
 
-The fastest safe route is:
+1. #155 — align product identity, supported-use guidance, and current validation records.
+2. #154 — resolve the focused control-contrast/focus question before broader stylesheet work.
+3. #136 — consolidate current compatible dependency maintenance from then-current main.
+4. #156 — reduce bounded Repository Review structural hotspots without changing behavior.
+5. #94 — begin the first architecture-evidence vertical slice.
 
-1. finalize safety, evidence, snapshot, and review-state contracts;
-2. build one end-to-end generic Python Repository Review MVP;
-3. deliver a thin localhost UI with Overview and Symbols views immediately;
-4. add relationships, persistent findings, comparisons, and handoffs in vertical
-   slices;
-5. dogfood the Python workspace before approving framework-specific enrichment or
-   additional languages.
+#54 continues in parallel as the security/release-closeout authority and is externally blocked
+on a verified NLTK correction. That blocker does not freeze unrelated product work.
 
-Optional exports are generated from the active view. XLSX, cloud services,
-desktop packaging, multi-user collaboration, and additional language analyzers are
-deferred until the local workspace demonstrates value.
+Phase 2B legacy-helper extraction/removal remains prohibited until #73's compatibility and
+public-beta deprecation gates are satisfied.
 
 ## Deferred directions
 
-The previous roadmap emphasized hosted telemetry, message queues, containers,
-autoscaling, remote extension registries, Excel-first reports, framework-specific
-analysis, and a dashboard delivered after the engine. Those are not current
-priorities.
-
-The legacy helper compatibility track under issues #62 and #73 remains separate
-from product development and must not block the repository review roadmap.
+Additional language analyzers, cloud/multi-user service, automatic refactoring, LLM-required
+classification, and stable release claims remain deferred until the current local product
+tranche demonstrates a clean, maintainable foundation.

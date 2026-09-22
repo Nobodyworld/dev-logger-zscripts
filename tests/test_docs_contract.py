@@ -58,3 +58,36 @@ def test_readme_raw_to_report_demo_uses_supported_adapter_order() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "python cli.py --adapter ci report --input examples/raw_to_report/raw.log" in readme
     assert "python cli.py report --adapter ci --input examples/raw_to_report/raw.log" not in readme
+
+
+def test_public_product_identity_and_operational_truth_are_aligned() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    index = (ROOT / "docs/INDEX.md").read_text(encoding="utf-8")
+    guardrails = (ROOT / "docs/guardrails.md").read_text(encoding="utf-8")
+    baseline = (ROOT / "docs/operations/BASELINE.md").read_text(encoding="utf-8")
+    verdict = (ROOT / "docs/operations/PUBLIC_RELEASE_FINAL_VERDICT.md").read_text(encoding="utf-8")
+    clean_clone = (ROOT / "docs/operations/CLEAN_CLONE_RELEASE_VALIDATION.md").read_text(encoding="utf-8")
+
+    assert "Scan → Explore → Review → Compare → Handoff" in readme
+    assert "Experimental Repository Review Workspace" not in readme
+    assert "Experimental Repository Review Workspace" not in index
+    assert "not an operating-system sandbox" in guardrails
+    assert "jsonschema>=4.21,<5" in baseline
+    assert "dependency-audit" in baseline
+    assert "Historical Record" in verdict
+    assert "Historical Record" in clean_clone
+
+
+def test_github_actions_example_uses_reviewed_immutable_security_defaults() -> None:
+    guide = (ROOT / "docs/guides/GITHUB_ACTIONS_USAGE.md").read_text(encoding="utf-8")
+
+    assert "permissions:\n  contents: read" in guide
+    assert "persist-credentials: false" in guide
+    assert "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" in guide
+    assert "actions/setup-python@9191ea1a55b1e7028943ee5647bf579e1182b42d" in guide
+    assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in guide
+    assert "actions/checkout@v" not in guide
+    assert "actions/setup-python@v" not in guide
+    assert "actions/upload-artifact@v" not in guide
+    assert "--format json --redact --output report.json" in guide
+    assert "--format markdown --redact --output report.md" in guide

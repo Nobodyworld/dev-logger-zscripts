@@ -1,7 +1,6 @@
 # Support
 
-Zscripts is a public-beta structured log toolkit and experimental local
-repository-review workspace for developers and automation systems.
+Zscripts is a public-beta local Repository Review workspace for developers and automation systems. The maintained structured-log toolkit remains a supported capability.
 
 ## Community Channels
 

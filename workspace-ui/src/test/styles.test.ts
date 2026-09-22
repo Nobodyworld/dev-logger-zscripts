@@ -33,9 +33,9 @@ function contrast(left: string, right: string): number {
 describe("workspace control styling", () => {
     it("keeps enabled primary button text above the normal-text contrast target", () => {
         expect(contrast("#ffffff", cssVariable("button-primary"))).toBeGreaterThanOrEqual(4.5);
-        expect(contrast("#ffffff", cssVariable("button-primary-hover"))).toBeGreaterThanOrEqual(
-            4.5,
-        );
+        expect(
+            contrast("#ffffff", cssVariable("button-primary-hover")),
+        ).toBeGreaterThanOrEqual(4.5);
         expect(styles).toContain("background: var(--button-primary);");
         expect(styles).toContain("background: var(--button-primary-hover);");
     });

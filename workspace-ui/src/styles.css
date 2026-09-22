@@ -21,6 +21,8 @@
     --teal: #008b8f;
     --teal-dark: #007377;
     --teal-soft: #e8f7f7;
+    --button-primary: #007377;
+    --button-primary-hover: #005f63;
     --danger: #a43e37;
     --focus: #1677ff;
     --radius: 7px;
@@ -65,8 +67,17 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-    outline: 3px solid color-mix(in srgb, var(--focus) 35%, transparent);
-    outline-offset: 1px;
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible {
+        outline-color: Highlight;
+    }
 }
 
 .sr-only {
@@ -267,11 +278,11 @@ select {
 
 .button--primary {
     color: #ffffff;
-    background: var(--teal);
+    background: var(--button-primary);
 }
 
 .button--primary:hover:not(:disabled) {
-    background: var(--teal-dark);
+    background: var(--button-primary-hover);
 }
 
 .button--secondary {

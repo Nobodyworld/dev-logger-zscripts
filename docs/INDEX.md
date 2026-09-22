@@ -1,6 +1,6 @@
-# zscripts Toolkit Documentation
+# Zscripts Documentation
 
-Zscripts is a structured log collection, normalization, redaction, diagnostics, and reporting toolkit for developers and automation systems.
+Zscripts is a local-first repository review workspace. The maintained log-toolkit CLI remains a supported capability, while legacy helpers are compatibility-only.
 
 - [CLI Overview](../README.md)
 - [Support](SUPPORT.md)
@@ -9,7 +9,7 @@ Zscripts is a structured log collection, normalization, redaction, diagnostics, 
 - [Architecture Deep-Dive](architecture/ARCHITECTURE.md)
 - [Architecture Overview](architecture/ARCHITECTURE_OVERVIEW.md)
 - [ToolkitService API Reference](api.md)
-- [Experimental Repository Review Workspace](repository-review.md)
+- [Repository Review Workspace](repository-review.md)
 - [Operational Workflows](workflows.md)
 - [Automation Playbook](automation/AUTOMATION.md)
 - [Normalized Log Schema](schema.md)
@@ -32,8 +32,8 @@ Zscripts is a structured log collection, normalization, redaction, diagnostics, 
 - [Log ETL Case Study](guides/LOG_ETL_CASE_STUDY.md)
 - [Raw Log to Normalized and Redacted Report](guides/RAW_LOG_TO_REDACTED_REPORT.md)
 - [GitHub Actions Usage](guides/GITHUB_ACTIONS_USAGE.md)
-- [Public Release Audit](operations/PUBLIC_RELEASE_AUDIT.md)
-- [Public Release Final Verdict](operations/PUBLIC_RELEASE_FINAL_VERDICT.md)
+- [Historical Public Release Audit](operations/PUBLIC_RELEASE_AUDIT.md)
+- [Historical Public Release Final Verdict](operations/PUBLIC_RELEASE_FINAL_VERDICT.md)
 - [Clean-Clone Release Validation](operations/CLEAN_CLONE_RELEASE_VALIDATION.md)
 - [Extension Guide](guides/EXTENSION_GUIDE.md)
 - [Legacy and Optional Helpers](helpers/LEGACY_OPTIONAL_HELPERS.md)

@@ -1,100 +1,54 @@
 # Security Policy
 
-## Supported Versions
+## Archived status
 
-Zscripts is published as **PUBLIC BETA — ACTIVE DEVELOPMENT**. Security fixes are
-provided on a best-effort basis for the current `main` branch. No older release
-line is currently guaranteed support.
+Zscripts is an **archived reference implementation**. No version, branch, tag, package, or
+artifact is supported for production use, and there is no continuing security-remediation
+commitment.
+
+At archival, the repository's independent dependency audit still reported the known NLTK
+condition historically tracked in issue #54. The repository was archived without suppressing,
+ignoring, or dismissing that result.
 
 | Version | Supported |
 | --- | --- |
-| `main` | Best-effort security fixes |
-| Tagged pre-1.0 releases | Not independently supported unless stated in release notes |
+| `main` | No |
+| Tagged pre-1.0 artifacts | No |
 
-## Reporting a Vulnerability
+Anyone who forks or reuses this code assumes responsibility for dependency review, patching,
+threat-model review, testing, and deployment security.
 
-Use GitHub private vulnerability reporting through the repository **Security**
-tab. Include a clear description, reproduction steps, affected versions or
-commits, and the likely impact.
+## Sensitive disclosures
 
-- Do **not** disclose vulnerability details in a public issue, discussion, or pull
-  request.
-- If private vulnerability reporting is temporarily unavailable, do not publish
-  sensitive details. Use a verified private contact method listed by the
-  repository owner on GitHub, or wait until private reporting is available.
-- This project does not currently publish a dedicated security mailbox, PGP key,
-  or guaranteed response-time service level.
+Do not post credentials, private source, personal information, proprietary paths, exploit
+details, or other sensitive vulnerability material in public issues or pull requests.
 
-## Handling Process
+If a sensitive report concerns historical repository content, use GitHub private vulnerability
+reporting when it is available for the archived repository. If that channel is unavailable,
+use a verified private contact method published by the repository owner rather than disclosing
+details publicly. No response-time or remediation commitment is provided.
 
-Maintainers will, as capacity permits:
+## Historical security posture
 
-1. Triage and attempt to reproduce the report.
-2. Assess severity and affected surfaces.
-3. Develop and test a fix in a non-public workstream when appropriate.
-4. Coordinate disclosure with the reporter.
-5. Publish a GitHub Security Advisory and update project documentation when a
-   disclosure is warranted.
+Before archival, the repository used full-SHA GitHub Actions, least-privilege workflow
+permissions, non-persisted checkout credentials, detect-secrets, Bandit, `pip-audit`,
+Gitleaks in the local release profile, binary scanning, coverage gates, CodeQL, hostile-input
+fixtures, read-only Repository Review contracts, localhost API restrictions, and packaging
+smokes.
 
-Response and remediation timing depends on severity, reproducibility, maintainer
-availability, and the scope of the required fix.
+Those controls and their evidence remain useful historical implementation material. They do
+not establish that the archived repository is currently secure or supported.
 
-## Security Tooling
+## Repository Review threat model
 
-The hosted quality gate includes:
+Repository Review treats analyzed repositories as hostile input. It uses bounded byte reads and
+Python AST/static analysis rather than importing target modules or executing target project
+commands. Read-only Git metadata queries use fixed no-shell operations; symlinks are excluded.
+State is stored outside analyzed repositories. Source excerpts are explicit, bounded,
+hash-verified, and not persisted, but may still expose sensitive source text locally.
 
-- Ruff formatting and linting;
-- the supported mypy target;
-- Bandit;
-- `pip-audit`;
-- binary-file scanning;
-- pytest with an enforced coverage threshold;
-- editable-install, wheel, zipapp, and diagnostics smoke tests.
-- hostile repository fixtures, read-only/cancellation/rollback contracts,
-  localhost API validation, frontend tests, and packaged-workspace smoke tests.
+The workspace binds to `127.0.0.1` and uses same-origin routes and restrictive browser
+headers. Static analysis cannot prove runtime behavior, architectural intent, or code safety.
 
-The local `release` profile additionally validates report redaction, requires
-Gitleaks scans of the tracked worktree and repository history, and verifies a
-clean worktree. GitHub secret scanning, push protection,
-Dependabot alerts and security updates, CodeQL where eligible, and private
-vulnerability reporting should be enabled or verified immediately after the
-repository becomes public.
-
-## Repository-review threat model
-
-The experimental workspace treats every analyzed repository as hostile input.
-It uses bounded byte reads and Python AST parsing only, never imports target
-modules, never runs framework setup, and never derives a shell command from
-repository contents. Read-only Git metadata queries use a fixed no-shell
-allowlist with hooks and optional locks disabled. Symlinks are excluded.
-
-The only Bandit exemptions added for this slice cover that fixed Git invocation
-and SQL query fragments assembled from fixed, allowlisted column/direction
-tokens; all user values are bound parameters. Tests exercise inert fixtures that
-would write files, run commands, open sockets, perform HTTP requests, read
-environment secrets, invoke framework setup, and raise at import time if the
-analyzer ever executed them.
-
-The application stores metadata outside the repository and binds the workspace
-only to `127.0.0.1` with same-origin routes and restrictive browser headers.
-Source excerpts are explicit, bounded, hash-verified, never persisted, and may
-still contain sensitive source text in the local browser. Static analysis does
-not establish that a repository is safe. See
-[the repository-review privacy contract](docs/repository-review.md#read-only-and-privacy-contract).
-
-## Responsible Disclosure
-
-Coordinated disclosure is appreciated. Reporters may request attribution or
-anonymity. Please allow the maintainer a reasonable opportunity to investigate
-and remediate before public disclosure.
-
-## Pre-release Security Checklist
-
-- [ ] Run the complete hosted and local release gates.
-- [ ] Confirm coverage meets the configured threshold of 85% or higher.
-- [ ] Review dependency advisories with `pip-audit`.
-- [ ] Run tracked-worktree and full-history Gitleaks scans.
-- [ ] Verify generated reports do not expose fixture or provider-shaped secrets.
-- [ ] Confirm configuration changes are documented and secrets are loaded from
-      environment variables or secure stores.
-- [ ] Update `CHANGELOG.md` and release notes for security-impacting changes.
+See [the Repository Review privacy contract](docs/repository-review.md#read-only-and-privacy-contract)
+and [ARCHIVE.md](ARCHIVE.md).

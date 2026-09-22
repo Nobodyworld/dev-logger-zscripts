@@ -1,4 +1,4 @@
-"""Immutable contracts for the experimental repository review workspace."""
+"""Immutable contracts for the Repository Review workspace."""
 
 from __future__ import annotations
 

@@ -301,7 +301,7 @@ def _build_main_parser(
 
     experimental_parser = subparsers.add_parser(
         "experimental",
-        help="Use experimental repository-review commands.",
+        help="Use Repository Review CLI commands (public beta).",
     )
     experimental_subparsers = experimental_parser.add_subparsers(
         dest="experimental_command",
@@ -366,7 +366,7 @@ def _build_main_parser(
 
     workspace_parser = subparsers.add_parser(
         "workspace",
-        help="Start the experimental localhost-only repository review workspace.",
+        help="Start the localhost-only Repository Review workspace (public beta).",
     )
     workspace_parser.add_argument(
         "--host",

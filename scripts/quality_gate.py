@@ -240,6 +240,44 @@ def _run_wheel_smoke() -> dict[str, object]:
             ]
         )
 
+        core_environment = smoke_root / "core-venv"
+        venv.EnvBuilder(with_pip=True).create(core_environment)
+        core_python = _console_script(core_environment, "python")
+        _run([str(core_python), "-m", "pip", "install", "--upgrade", "pip"], cwd=smoke_root)
+        _run([str(core_python), "-m", "pip", "install", str(wheels[0])], cwd=smoke_root)
+        core_console = _console_script(core_environment, "zscripts")
+        core_log = smoke_root / "synthetic-ci.log"
+        core_log.write_text(
+            "============================= test session starts =============================\\n"
+            "FAILED tests/test_example.py::test_redaction - AssertionError: "
+            "API_KEY=not-a-real-secret-redaction-fixture-1234567890abcdef leaked\\n"
+            "=========================== short test summary info ===========================\\n"
+            "1 failed, 24 passed\\n",
+            encoding="utf-8",
+        )
+        core_report = smoke_root / "core-report.json"
+        _run(
+            [
+                str(core_console),
+                "--adapter",
+                "ci",
+                "report",
+                "--input",
+                str(core_log),
+                "--format",
+                "json",
+                "--redact",
+                "--output",
+                str(core_report),
+            ],
+            cwd=smoke_root,
+        )
+        core_report_text = core_report.read_text(encoding="utf-8")
+        if "not-a-real-secret-redaction-fixture-1234567890abcdef" in core_report_text:
+            raise GateFailure("Core-only report smoke leaked the synthetic fixture secret")
+        if "[REDACTED]" not in core_report_text:
+            raise GateFailure("Core-only report smoke omitted the expected redaction marker")
+
         environment = smoke_root / "venv"
         venv.EnvBuilder(with_pip=True).create(environment)
         python = _console_script(environment, "python")
@@ -282,6 +320,7 @@ def _run_wheel_smoke() -> dict[str, object]:
     return {
         "adapter_order": list(EXPECTED_ADAPTERS),
         "isolated_install": True,
+        "core_only_report_smoke": True,
         "helper_modules_included": 154,
         "workspace": workspace_smoke,
     }

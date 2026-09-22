@@ -1,11 +1,10 @@
-# Experimental Repository Review Workspace
+# Repository Review Workspace
 
 Status: **PUBLIC BETA — ACTIVE DEVELOPMENT**
 
-The repository review workspace is an experimental, local-first way to scan an
-ordinary Python repository, store deterministic metadata snapshots, and explore
-an Overview, searchable Symbols table, focused relationship graphs, and a
-reviewable deterministic Findings queue. It does not require an LLM, a cloud
+Repository Review is Zscripts' primary local-first product workflow for scanning an
+ordinary Python repository, storing deterministic metadata snapshots, and exploring
+Overview, Symbols, Relationships, Findings, Compare, and Handoff surfaces. It does not require an LLM, a cloud
 account, Docker, or an external database.
 
 The MVP flow is:
@@ -18,8 +17,8 @@ Local repository → bounded static scan → deterministic relationships
                                   localhost API → React workspace
 ```
 
-The existing log-normalization CLI remains supported. New repository-review
-commands and routes are explicitly experimental.
+The maintained log-normalization CLI remains supported. Repository Review commands
+and routes are public-beta interfaces and may still change before a stable release.
 
 ## Install and start
 

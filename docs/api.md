@@ -61,7 +61,7 @@ service = build_toolkit_service(config, adapter_registry=registry)
 - Always validate adapter identifiers against `AdapterRegistry.available()` to
   provide meaningful feedback in user interfaces.
 
-## Experimental Repository Review API
+## Repository Review API (public beta)
 
 The loopback-only workspace also exposes versioned snapshot evidence:
 

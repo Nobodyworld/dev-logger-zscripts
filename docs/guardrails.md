@@ -1,17 +1,21 @@
 # Guardrails and Redaction
 
-The toolkit defaults to a locked-down sandbox to keep log collection safe:
+Log collection can execute an explicitly selected command with **process-level guardrails**.
+These controls reduce accidental exposure, but they are not an operating-system sandbox,
+container, VM, filesystem jail, or network isolation boundary. A child process still has
+the permissions of the account that launched Zscripts unless the operating system or another
+external isolation layer restricts it.
 
-- File access is limited to the current working directory and children.
-- Subprocesses have CPU, memory, and file-size limits enforced when the host
-  platform supports them.
-- Environment variables are whitelisted to avoid accidental credential leaks.
-- Outbound network access is not required; commands inherit only the most basic
-  environment variables by default.
+Default command controls are:
 
-Use the `--dangerous` flag to bypass guardrails when you explicitly need full
-host access. The CLI documents this flag prominently to discourage accidental
-use.
+- the subprocess working directory must resolve within an allowlisted path;
+- the inherited environment is reduced to an allowlist;
+- a wall-clock timeout is enforced;
+- CPU, address-space, and output-file limits are applied on platforms where Python's
+  `resource` module is available.
+
+The `--dangerous` flag disables these Zscripts guardrails. Use stronger operating-system or
+container isolation when executing untrusted commands.
 
 Redaction uses regular expressions defined in `ToolkitConfig.redact_patterns`.
 You can preview the effect by running:

@@ -1,6 +1,6 @@
 # Zscripts
 
-Zscripts is a structured log collection, normalization, redaction, diagnostics, and reporting toolkit for developers and automation systems.
+Zscripts is a local-first repository review workspace for deterministic, read-only Python repository analysis. Its primary workflow is `Scan → Explore → Review → Compare → Handoff`. The maintained CLI also provides structured log collection, normalization, redaction, diagnostics, and reporting for developers and automation systems.
 
 ## PUBLIC BETA — ACTIVE DEVELOPMENT
 
@@ -18,7 +18,7 @@ pre-1.0 artifacts should be treated as beta software.
 
 Public narrative:
 
-> Zscripts converts raw development and CI logs into normalized, redacted, diagnosable, and reportable output through a reusable Python CLI and adapter architecture.
+> Zscripts helps a user scan a Python repository, explore deterministic evidence, review findings, compare snapshots, and create bounded local handoffs. The maintained CLI also supports normalized and redacted development-log workflows.
 
 ## End-to-End Demonstration
 
@@ -88,16 +88,25 @@ flowchart LR
   infrastructure layers.
 - Required JSON Schema validation for normalized payloads; invalid payloads are
   rejected in editable and isolated-wheel installations.
-- Experimental local repository review workspace with bounded, read-only Python
+- Primary local repository review workspace with bounded, read-only Python
   AST analysis, atomic SQLite snapshots, and the complete
   `Scan → Explore → Review → Compare → Handoff` workflow across Overview,
   Symbols, Relationships, Findings, Compare, and Handoff views.
 
 ## Quickstart
 
-Run commands from the repository root. The top-level `cli.py` shim simply
-dispatches to `zscripts.cli.main()`, and installed environments also expose
-the `zscripts` console command.
+Zscripts requires Python 3.11 or newer. For the maintained CLI from a source checkout:
+
+```sh
+python -m venv .venv
+# Windows PowerShell: .venv\\Scripts\\Activate.ps1
+# macOS/Linux: source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+Run commands from the repository root. The top-level `cli.py` shim dispatches to
+`zscripts.cli.main()`, and installed environments expose the `zscripts` console command.
 
 ```sh
 # Inspect the active sandbox guardrails
@@ -141,9 +150,9 @@ Global flags such as `--config`, `--set`, `--adapter`, `--enable-telemetry`,
 `--log-level`, and `--log-format` are available to every command. See
 `agents/cli_adapter.py` for a machine-readable description of the surface area.
 
-## Experimental Repository Review Workspace
+## Repository Review Workspace
 
-The workspace is a local-first product slice for scanning an ordinary Python
+The workspace is the primary local-first product for scanning an ordinary Python
 repository without importing or executing it. It stores metadata-only snapshots
 outside the analyzed repository and serves responsive Overview, Symbols,
 focused Relationships, reviewable Findings, deterministic Compare, and bounded
@@ -159,7 +168,7 @@ python scripts/build_workspace_assets.py
 # Start the local workspace at http://127.0.0.1:8765
 zscripts workspace
 
-# Or scan through the experimental CLI
+# Or scan through the repository-review CLI
 zscripts experimental analyze /path/to/repository --json
 ```
 
@@ -280,18 +289,19 @@ pip install --upgrade pip
 pip install .[dev,helpers,workspace]  # Includes local workspace development
 ```
 
-Execute the fast contributor gate with:
+Execute the fast contributor profile with:
 
 ```sh
-make check  # formatting, lint, mypy, security, pytest
+make check
 ```
 
-Use `make quality` for the complete hosted-CI contract (audit, binary scan,
-coverage ≥85%, documentation, packaging, zipapp, and diagnostics), and
-`make release` for the local release contract (quality plus redaction,
-tracked-worktree/full-history Gitleaks, and a final clean-worktree check).
-All three targets delegate to `scripts/quality_gate.py` and can be invoked
-directly on Windows.
+`make quality` is the complete **local** quality profile and includes dependency
+auditing. Hosted CI keeps the merge-required `quality` job independent from the
+separate `dependency-audit` job so an unresolved upstream advisory remains visible
+without freezing unrelated code-quality work. `make release` extends local quality
+with redaction validation, tracked-worktree/full-history Gitleaks scans, and a final
+clean-worktree check. All three targets delegate to `scripts/quality_gate.py` and
+can be invoked directly on Windows.
 
 Common individual commands:
 

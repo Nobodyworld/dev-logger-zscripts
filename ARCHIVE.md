@@ -10,16 +10,18 @@ eras—see [HISTORY.md](HISTORY.md).
 
 ## Why development stops here
 
-Zscripts accumulated multiple useful but increasingly separate product eras:
+Zscripts accumulated multiple useful but increasingly separate eras:
 
-1. a structured development-log collection, normalization, redaction, diagnostics, and
-   reporting toolkit;
-2. a broad legacy helper collection kept temporarily for compatibility; and
-3. a local Repository Review workspace with deterministic static analysis, SQLite snapshots,
+1. the June 2024 Django/source-context compiler that prepared repository source and structural
+   names for ChatGPT web chats that could not directly inspect the codebase;
+2. a generalized structured development-log collection, normalization, redaction, diagnostics,
+   and reporting toolkit;
+3. a broad legacy helper collection kept temporarily for compatibility; and
+4. a local Repository Review workspace with deterministic static analysis, SQLite snapshots,
    findings, comparisons, and bounded handoffs.
 
-Each layer produced useful implementation and design evidence. Keeping all three under one
-product, however, made the repository boundary increasingly unclear and caused old compatibility
+Each era and layer produced useful implementation and design evidence. Keeping all of them under
+one product, however, made the repository boundary increasingly unclear and caused old compatibility
 surfaces to continue driving dependency, packaging, security, and maintenance work unrelated to
 the newest product direction.
 

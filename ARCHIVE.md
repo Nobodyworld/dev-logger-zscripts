@@ -20,8 +20,8 @@ Zscripts accumulated multiple useful but increasingly separate eras:
 4. a local Repository Review workspace with deterministic static analysis, SQLite snapshots,
    findings, comparisons, and bounded handoffs.
 
-Each era and layer produced useful implementation and design evidence. Keeping all three under one
-product, however, made the repository boundary increasingly unclear and caused old compatibility
+Each era and layer produced useful implementation and design evidence. Keeping all of them under
+one product, however, made the repository boundary increasingly unclear and caused old compatibility
 surfaces to continue driving dependency, packaging, security, and maintenance work unrelated to
 the newest product direction.
 

@@ -1,6 +1,6 @@
 # Zscripts
 
-Zscripts is a local-first repository review workspace for deterministic, read-only Python repository analysis. Its primary workflow is `Scan → Explore → Review → Compare → Handoff`. The maintained CLI also provides structured log collection, normalization, redaction, diagnostics, and reporting for developers and automation systems.
+Zscripts is an archived, multi-era developer-tooling project that began in June 2024 as a Django/source-context compiler for ChatGPT web chats, later evolved into a generalized build/log toolkit, and finally into a local-first Repository Review workspace. Its final implemented workflow was `Scan → Explore → Review → Compare → Handoff`, alongside maintained structured-log collection, normalization, redaction, diagnostics, and reporting capabilities.
 
 ## ARCHIVED REFERENCE IMPLEMENTATION — NOT PRODUCTION READY
 
@@ -8,11 +8,11 @@ Zscripts is retired as an active product and preserved publicly as a reference i
 It is not maintained, no stable release was published, and no security-support commitment
 continues after archival.
 
-The repository accumulated several useful but increasingly distinct eras: the original log
-toolkit, a large legacy-helper compatibility surface, and the later Repository Review
-workspace. Rather than keep refactoring those histories into one product, future work should
-start in separately scoped repositories and deliberately reuse only the contracts or ideas
-that still fit.
+The repository accumulated several useful but increasingly distinct eras: the original
+source-context compiler, the generalized log toolkit, a large legacy-helper compatibility
+surface, and the later Repository Review workspace. Rather than keep refactoring those histories
+into one product, future work should start in separately scoped repositories and deliberately
+reuse only the contracts or ideas that still fit.
 
 At archival, the independent dependency audit still reports the known NLTK condition tracked
 historically in issue #54. No advisory was suppressed or dismissed to make the repository
@@ -24,9 +24,9 @@ compiler for ChatGPT web chats, and [ARCHIVE.md](ARCHIVE.md) for the retirement 
 preserved scope. Redaction remains defense in depth, not a guarantee that generated output is
 safe to publish.
 
-Public narrative:
+Historical public narrative from the final product era:
 
-> Zscripts helps a user scan a Python repository, explore deterministic evidence, review findings, compare snapshots, and create bounded local handoffs. The maintained CLI also supports normalized and redacted development-log workflows.
+> Zscripts helped a user scan a Python repository, explore deterministic evidence, review findings, compare snapshots, and create bounded local handoffs. The maintained CLI also supported normalized and redacted development-log workflows.
 
 ## End-to-End Demonstration
 

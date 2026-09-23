@@ -1,6 +1,6 @@
 # Zscripts
 
-Zscripts is an archived, multi-era developer-tooling project that began in June 2024 as a Django/source-context compiler for ChatGPT web chats, later evolved into a generalized build/log toolkit, and finally into a local-first Repository Review workspace. Its final implemented workflow was `Scan → Explore → Review → Compare → Handoff`, alongside maintained structured-log collection, normalization, redaction, diagnostics, and reporting capabilities.
+Zscripts is an archived, multi-era developer-tooling project that began in June 2024 as a Django/source-context compiler for ChatGPT web chats, later evolved into a generalized build/log toolkit, and finally into a local-first Repository Review workspace. Its final implemented workflow was `Scan → Explore → Review → Compare → Handoff`, alongside structured-log collection, normalization, redaction, diagnostics, and reporting capabilities.
 
 ## ARCHIVED REFERENCE IMPLEMENTATION — NOT PRODUCTION READY
 

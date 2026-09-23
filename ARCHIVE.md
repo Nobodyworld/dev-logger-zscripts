@@ -4,6 +4,10 @@ Status: **ARCHIVED REFERENCE IMPLEMENTATION — NOT PRODUCTION READY**
 
 Decision date: **2026-09-22**
 
+For the full project origin and evolution—from a June 2024 Django/source-context compiler used
+to prepare code for ChatGPT web chats through the later log-toolkit and Repository Review
+eras—see [HISTORY.md](HISTORY.md).
+
 ## Why development stops here
 
 Zscripts accumulated multiple useful but increasingly separate product eras:

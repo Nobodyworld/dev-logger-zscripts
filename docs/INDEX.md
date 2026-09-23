@@ -3,6 +3,7 @@
 > **Archived reference implementation.** Zscripts is no longer actively maintained. Start with the [archive decision](../ARCHIVE.md); the remaining documentation is preserved as implementation and historical evidence.
 
 - [Archive Decision](../ARCHIVE.md)
+- [Project History](../HISTORY.md)
 - [CLI Overview](../README.md)
 - [Support](SUPPORT.md)
 - [Contributing](../CONTRIBUTING.md)

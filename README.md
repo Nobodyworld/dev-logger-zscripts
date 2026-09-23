@@ -19,8 +19,10 @@ historically in issue #54. No advisory was suppressed or dismissed to make the r
 appear green. Do not adopt this repository as a production dependency without taking ownership
 of dependency review, security maintenance, and validation.
 
-See [ARCHIVE.md](ARCHIVE.md) for the retirement rationale and preserved scope. Redaction remains
-defense in depth, not a guarantee that generated output is safe to publish.
+See [HISTORY.md](HISTORY.md) for the project's June 2024 origin as a Django/source-context
+compiler for ChatGPT web chats, and [ARCHIVE.md](ARCHIVE.md) for the retirement rationale and
+preserved scope. Redaction remains defense in depth, not a guarantee that generated output is
+safe to publish.
 
 Public narrative:
 
